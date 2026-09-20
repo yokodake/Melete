@@ -65,10 +65,10 @@ class TimerController(
         }
     }
 
-    val warningLeadSeconds: Int get() = store.warningLeadSeconds
+    val cueSettings: CueSettings get() = store.cueSettings
 
-    fun setWarningLeadSeconds(seconds: Int) {
-        store.warningLeadSeconds = seconds
+    fun setCueSettings(settings: CueSettings) {
+        store.cueSettings = settings
     }
 
     fun lastDurationSeconds(phase: TimerPhase): Int = when (phase) {
@@ -80,7 +80,7 @@ class TimerController(
      * Starts a countdown. Called from a tap while the app is on screen, which is what gives the
      * foreground service the while-in-use capability it needs to make a sound later on.
      */
-    fun start(phase: TimerPhase, durationSeconds: Int, warningLeadSeconds: Int = store.warningLeadSeconds) {
+    fun start(phase: TimerPhase, durationSeconds: Int, settings: CueSettings = store.cueSettings) {
         val duration = durationSeconds.coerceAtLeast(1)
         when (phase) {
             TimerPhase.WORK -> store.lastWorkSeconds = duration
@@ -92,7 +92,7 @@ class TimerController(
             runId = UUID.randomUUID().toString(),
             phase = phase,
             durationMs = duration * 1000L,
-            warningLeadMs = warningLeadSeconds.takeIf { it > 0 }?.times(1000L),
+            settings = settings,
             nowElapsedMs = now(),
         )
         _state.value = running
@@ -150,18 +150,13 @@ class TimerController(
             while (true) {
                 val running = _state.value as? TimerState.Running ?: return@launch
                 val nowMs = now()
-                if (running.isWarningDue(nowMs)) {
-                    deliver(running.runId, TimerCue.WARNING)
+                val due = running.dueCue(nowMs)
+                if (due != null) {
+                    deliver(running.runId, due.cue)
                     continue
                 }
-                if (running.isDue(nowMs)) {
-                    deliver(running.runId, TimerCue.FINISH)
-                    return@launch
-                }
-                val nextCueAt = running.warningAtElapsedMs
-                    ?.takeIf { !running.warningFired && it > nowMs }
-                    ?: running.deadlineElapsedMs
-                delay((nextCueAt - nowMs).coerceAtLeast(MIN_SLEEP_MS))
+                val nextAt = running.nextCueAt(nowMs) ?: return@launch
+                delay((nextAt - nowMs).coerceAtLeast(MIN_SLEEP_MS))
             }
         }
     }
@@ -177,7 +172,7 @@ class TimerController(
                 Log.d(TAG, "Ignoring $cue for stale run $runId")
                 return
             }
-            if (current is TimerState.Running && cue == TimerCue.WARNING && current.warningFired) return
+            if (current is TimerState.Running && cue in current.delivered) return
             if (current is TimerState.Finished && cue == TimerCue.FINISH) return
 
             // Whether *this* path owes the sound. The state still has to move either way: a cue
@@ -186,28 +181,24 @@ class TimerController(
             val owed = store.markCueDelivered(runId, cue)
             if (!owed) Log.d(TAG, "$cue for $runId was already delivered")
 
-            when (cue) {
-                TimerCue.WARNING -> {
-                    if (current is TimerState.Running) {
-                        _state.value = current.copy(warningFired = true)
-                        persist()
-                    }
-                    if (owed) cues.play(TimerCue.WARNING)
+            if (cue == TimerCue.FINISH) {
+                alarms.cancelAll()
+                val phase = (current as? TimerState.Running)?.phase
+                    ?: (current as? TimerState.Paused)?.phase
+                _state.value = TimerTransitions.finish(current)
+                persist()
+                if (owed) {
+                    cues.play(cue)
+                    // Reaching zero is a cue, never a performed set: the logger is offered, and
+                    // only the user can confirm that the work happened.
+                    phase?.let(notifications::postFinished)
                 }
-
-                TimerCue.FINISH -> {
-                    alarms.cancelAll()
-                    val phase = (current as? TimerState.Running)?.phase
-                        ?: (current as? TimerState.Paused)?.phase
-                    _state.value = TimerTransitions.finish(current)
+            } else {
+                if (current is TimerState.Running) {
+                    _state.value = current.copy(delivered = current.delivered + cue)
                     persist()
-                    if (owed) {
-                        cues.play(TimerCue.FINISH)
-                        // Reaching zero is a cue, never a performed set: the logger is offered,
-                        // and only the user can confirm that the work happened.
-                        phase?.let(notifications::postFinished)
-                    }
                 }
+                if (owed) cues.play(cue)
             }
         }
     }

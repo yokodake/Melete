@@ -14,6 +14,9 @@ enum class TimerPhase {
  * the UI is recreated; a deadline can always be re-derived from the clock. Elapsed-realtime is the
  * right clock because it keeps counting while the device sleeps and is unaffected by the user or
  * the network moving the wall clock.
+ *
+ * Which cues a run owes is fixed when it starts, and which it has already given travels with the
+ * state, so pausing, resuming or rebuilding the UI can never sound the same cue twice.
  */
 sealed interface TimerState {
 
@@ -26,27 +29,31 @@ sealed interface TimerState {
         val totalMs: Long,
         /** Elapsed-realtime instant the countdown reaches zero. */
         val deadlineElapsedMs: Long,
-        /** How long before the deadline the advance warning sounds, or null for no warning. */
-        val warningLeadMs: Long?,
-        /** True once the advance warning has sounded for this run, so it is never repeated. */
-        val warningFired: Boolean,
+        val plan: List<PlannedCue>,
+        val delivered: Set<TimerCue> = emptySet(),
     ) : TimerState {
 
-        fun remainingMs(nowElapsedMs: Long): Long = (deadlineElapsedMs - nowElapsedMs).coerceAtLeast(0)
+        fun remainingMs(nowElapsedMs: Long): Long =
+            (deadlineElapsedMs - nowElapsedMs).coerceAtLeast(0)
 
-        /**
-         * When the advance warning is due, or null when this run has none. A warning at or beyond
-         * the whole countdown is not a warning, so it is dropped rather than fired at the start.
-         */
-        val warningAtElapsedMs: Long?
-            get() = warningLeadMs
-                ?.takeIf { it > 0 && it < totalMs }
-                ?.let { deadlineElapsedMs - it }
+        /** The elapsed-realtime instant a planned cue sounds. */
+        fun instantOf(planned: PlannedCue): Long = deadlineElapsedMs - planned.remainingMs
+
+        /** The earliest cue that is owed and already due, or null when none is. */
+        fun dueCue(nowElapsedMs: Long): PlannedCue? = plan
+            .filter { it.cue !in delivered && instantOf(it) <= nowElapsedMs }
+            // The most time left is the earliest one, so cues are always given in order even if
+            // several fell due while the app was not looking.
+            .maxByOrNull { it.remainingMs }
+
+        /** When the next owed cue falls due, or null when everything has been given. */
+        fun nextCueAt(nowElapsedMs: Long): Long? = plan
+            .filter { it.cue !in delivered }
+            .map(::instantOf)
+            .filter { it > nowElapsedMs }
+            .minOrNull()
 
         fun isDue(nowElapsedMs: Long): Boolean = nowElapsedMs >= deadlineElapsedMs
-
-        fun isWarningDue(nowElapsedMs: Long): Boolean =
-            !warningFired && warningAtElapsedMs?.let { nowElapsedMs >= it } == true
     }
 
     data class Paused(
@@ -54,8 +61,8 @@ sealed interface TimerState {
         val phase: TimerPhase,
         val totalMs: Long,
         val remainingMs: Long,
-        val warningLeadMs: Long?,
-        val warningFired: Boolean,
+        val plan: List<PlannedCue>,
+        val delivered: Set<TimerCue> = emptySet(),
     ) : TimerState
 
     /** The countdown reached zero. Reaching zero records nothing: it is a cue, not a performed set. */
@@ -93,15 +100,14 @@ object TimerTransitions {
         runId: String,
         phase: TimerPhase,
         durationMs: Long,
-        warningLeadMs: Long?,
+        settings: CueSettings,
         nowElapsedMs: Long,
     ): TimerState.Running = TimerState.Running(
         runId = runId,
         phase = phase,
         totalMs = durationMs,
         deadlineElapsedMs = nowElapsedMs + durationMs,
-        warningLeadMs = warningLeadMs,
-        warningFired = false,
+        plan = CuePlanner.plan(phase, durationMs, settings),
     )
 
     fun pause(state: TimerState.Running, nowElapsedMs: Long): TimerState.Paused = TimerState.Paused(
@@ -109,9 +115,9 @@ object TimerTransitions {
         phase = state.phase,
         totalMs = state.totalMs,
         remainingMs = state.remainingMs(nowElapsedMs),
-        warningLeadMs = state.warningLeadMs,
-        // Carried across the pause: a warning already given must not be given again on resume.
-        warningFired = state.warningFired,
+        plan = state.plan,
+        // Carried across the pause: cues already given must not be given again on resume.
+        delivered = state.delivered,
     )
 
     fun resume(state: TimerState.Paused, nowElapsedMs: Long): TimerState.Running = TimerState.Running(
@@ -119,8 +125,8 @@ object TimerTransitions {
         phase = state.phase,
         totalMs = state.totalMs,
         deadlineElapsedMs = nowElapsedMs + state.remainingMs,
-        warningLeadMs = state.warningLeadMs,
-        warningFired = state.warningFired,
+        plan = state.plan,
+        delivered = state.delivered,
     )
 
     fun finish(state: TimerState): TimerState = when (state) {

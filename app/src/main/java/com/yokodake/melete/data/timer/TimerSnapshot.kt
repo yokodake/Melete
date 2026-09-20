@@ -9,6 +9,9 @@ import kotlinx.serialization.Serializable
  * deadline from a previous boot is not merely stale, it is meaningless — it would usually look
  * like a countdown that finished long ago, or one with hours left. Comparing the boot count tells
  * the two situations apart without guessing.
+ *
+ * The cue plan is stored with the run rather than recomputed, so changing the cue settings cannot
+ * reach back into a countdown that is already under way.
  */
 @Serializable
 data class TimerSnapshot(
@@ -21,8 +24,8 @@ data class TimerSnapshot(
     val deadlineElapsedMs: Long = 0,
     /** Remaining time. Meaningful only while [status] is PAUSED. */
     val remainingMs: Long = 0,
-    val warningLeadMs: Long? = null,
-    val warningFired: Boolean = false,
+    val plan: List<PlannedCue> = emptyList(),
+    val delivered: Set<TimerCue> = emptySet(),
 ) {
     enum class Status { RUNNING, PAUSED, FINISHED }
 }
@@ -38,8 +41,8 @@ object TimerRestore {
             bootCount = bootCount,
             status = TimerSnapshot.Status.RUNNING,
             deadlineElapsedMs = state.deadlineElapsedMs,
-            warningLeadMs = state.warningLeadMs,
-            warningFired = state.warningFired,
+            plan = state.plan,
+            delivered = state.delivered,
         )
 
         is TimerState.Paused -> TimerSnapshot(
@@ -49,8 +52,8 @@ object TimerRestore {
             bootCount = bootCount,
             status = TimerSnapshot.Status.PAUSED,
             remainingMs = state.remainingMs,
-            warningLeadMs = state.warningLeadMs,
-            warningFired = state.warningFired,
+            plan = state.plan,
+            delivered = state.delivered,
         )
 
         is TimerState.Finished -> TimerSnapshot(
@@ -85,8 +88,8 @@ object TimerRestore {
                 phase = snapshot.phase,
                 totalMs = snapshot.totalMs,
                 remainingMs = snapshot.remainingMs,
-                warningLeadMs = snapshot.warningLeadMs,
-                warningFired = snapshot.warningFired,
+                plan = snapshot.plan,
+                delivered = snapshot.delivered,
             )
 
             TimerSnapshot.Status.FINISHED ->
@@ -106,8 +109,8 @@ object TimerRestore {
                     phase = snapshot.phase,
                     totalMs = snapshot.totalMs,
                     deadlineElapsedMs = snapshot.deadlineElapsedMs,
-                    warningLeadMs = snapshot.warningLeadMs,
-                    warningFired = snapshot.warningFired,
+                    plan = snapshot.plan,
+                    delivered = snapshot.delivered,
                 )
             }
         }

@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yokodake.melete.data.timer.AlarmScheduler
 import com.yokodake.melete.data.timer.CuePlayer
+import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerCue
 import com.yokodake.melete.data.timer.TimerNotifications
@@ -64,6 +65,14 @@ class TimerControllerTest {
     private lateinit var store: TimerStore
     private lateinit var cues: RecordingCuePlayer
     private lateinit var alarms: FakeAlarms
+    private lateinit var savedSettings: Triple<CueSettings, Int, Int>
+
+    /** Only the end, so the tests are about delivery rather than about the cue plan. */
+    private val endOnly = CueSettings(
+        thirtySecondWarning = false,
+        finalCountdown = false,
+        quarterCues = false,
+    )
 
     @Before
     fun setUp() {
@@ -71,6 +80,8 @@ class TimerControllerTest {
         store = TimerStore(context)
         cues = RecordingCuePlayer()
         alarms = FakeAlarms()
+        // These settings belong to the user; the tests borrow them and hand them back.
+        savedSettings = store.snapshotSettings()
         // Leave no state from an earlier test or from the app itself.
         store.readSnapshot()?.let { store.clearCues(it.runId) }
         store.writeSnapshot(null)
@@ -81,6 +92,7 @@ class TimerControllerTest {
         scope.cancel()
         store.readSnapshot()?.let { store.clearCues(it.runId) }
         store.writeSnapshot(null)
+        store.restoreSettings(savedSettings)
     }
 
     private fun controller(player: CuePlayer = cues) = TimerController(
@@ -95,7 +107,7 @@ class TimerControllerTest {
     @Test
     fun aCountdownRunsOutAndSoundsExactlyOnce() = runBlocking {
         val controller = controller()
-        controller.start(TimerPhase.REST, durationSeconds = 1, warningLeadSeconds = 0)
+        controller.start(TimerPhase.REST, durationSeconds = 1, settings = endOnly)
 
         delay(2_500)
 
@@ -107,7 +119,7 @@ class TimerControllerTest {
     @Test
     fun anAlarmForTheSameRunDoesNotSoundASecondTime() = runBlocking {
         val controller = controller()
-        controller.start(TimerPhase.REST, durationSeconds = 1, warningLeadSeconds = 0)
+        controller.start(TimerPhase.REST, durationSeconds = 1, settings = endOnly)
         delay(2_500)
         val runId = (controller.state.value as TimerState.Finished).runId
 
@@ -120,20 +132,31 @@ class TimerControllerTest {
     }
 
     @Test
-    fun theWarningAndTheEndAreBothDeliveredOnceAndInOrder() = runBlocking {
+    fun everyPlannedCueIsDeliveredOnceAndInOrder() = runBlocking {
         val controller = controller()
-        controller.start(TimerPhase.WORK, durationSeconds = 3, warningLeadSeconds = 2)
+        controller.start(
+            TimerPhase.WORK,
+            durationSeconds = 4,
+            settings = CueSettings(
+                thirtySecondWarning = false,
+                finalCountdown = true,
+                quarterCues = false,
+            ),
+        )
 
-        delay(4_500)
+        delay(5_500)
 
-        assertEquals(listOf(TimerCue.WARNING, TimerCue.FINISH), cues.played.toList())
+        assertEquals(
+            listOf(TimerCue.COUNT_3, TimerCue.COUNT_2, TimerCue.COUNT_1, TimerCue.FINISH),
+            cues.played.toList(),
+        )
         controller.cancel()
     }
 
     @Test
     fun cancellingBeforeTheEndSoundsNothing() = runBlocking {
         val controller = controller()
-        controller.start(TimerPhase.REST, durationSeconds = 2, warningLeadSeconds = 0)
+        controller.start(TimerPhase.REST, durationSeconds = 2, settings = endOnly)
         val runId = (controller.state.value as TimerState.Running).runId
         delay(300)
         controller.cancel()
@@ -148,30 +171,43 @@ class TimerControllerTest {
     }
 
     @Test
-    fun pausingHoldsTheRemainingTimeAndResumingDoesNotRepeatTheWarning() = runBlocking {
+    fun pausingHoldsTheRemainingTimeAndResumingDoesNotRepeatACue() = runBlocking {
         val controller = controller()
-        controller.start(TimerPhase.REST, durationSeconds = 4, warningLeadSeconds = 3)
-        delay(1_500)
+        controller.start(
+            TimerPhase.REST,
+            durationSeconds = 5,
+            settings = CueSettings(
+                thirtySecondWarning = false,
+                finalCountdown = true,
+                quarterCues = false,
+            ),
+        )
+        delay(2_500)
 
         controller.pause()
         val paused = controller.state.value as TimerState.Paused
-        assertTrue(paused.warningFired)
+        assertTrue("the three second tick should already be given", paused.delivered.isNotEmpty())
         val remaining = paused.remainingMs
+        val givenSoFar = cues.played.toList()
 
         delay(1_500)
         assertEquals(remaining, (controller.state.value as TimerState.Paused).remainingMs)
+        assertEquals("a paused countdown sounds nothing", givenSoFar, cues.played.toList())
 
         controller.resume()
         delay(remaining + 800)
 
-        assertEquals(listOf(TimerCue.WARNING, TimerCue.FINISH), cues.played.toList())
+        assertEquals(
+            listOf(TimerCue.COUNT_3, TimerCue.COUNT_2, TimerCue.COUNT_1, TimerCue.FINISH),
+            cues.played.toList(),
+        )
         controller.cancel()
     }
 
     @Test
     fun aRunSurvivesTheProcessOwningItGoingAway() = runBlocking {
         val first = controller()
-        first.start(TimerPhase.REST, durationSeconds = 30, warningLeadSeconds = 0)
+        first.start(TimerPhase.REST, durationSeconds = 30, settings = endOnly)
         val runId = (first.state.value as TimerState.Running).runId
 
         // A second controller built from the same durable state is what a fresh process sees.
@@ -186,7 +222,7 @@ class TimerControllerTest {
     @Test
     fun aCueIsNotOwedTwiceAcrossProcesses() = runBlocking {
         val first = controller()
-        first.start(TimerPhase.REST, durationSeconds = 1, warningLeadSeconds = 0)
+        first.start(TimerPhase.REST, durationSeconds = 1, settings = endOnly)
         delay(2_000)
         val runId = (first.state.value as TimerState.Finished).runId
 
@@ -204,7 +240,7 @@ class TimerControllerTest {
         // What a killed process looks like: the run is on disk, nothing is ticking, and the
         // backstop alarm is the only thing left to ring.
         val owner = controller()
-        owner.start(TimerPhase.REST, durationSeconds = 60, warningLeadSeconds = 0)
+        owner.start(TimerPhase.REST, durationSeconds = 60, settings = endOnly)
         val runId = (owner.state.value as TimerState.Running).runId
 
         owner.onAlarm(runId, TimerCue.FINISH)
@@ -218,7 +254,7 @@ class TimerControllerTest {
     @Test
     fun aCueAlreadyRungByTheOtherPathStillEndsTheCountdown() = runBlocking {
         val owner = controller()
-        owner.start(TimerPhase.REST, durationSeconds = 60, warningLeadSeconds = 0)
+        owner.start(TimerPhase.REST, durationSeconds = 60, settings = endOnly)
         val runId = (owner.state.value as TimerState.Running).runId
 
         // Someone else claimed the cue first: the sound is not owed twice, but the run is over.

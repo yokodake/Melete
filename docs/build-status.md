@@ -39,8 +39,10 @@ Last updated: 2026-09-20, end of phase 3.
 
 - One countdown, for work or for rest, started from the timer tab or from the exercise being
   logged. Adjustable before it starts, then pause, resume and cancel.
-- Advance warning of 30s, 10s or off. A warning at least as long as the countdown is dropped
-  rather than fired at the start, and the screen says so before you start.
+- Three families of cue, each switchable on its own, each with its own sound: a heads-up at
+  **thirty seconds left**, a **3-2-1** tick through the last three seconds, and **quarter, half
+  and three-quarter** marks through a work interval of a minute or more. The screen says how many
+  cues the countdown will actually sound, and why a setting does not apply when it cannot.
 - A persistent notification carries the remaining time as a countdown chronometer, with pause,
   resume and cancel buttons.
 - The logger shows the remaining time inline and offers *Rest* right after a set is confirmed.
@@ -187,6 +189,15 @@ foreground service types, background audio and exact alarms.
 - **Two one-shot exact alarms per run, not a repeating alarm.** The countdown itself is driven in
   process; the alarms exist only so a frozen or killed app still sounds at the warning and at the
   end. Both are on the elapsed-realtime clock, the same clock as the deadline.
+- **The cue plan is fixed when a run starts**, so changing the settings mid-countdown cannot
+  change what the run in progress will do. Cues that would fall outside the countdown are dropped,
+  and two cues landing on the same moment collapse into the more specific one — on a two minute
+  set, three-quarters done *is* thirty seconds left, and it sounds once.
+- **Quarter cues are for work intervals only.** A rest interval needs to know how much is left,
+  not where its middle was.
+- **Only the thirty-second warning and the end are backed by exact alarms.** The finer cues are
+  company while training, not a reason to wake a dead process, and eight exact alarms per rest
+  would be a poor trade for a phone's battery.
 - **Every cue passes through one delivery gate.** Durable bookkeeping records which cues a run has
   already had, so the in-process path and the alarm path cannot both sound. The state moves on
   whichever path wins, so a cue rung by the other one still ends the countdown rather than
@@ -260,13 +271,15 @@ Phase 2:
 
 Phase 3:
 
-- `./gradlew :app:testDebugUnitTest` — 39 tests passing, 12 of them the timer arithmetic: remaining
+- `./gradlew :app:testDebugUnitTest` — 55 tests passing, 28 of them the timer: the cue plan for
+  each length and phase, collisions collapsing to the more specific cue, each family switching off
+  on its own, and the arithmetic: remaining
   time never negative, pause and resume preserving remaining time without shifting the deadline, a
   warning already given not repeated after resuming, a warning at least as long as the countdown
   dropped rather than fired at the start, a running countdown after a reboot reported interrupted,
   a paused one surviving a reboot, and a run that expired while the process was gone coming back
   finished.
-- `scripts/device-tests.sh` — 29 instrumented tests passing on the Pixel 9, 9 of them timer
+- `scripts/device-tests.sh` — 31 instrumented tests passing on the Pixel 9, 11 of them timer
   delivery: a countdown sounding exactly once, a late backstop alarm for the same run not sounding
   again, warning and end delivered once each and in order, cancelling leaving nothing pending,
   pause and resume not repeating the warning, a run surviving the controller that owned it, and an
@@ -278,19 +291,21 @@ Phase 3:
 - A crash found by these tests and fixed: starting the foreground service and then stopping it
   before it reached `startForeground` killed the process with
   `ForegroundServiceDidNotStartInTimeException`.
+- A sixty-three second work interval was run on the Pixel 9 **with the screen off**. The platform
+  logged audio going active eight times, spaced 15.8s, 1.5s, 14.2s, 12.7s, 1.0s, 1.0s, 1.1s — an
+  exact match for quarter, half, thirty-seconds-left, three-quarters, three, two, one and the end,
+  with 47.4s measured from the quarter mark to the end against 47.25s planned. The user confirmed
+  hearing the cues.
 
 ## Known limitations
 
 - No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
   not created speculatively.
-- **The timer checks still owed on a real phone, in the user's hands:** that the cue is *audible*
-  with the screen locked and the app not in front, how it behaves while another app is playing
-  audio, and whether the cue still arrives under forced Doze
-  (`adb shell dumpsys battery unplug && adb shell dumpsys deviceidle force-idle`, then
-  `adb shell dumpsys battery reset`). The automated checks above establish that the audio system
-  accepts the cue and that the arithmetic recovers; they do not establish audibility from a
-  process the system has killed, and instrumentation keeps the app in a more privileged state than
-  a genuinely backgrounded one.
+- **Still owed:** behaviour while another app is playing audio (the user is checking this against
+  Spotify), and forced Doze. A first forced-Doze attempt was inconclusive because the countdown
+  under test never started, so nothing can be claimed about it yet. Surviving the app being
+  *killed* is explicitly not a requirement: the foreground service is what keeps the countdown
+  alive in the background, and that is what was verified.
 - Only one countdown exists at a time, and there is no automatic work/rest sequence. That is
   phase 7C, deliberately after the single timer has been used in a real session.
 - An occurrence that already has a date cannot be moved to another day, and a recorded set cannot

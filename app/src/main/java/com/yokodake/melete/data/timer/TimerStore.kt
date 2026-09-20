@@ -55,6 +55,19 @@ class TimerStore(context: Context) {
         }
     }
 
+    /**
+     * Test and development hook: the timer settings belong to the user, so anything that changes
+     * them for its own purposes has to be able to put them back.
+     */
+    fun snapshotSettings(): Triple<CueSettings, Int, Int> =
+        Triple(cueSettings, lastRestSeconds, lastWorkSeconds)
+
+    fun restoreSettings(saved: Triple<CueSettings, Int, Int>) {
+        cueSettings = saved.first
+        lastRestSeconds = saved.second
+        lastWorkSeconds = saved.third
+    }
+
     /** Forgets the cue bookkeeping for finished or cancelled runs. */
     fun clearCues(runId: String) {
         val editor = preferences.edit()
@@ -62,9 +75,19 @@ class TimerStore(context: Context) {
         editor.apply()
     }
 
-    var warningLeadSeconds: Int
-        get() = preferences.getInt(KEY_WARNING_LEAD, DEFAULT_WARNING_LEAD_SECONDS)
-        set(value) = preferences.edit().putInt(KEY_WARNING_LEAD, value).apply()
+    var cueSettings: CueSettings
+        get() = CueSettings(
+            thirtySecondWarning = preferences.getBoolean(KEY_THIRTY_SECONDS, true),
+            finalCountdown = preferences.getBoolean(KEY_FINAL_COUNTDOWN, true),
+            quarterCues = preferences.getBoolean(KEY_QUARTER_CUES, true),
+        )
+        set(value) {
+            preferences.edit()
+                .putBoolean(KEY_THIRTY_SECONDS, value.thirtySecondWarning)
+                .putBoolean(KEY_FINAL_COUNTDOWN, value.finalCountdown)
+                .putBoolean(KEY_QUARTER_CUES, value.quarterCues)
+                .apply()
+        }
 
     var lastRestSeconds: Int
         get() = preferences.getInt(KEY_LAST_REST, DEFAULT_REST_SECONDS)
@@ -77,19 +100,12 @@ class TimerStore(context: Context) {
     private companion object {
         const val KEY_SNAPSHOT = "snapshot"
         const val KEY_CUE_PREFIX = "cue:"
-        const val KEY_WARNING_LEAD = "warning-lead-seconds"
+        const val KEY_THIRTY_SECONDS = "cue-thirty-seconds"
+        const val KEY_FINAL_COUNTDOWN = "cue-final-countdown"
+        const val KEY_QUARTER_CUES = "cue-quarters"
         const val KEY_LAST_REST = "last-rest-seconds"
         const val KEY_LAST_WORK = "last-work-seconds"
-        const val DEFAULT_WARNING_LEAD_SECONDS = 10
         const val DEFAULT_REST_SECONDS = 180
         const val DEFAULT_WORK_SECONDS = 10
     }
-}
-
-enum class TimerCue {
-    /** The advance warning, some seconds before the end. */
-    WARNING,
-
-    /** The countdown reaching zero. */
-    FINISH,
 }

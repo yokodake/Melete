@@ -1,5 +1,8 @@
 package com.yokodake.melete.data
 
+import com.yokodake.melete.data.timer.CuePlanner
+import com.yokodake.melete.data.timer.CueSettings
+import com.yokodake.melete.data.timer.TimerCue
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerRestore
 import com.yokodake.melete.data.timer.TimerSnapshot
@@ -18,12 +21,14 @@ import org.junit.Test
 class TimerStateTest {
 
     private val runId = "run-1"
+    private val settings = CueSettings()
 
     private fun running(
         totalMs: Long = 60_000,
         startedAt: Long = 1_000,
-        warningLeadMs: Long? = 10_000,
-    ) = TimerTransitions.start(runId, TimerPhase.REST, totalMs, warningLeadMs, startedAt)
+        phase: TimerPhase = TimerPhase.REST,
+        cues: CueSettings = settings,
+    ) = TimerTransitions.start(runId, phase, totalMs, cues, startedAt)
 
     @Test
     fun `remaining time is derived from the deadline and never goes negative`() {
@@ -49,46 +54,65 @@ class TimerStateTest {
     }
 
     @Test
-    fun `a warning already given is not repeated after pause and resume`() {
-        val state = running(totalMs = 60_000, startedAt = 1_000, warningLeadMs = 10_000)
-        assertTrue(state.isWarningDue(51_000))
+    fun `cues fall due at their planned moment and in order`() {
+        val state = running(totalMs = 120_000, startedAt = 0, phase = TimerPhase.WORK)
+        // A quarter done is thirty seconds in.
+        assertNull(state.dueCue(29_999))
+        assertEquals(TimerCue.QUARTER, state.dueCue(30_000)?.cue)
 
-        val afterWarning = state.copy(warningFired = true)
-        assertFalse(afterWarning.isWarningDue(51_000))
-
-        val paused = TimerTransitions.pause(afterWarning, nowElapsedMs = 55_000)
-        assertTrue(paused.warningFired)
-        val resumed = TimerTransitions.resume(paused, nowElapsedMs = 100_000)
-        assertTrue(resumed.warningFired)
-        assertFalse(resumed.isWarningDue(106_000))
+        val afterQuarter = state.copy(delivered = setOf(TimerCue.QUARTER))
+        assertEquals(TimerCue.HALF, afterQuarter.dueCue(60_000)?.cue)
+        assertNull(afterQuarter.dueCue(59_999))
     }
 
     @Test
-    fun `the warning is due only once the lead time is reached`() {
-        val state = running(totalMs = 60_000, startedAt = 0, warningLeadMs = 10_000)
-        assertEquals(50_000L, state.warningAtElapsedMs)
-        assertFalse(state.isWarningDue(49_999))
-        assertTrue(state.isWarningDue(50_000))
+    fun `several cues that fell due unseen are given oldest first`() {
+        val state = running(totalMs = 120_000, startedAt = 0, phase = TimerPhase.WORK)
+        // Nothing was delivered for the first ninety seconds.
+        assertEquals(TimerCue.QUARTER, state.dueCue(95_000)?.cue)
+        val next = state.copy(delivered = setOf(TimerCue.QUARTER))
+        assertEquals(TimerCue.HALF, next.dueCue(95_000)?.cue)
     }
 
     @Test
-    fun `a warning at least as long as the countdown is dropped rather than fired at the start`() {
-        val sameLength = running(totalMs = 10_000, startedAt = 0, warningLeadMs = 10_000)
-        assertNull(sameLength.warningAtElapsedMs)
-        assertFalse(sameLength.isWarningDue(0))
+    fun `a cue already given is not repeated after pause and resume`() {
+        val state = running(totalMs = 180_000, startedAt = 0)
+        val afterWarning = state.copy(delivered = setOf(TimerCue.THIRTY_SECONDS))
+        assertNull(afterWarning.dueCue(150_000))
 
-        val longer = running(totalMs = 10_000, startedAt = 0, warningLeadMs = 30_000)
-        assertNull(longer.warningAtElapsedMs)
-        assertFalse(longer.isWarningDue(0))
-        // The countdown itself is unaffected.
-        assertTrue(longer.isDue(10_000))
+        val paused = TimerTransitions.pause(afterWarning, nowElapsedMs = 155_000)
+        assertTrue(TimerCue.THIRTY_SECONDS in paused.delivered)
+        val resumed = TimerTransitions.resume(paused, nowElapsedMs = 500_000)
+        assertTrue(TimerCue.THIRTY_SECONDS in resumed.delivered)
+        assertNull(resumed.dueCue(500_001))
     }
 
     @Test
-    fun `no warning is configured when the lead is off`() {
-        val state = running(warningLeadMs = null)
-        assertNull(state.warningAtElapsedMs)
-        assertFalse(state.isWarningDue(59_000))
+    fun `the next cue instant is the earliest one still owed`() {
+        val state = running(totalMs = 180_000, startedAt = 0)
+        // Thirty seconds left, i.e. 150 seconds in.
+        assertEquals(150_000L, state.nextCueAt(0))
+        val afterWarning = state.copy(delivered = setOf(TimerCue.THIRTY_SECONDS))
+        assertEquals(177_000L, afterWarning.nextCueAt(0))
+    }
+
+    @Test
+    fun `once every cue is given there is no next instant`() {
+        val state = running(totalMs = 60_000, startedAt = 0)
+        val all = state.copy(delivered = state.plan.map { it.cue }.toSet())
+        assertNull(all.nextCueAt(0))
+    }
+
+    @Test
+    fun `the plan is fixed when the run starts so settings cannot change it mid countdown`() {
+        val state = running(totalMs = 180_000, startedAt = 0)
+        assertEquals(
+            CuePlanner.plan(TimerPhase.REST, 180_000, settings),
+            state.plan,
+        )
+        val paused = TimerTransitions.pause(state, 10_000)
+        assertEquals(state.plan, paused.plan)
+        assertEquals(state.plan, TimerTransitions.resume(paused, 99_000).plan)
     }
 
     @Test
@@ -114,12 +138,23 @@ class TimerStateTest {
     }
 
     @Test
-    fun `a countdown still within its deadline comes back running with the same deadline`() {
+    fun `a countdown still within its deadline comes back running with its plan intact`() {
         val state = running()
         val snapshot = TimerRestore.snapshot(state, bootCount = 7) as TimerSnapshot
         val restored = TimerRestore.restore(snapshot, currentBootCount = 7, nowElapsedMs = 30_000)
         assertEquals(state, restored)
         assertEquals(31_000, (restored as TimerState.Running).remainingMs(30_000))
+        assertEquals(state.plan, restored.plan)
+    }
+
+    @Test
+    fun `delivered cues survive the process going away`() {
+        val state = running(totalMs = 180_000, startedAt = 0)
+            .copy(delivered = setOf(TimerCue.THIRTY_SECONDS))
+        val snapshot = TimerRestore.snapshot(state, bootCount = 3) as TimerSnapshot
+        val restored = TimerRestore.restore(snapshot, currentBootCount = 3, nowElapsedMs = 160_000)
+        assertTrue(TimerCue.THIRTY_SECONDS in (restored as TimerState.Running).delivered)
+        assertNull(restored.dueCue(160_000))
     }
 
     @Test
