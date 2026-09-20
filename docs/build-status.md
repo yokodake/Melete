@@ -129,12 +129,19 @@ com.yokodake.melete
 | --- | --- |
 | Build the debug APK | `./gradlew :app:assembleDebug` |
 | JVM unit tests | `./gradlew :app:testDebugUnitTest` |
-| Instrumented tests (device/emulator required) | `./gradlew :app:connectedDebugAndroidTest` |
+| Instrumented tests, keeping app data | `scripts/device-tests.sh` |
+| Instrumented tests via Gradle (WIPES app data, see below) | `./gradlew :app:connectedDebugAndroidTest` |
 | Install on a connected device | `./gradlew :app:installDebug` |
 | Install a built APK by hand | `adb install -r app/build/outputs/apk/debug/app-debug.apk` |
 | Launch | `adb shell am start -n com.yokodake.melete/.MainActivity` |
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`.
+
+**`./gradlew connectedDebugAndroidTest` uninstalls the app when it finishes**, and uninstalling
+deletes `/data/user/0/com.yokodake.melete` — the whole training record on that device. Use
+`scripts/device-tests.sh` instead: it installs both APKs with `install -r`, which keeps app data,
+and drives `am instrument` directly. Reach for the Gradle task only on a device whose data does not
+matter.
 
 ## Checks actually run
 
@@ -144,8 +151,7 @@ Phase 1:
 - `./gradlew :app:testDebugUnitTest` — 17 tests passing (week arithmetic and labels including the
   new-year boundary, prescription JSON round-trip, absence-stays-absence, added load vs
   assistance, unknown-field tolerance, week grouping and ordering, per-side labelling).
-- `./gradlew :app:connectedDebugAndroidTest` — 4 Room persistence tests passing on a physical
-  Pixel 9 (Android 17).
+- 4 Room persistence tests passing on a physical Pixel 9 (Android 17).
 - On-device manual check: sample data appears on the right days, the unscheduled item appears in
   the unscheduled section, week navigation and the *Today* action work, today is marked.
 
@@ -154,7 +160,7 @@ Phase 2:
 - `./gradlew :app:testDebugUnitTest` — 23 tests passing (phase 1 tests plus set-draft conversion:
   an empty field stays absent, no unit means no measurement is recorded, the load meaning travels
   with the set, an empty draft cannot be confirmed, draft and payload round-trips).
-- `./gradlew :app:connectedDebugAndroidTest` — 20 instrumented tests passing on the Pixel 9,
+- 20 instrumented tests passing on the Pixel 9,
   including: a library edit leaving a scheduled copy and its actuals untouched; editing this
   week's plan leaving the library and the actuals untouched; six sets logged against a plan of
   four; an unplanned set still belonging to an occurrence and a session; left and right recorded
@@ -163,15 +169,18 @@ Phase 2:
   date; previous results coming only from other occurrences; refusing to delete an occurrence that
   has actuals; completion state independent of recorded sets; and
   `migrate1To2KeepsExistingRowsAndAddsTheNewTables`.
-- The phase 2 build was installed over the phase 1 build on the Pixel 9 that already held phase 1
-  data, and the app started with no error, so `MIGRATION_1_2` ran against real existing rows and
-  passed Room's post-migration schema validation.
 - Full on-device walkthrough on the Pixel 9: created an exercise from an empty library, scheduled
   it onto today, and confirmed three sets with one tap each. The database pulled off the device
   after a force-stop showed `user_version = 2`, three `actual_sets` rows with explicit
   `LEFT` / `RIGHT` sides and `rpe` / `rir` stored as `null` rather than `0`, one `training_sessions`
   row for the training date, and two `prescriptions` rows (the library default and the scheduled
   copy).
+- `MIGRATION_1_2` has **not** been exercised against a real phase 1 database on a device. The
+  Gradle device-test task had uninstalled the app before the phase 2 build was installed, so the
+  phone started from an empty schema 2 database. The migration is covered by `MigrationTest`, which
+  builds a schema 1 database, fills it and validates the upgrade. Before shipping a schema 3, run
+  the upgrade once over a populated database using `scripts/device-tests.sh` so the install is not
+  wiped first.
 
 ## Known limitations
 
