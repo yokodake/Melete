@@ -4,6 +4,7 @@ import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.PrescriptionEntity
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
@@ -118,7 +119,7 @@ object DevSampleData {
                 targetReps = 8,
                 restSeconds = 60,
                 measurement = Measurement(22.5, "kg", MeasurementMeaning.TOTAL_LOAD),
-                rpe = 8.0,
+                effort = EffortLevel.HARD,
             ),
             dayOffset = 4,
             orderIndex = 0,

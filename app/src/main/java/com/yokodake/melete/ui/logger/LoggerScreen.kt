@@ -58,6 +58,8 @@ import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
+import com.yokodake.melete.data.model.EffortLevel
+import com.yokodake.melete.ui.components.EffortSelector
 import com.yokodake.melete.ui.components.NumberField
 import com.yokodake.melete.ui.components.PrescriptionFields
 import com.yokodake.melete.ui.components.trimNumber
@@ -133,6 +135,7 @@ fun LoggerScreen(
                     occurrence = occurrence,
                     onDraftChange = viewModel::updateDraft,
                     onSide = viewModel::setSide,
+                    onEffort = viewModel::setEffort,
                     onToggleEffort = viewModel::toggleEffortFields,
                     onConfirm = viewModel::confirmSet,
                     onUndo = viewModel::undoLastSet,
@@ -497,6 +500,7 @@ private fun SetEntryBar(
     occurrence: PlannedOccurrence,
     onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
     onSide: (BodySide) -> Unit,
+    onEffort: (EffortLevel?) -> Unit,
     onToggleEffort: () -> Unit,
     onConfirm: () -> Unit,
     onUndo: () -> Unit,
@@ -559,28 +563,15 @@ private fun SetEntryBar(
                 }
             }
             if (draft.showEffortFields) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumberField(
-                        label = "RPE",
-                        value = draft.rpe,
-                        onValueChange = { value -> onDraftChange { it.copy(rpe = value) } },
-                        decimal = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    NumberField(
-                        label = "RIR",
-                        value = draft.rir,
-                        onValueChange = { value -> onDraftChange { it.copy(rir = value) } },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                Text("How hard?", style = MaterialTheme.typography.labelLarge)
+                EffortSelector(selected = draft.effort, onSelect = onEffort)
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = onToggleEffort) {
-                    Text(if (draft.showEffortFields) "Hide RPE/RIR" else "RPE/RIR")
+                    Text(if (draft.showEffortFields) "Hide RPE" else "RPE")
                 }
                 if (draft.editingSetId != null) {
                     TextButton(onClick = onCancelEdit) { Text("Cancel") }
@@ -619,8 +610,7 @@ private fun formatSet(payload: ActualSetPayload, side: BodySide?, unit: String?)
             MeasurementMeaning.ASSISTANCE -> "−$value ${measurement.unit} assist"
         }
     }
-    payload.rpe?.let { parts += "RPE ${trimNumber(it)}" }
-    payload.rir?.let { parts += "$it RIR" }
+    payload.effort?.let { parts += "RPE ${it.label.lowercase()}" }
     side?.let { parts += if (it == BodySide.LEFT) "L" else "R" }
     if (parts.isEmpty() && unit != null) parts += "no values"
     return parts.joinToString(" · ")

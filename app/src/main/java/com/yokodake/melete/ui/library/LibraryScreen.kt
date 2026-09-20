@@ -33,6 +33,29 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.LibraryExercise
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
+/** The library as a tab: browse what exists and edit it. Nothing is scheduled from here. */
+@Composable
+fun LibraryRoute(
+    onEditExercise: (String) -> Unit,
+    onNewExercise: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
+    viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
+) {
+    val exercises by viewModel.exercises.collectAsStateWithLifecycle()
+    LibraryScreen(
+        title = "Library",
+        subtitle = null,
+        exercises = exercises,
+        emptyMessage = "No exercises yet. Everything here is yours to define — " +
+            "nothing is built in.",
+        onRowClick = onEditExercise,
+        onNewExercise = onNewExercise,
+        onBack = null,
+        bottomBar = bottomBar,
+    )
+}
+
+/** The library as a picker: choosing an exercise copies it into the chosen slot of the week. */
 @Composable
 fun LibraryPickerRoute(
     onScheduled: () -> Unit,
@@ -42,26 +65,35 @@ fun LibraryPickerRoute(
     viewModel: LibraryPickerViewModel = viewModel(factory = LibraryPickerViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LibraryPickerScreen(
-        state = state,
-        onPick = { viewModel.schedule(it, onScheduled) },
+    LibraryScreen(
+        title = "Add to",
+        subtitle = state.targetLabel,
+        exercises = state.exercises,
+        emptyMessage = "The library is empty. Create an exercise to get started — " +
+            "nothing is built in.",
+        onRowClick = { viewModel.schedule(it, onScheduled) },
+        onSecondaryAction = onEditExercise to "Edit",
         onNewExercise = onNewExercise,
-        onEditExercise = onEditExercise,
         onBack = onBack,
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LibraryPickerScreen(
-    state: LibraryPickerUiState,
-    onPick: (String) -> Unit,
+fun LibraryScreen(
+    title: String,
+    subtitle: String?,
+    exercises: List<LibraryExercise>,
+    emptyMessage: String,
+    onRowClick: (String) -> Unit,
     onNewExercise: () -> Unit,
-    onEditExercise: (String) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
+    onSecondaryAction: Pair<(String) -> Unit, String>? = null,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -69,16 +101,20 @@ fun LibraryPickerScreen(
                 ),
                 title = {
                     Column {
-                        Text("Add to", style = MaterialTheme.typography.titleMedium)
-                        Text(state.targetLabel, style = MaterialTheme.typography.bodySmall)
+                        Text(title, style = MaterialTheme.typography.titleMedium)
+                        if (subtitle != null) {
+                            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 },
                 navigationIcon = {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.semantics { contentDescription = "Back" },
-                    ) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
+                    if (onBack != null) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.semantics { contentDescription = "Back" },
+                        ) {
+                            Text("‹", style = MaterialTheme.typography.headlineMedium)
+                        }
                     }
                 },
             )
@@ -101,21 +137,20 @@ fun LibraryPickerScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (state.exercises.isEmpty()) {
+            if (exercises.isEmpty()) {
                 item {
                     Text(
-                        text = "The library is empty. Create an exercise to get started — " +
-                            "nothing is built in.",
+                        text = emptyMessage,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            items(items = state.exercises, key = { it.id }) { exercise ->
+            items(items = exercises, key = { it.id }) { exercise ->
                 LibraryRow(
                     exercise = exercise,
-                    onPick = { onPick(exercise.id) },
-                    onEdit = { onEditExercise(exercise.id) },
+                    onClick = { onRowClick(exercise.id) },
+                    secondaryAction = onSecondaryAction,
                 )
             }
         }
@@ -123,11 +158,15 @@ fun LibraryPickerScreen(
 }
 
 @Composable
-private fun LibraryRow(exercise: LibraryExercise, onPick: () -> Unit, onEdit: () -> Unit) {
+private fun LibraryRow(
+    exercise: LibraryExercise,
+    onClick: () -> Unit,
+    secondaryAction: Pair<(String) -> Unit, String>?,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPick),
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -151,7 +190,10 @@ private fun LibraryRow(exercise: LibraryExercise, onPick: () -> Unit, onEdit: ()
                     )
                 }
             }
-            TextButton(onClick = onEdit) { Text("Edit") }
+            if (secondaryAction != null) {
+                val (action, label) = secondaryAction
+                TextButton(onClick = { action(exercise.id) }) { Text(label) }
+            }
         }
     }
 }

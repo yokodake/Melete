@@ -6,6 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
@@ -60,7 +61,7 @@ class LoggingInvariantsTest {
             targetReps = 8,
             restSeconds = 30,
             measurement = Measurement(load, "kg", MeasurementMeaning.TOTAL_LOAD),
-            rpe = 8.0,
+            effort = EffortLevel.HARD,
         ),
     )
 
@@ -78,7 +79,7 @@ class LoggingInvariantsTest {
         assertEquals(4, exercise.defaultPrescription?.sets)
         assertEquals(8, exercise.defaultPrescription?.targetReps)
         assertEquals(30, exercise.defaultPrescription?.restSeconds)
-        assertEquals(8.0, exercise.defaultPrescription?.rpe ?: 0.0, 0.001)
+        assertEquals(EffortLevel.HARD, exercise.defaultPrescription?.effort)
         // Nothing about "dumbbell row" exists in code: an unloaded timed stretch is the same path.
         val stretchId = repository.createExercise(
             ExerciseDraft(
