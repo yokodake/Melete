@@ -58,6 +58,7 @@ fun WeekRoute(
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit,
     modifier: Modifier = Modifier,
+    bottomBar: @Composable () -> Unit = {},
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -70,6 +71,7 @@ fun WeekRoute(
         onClearSampleData = viewModel::clearSampleData,
         onOpenOccurrence = onOpenOccurrence,
         onAddExercise = { date -> onAddExercise(state.weekStart, date) },
+        bottomBar = bottomBar,
         modifier = modifier,
     )
 }
@@ -85,6 +87,7 @@ fun WeekScreen(
     onClearSampleData: () -> Unit,
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (LocalDate?) -> Unit,
+    bottomBar: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val rows = remember(state) { state.toRows() }
@@ -101,6 +104,7 @@ fun WeekScreen(
         modifier = modifier
             .fillMaxSize()
             .imePadding(),
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 // An opaque container so that list rows scrolling underneath are hidden by the

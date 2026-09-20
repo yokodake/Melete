@@ -3,6 +3,7 @@ package com.yokodake.melete.ui
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.model.ActualSetJson
 import com.yokodake.melete.data.model.ActualSetPayload
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.ui.logger.SetDraft
@@ -20,8 +21,7 @@ class SetDraftTest {
         val payload = SetDraft(reps = "8").toPayload("kg", MeasurementMeaning.TOTAL_LOAD)
         assertEquals(8, payload.reps)
         assertNull(payload.measurement)
-        assertNull(payload.rpe)
-        assertNull(payload.rir)
+        assertNull(payload.effort)
         assertNull(payload.durationSeconds)
     }
 
@@ -53,7 +53,7 @@ class SetDraftTest {
         val draft = SetDraft(
             reps = "8",
             measurement = "22.5",
-            rpe = "8",
+            effort = EffortLevel.VERY_HARD,
             side = BodySide.RIGHT,
             editingSetId = "set-1",
             showEffortFields = true,
@@ -63,11 +63,27 @@ class SetDraftTest {
     }
 
     @Test
+    fun `a rated set records the chosen level and nothing else`() {
+        val payload = SetDraft(reps = "8", effort = EffortLevel.MODERATE)
+            .toPayload("kg", MeasurementMeaning.TOTAL_LOAD)
+        assertEquals(EffortLevel.MODERATE, payload.effort)
+        assertEquals(3, payload.effort?.level)
+        assertEquals(payload, ActualSetJson.decode(ActualSetJson.encode(payload)))
+    }
+
+    @Test
+    fun `an unrated set is not recorded as easy`() {
+        val payload = SetDraft(reps = "8").toPayload("kg", MeasurementMeaning.TOTAL_LOAD)
+        assertNull(payload.effort)
+        assertNull(ActualSetJson.decode(ActualSetJson.encode(payload)).effort)
+    }
+
+    @Test
     fun `an actual set payload round trips`() {
         val payload = ActualSetPayload(
             reps = 6,
             measurement = Measurement(80.0, "kg", MeasurementMeaning.TOTAL_LOAD),
-            rir = 1,
+            effort = EffortLevel.HARD,
         )
         assertEquals(payload, ActualSetJson.decode(ActualSetJson.encode(payload)))
     }

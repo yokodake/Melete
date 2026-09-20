@@ -17,6 +17,7 @@ import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
@@ -49,8 +50,7 @@ data class SetDraft(
     val reps: String = "",
     val durationSeconds: String = "",
     val measurement: String = "",
-    val rpe: String = "",
-    val rir: String = "",
+    val effort: EffortLevel? = null,
     val side: BodySide? = null,
     /** Set when the draft is a correction of an already recorded set. */
     val editingSetId: String? = null,
@@ -64,8 +64,7 @@ data class SetDraft(
                 Measurement(value, it, meaning ?: MeasurementMeaning.TOTAL_LOAD)
             }
         },
-        rpe = rpe.toDoubleOrNull(),
-        rir = rir.toIntOrNull(),
+        effort = effort,
     )
 }
 
@@ -215,6 +214,8 @@ class LoggerViewModel(
 
     fun setSide(side: BodySide) = updateDraft { it.copy(side = side) }
 
+    fun setEffort(effort: EffortLevel?) = updateDraft { it.copy(effort = effort) }
+
     fun toggleEffortFields() = updateDraft { it.copy(showEffortFields = !it.showEffortFields) }
 
     private fun persistDraft() {
@@ -266,11 +267,10 @@ class LoggerViewModel(
             reps = set.payload.reps?.toString().orEmpty(),
             durationSeconds = set.payload.durationSeconds?.toString().orEmpty(),
             measurement = set.payload.measurement?.value?.let(::trimNumber).orEmpty(),
-            rpe = set.payload.rpe?.let(::trimNumber).orEmpty(),
-            rir = set.payload.rir?.toString().orEmpty(),
+            effort = set.payload.effort,
             side = set.side,
             editingSetId = set.id,
-            showEffortFields = set.payload.rpe != null || set.payload.rir != null,
+            showEffortFields = set.payload.effort != null,
         )
         persistDraft()
     }

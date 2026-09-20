@@ -7,7 +7,7 @@ import kotlinx.serialization.json.Json
  * Version of the named-field prescription payload. Bump it whenever the meaning of a field
  * changes, never reuse a name for a different quantity, and keep old versions readable.
  */
-const val PRESCRIPTION_PAYLOAD_VERSION: Int = 1
+const val PRESCRIPTION_PAYLOAD_VERSION: Int = 2
 
 /** How the app asks for a performed set. */
 enum class ExerciseMode {
@@ -51,7 +51,8 @@ data class PrescriptionPayload(
     val targetDurationSeconds: Int? = null,
     val restSeconds: Int? = null,
     val measurement: Measurement? = null,
-    val rpe: Double? = null,
+    /** Target effort on the five-point verbal scale. Replaced the numeric `rpe` field in v2. */
+    val effort: EffortLevel? = null,
     val rir: Int? = null,
 ) {
     init {

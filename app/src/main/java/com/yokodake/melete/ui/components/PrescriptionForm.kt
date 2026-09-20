@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -12,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
@@ -27,7 +31,7 @@ data class PrescriptionFormState(
     val targetDurationSeconds: String = "",
     val restSeconds: String = "",
     val measurementValue: String = "",
-    val rpe: String = "",
+    val effort: EffortLevel? = null,
     val rir: String = "",
 ) {
     fun toPayload(unit: String?, meaning: MeasurementMeaning?): PrescriptionPayload =
@@ -41,7 +45,7 @@ data class PrescriptionFormState(
                     Measurement(value, resolvedUnit, meaning ?: MeasurementMeaning.TOTAL_LOAD)
                 }
             },
-            rpe = rpe.toDoubleOrNull(),
+            effort = effort,
             rir = rir.toIntOrNull(),
         )
 
@@ -52,7 +56,7 @@ data class PrescriptionFormState(
             targetDurationSeconds = payload?.targetDurationSeconds?.toString().orEmpty(),
             restSeconds = payload?.restSeconds?.toString().orEmpty(),
             measurementValue = payload?.measurement?.value?.let(::trimNumber).orEmpty(),
-            rpe = payload?.rpe?.let(::trimNumber).orEmpty(),
+            effort = payload?.effort,
             rir = payload?.rir?.toString().orEmpty(),
         )
     }
@@ -117,26 +121,49 @@ fun PrescriptionFields(
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NumberField(
-                label = "Target RPE",
-                value = state.rpe,
-                onValueChange = { onStateChange(state.copy(rpe = it)) },
-                decimal = true,
-                modifier = Modifier.weight(1f),
-            )
-            NumberField(
-                label = "Target RIR",
-                value = state.rir,
-                onValueChange = { onStateChange(state.copy(rir = it)) },
-                modifier = Modifier.weight(1f),
-            )
-        }
+        Text("Target RPE", style = MaterialTheme.typography.bodyMedium)
+        EffortSelector(
+            selected = state.effort,
+            onSelect = { onStateChange(state.copy(effort = it)) },
+        )
+        NumberField(
+            label = "Target RIR",
+            value = state.rir,
+            onValueChange = { onStateChange(state.copy(rir = it)) },
+            modifier = Modifier.fillMaxWidth(0.5f),
+        )
         Text(
             text = "Leave a field empty to record it as not set. Empty is not zero.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * The five-point effort scale. Tapping the selected level clears it again, because an effort
+ * rating is always optional and must stay genuinely unset rather than defaulting to a middle
+ * value nobody chose.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EffortSelector(
+    selected: EffortLevel?,
+    onSelect: (EffortLevel?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        EffortLevel.entries.forEach { level ->
+            FilterChip(
+                selected = selected == level,
+                onClick = { onSelect(if (selected == level) null else level) },
+                label = { Text(level.label) },
+            )
+        }
     }
 }
 
