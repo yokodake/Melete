@@ -691,7 +691,7 @@ private fun formatSet(payload: ActualSetPayload, side: BodySide?, unit: String?)
             MeasurementMeaning.ASSISTANCE -> "−$value ${measurement.unit} assist"
         }
     }
-    payload.effort?.let { parts += "RPE ${it.label.lowercase()}" }
+    payload.effort?.let { parts += it.label.lowercase() }
     side?.let { parts += if (it == BodySide.LEFT) "L" else "R" }
     if (parts.isEmpty() && unit != null) parts += "no values"
     return parts.joinToString(" · ")

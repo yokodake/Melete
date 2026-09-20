@@ -53,9 +53,24 @@ class TimerCuePlayer(context: Context) : CuePlayer {
         .build()
 
     override fun play(cue: TimerCue) {
+        // Each family sounds different, so the cue itself says which moment it is without
+        // anyone having to look at the screen mid-set.
         val pattern = when (cue) {
-            TimerCue.WARNING -> Pattern(beeps = 2, toneMs = 110, gapMs = 90, frequencyHz = 880.0)
-            TimerCue.FINISH -> Pattern(beeps = 3, toneMs = 220, gapMs = 110, frequencyHz = 1175.0)
+            // Progress through a long set: one soft, low beep, easy to ignore.
+            TimerCue.QUARTER, TimerCue.HALF, TimerCue.THREE_QUARTERS ->
+                Pattern(beeps = 1, toneMs = 90, gapMs = 60, frequencyHz = 660.0)
+
+            // Thirty seconds left: two beeps, the traditional heads-up.
+            TimerCue.THIRTY_SECONDS ->
+                Pattern(beeps = 2, toneMs = 110, gapMs = 90, frequencyHz = 880.0)
+
+            // The last three seconds: one short tick each, like a starting light.
+            TimerCue.COUNT_3, TimerCue.COUNT_2, TimerCue.COUNT_1 ->
+                Pattern(beeps = 1, toneMs = 70, gapMs = 50, frequencyHz = 1046.0)
+
+            // Zero: unmistakable.
+            TimerCue.FINISH ->
+                Pattern(beeps = 3, toneMs = 220, gapMs = 110, frequencyHz = 1175.0)
         }
         vibrate(pattern)
         playTone(pattern)

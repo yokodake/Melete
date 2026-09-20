@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerState
 
@@ -112,7 +113,7 @@ fun TimerScreen(
                     state = state,
                     onPhase = viewModel::setDraftPhase,
                     onAdjust = viewModel::adjustDraftSeconds,
-                    onWarningLead = viewModel::setWarningLeadSeconds,
+                    onCues = viewModel::setCueSettings,
                     onStart = ::startWithNotifications,
                 )
             }
@@ -220,7 +221,7 @@ private fun IdleControls(
     state: TimerUiState,
     onPhase: (TimerPhase) -> Unit,
     onAdjust: (Int) -> Unit,
-    onWarningLead: (Int) -> Unit,
+    onCues: (CueSettings) -> Unit,
     onStart: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -246,29 +247,7 @@ private fun IdleControls(
             }
         }
     }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text("Warn before the end", style = MaterialTheme.typography.bodyMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(0, 10, 30).forEach { seconds ->
-                FilterChip(
-                    selected = state.warningLeadSeconds == seconds,
-                    onClick = { onWarningLead(seconds) },
-                    label = { Text(if (seconds == 0) "Off" else "${seconds}s") },
-                )
-            }
-        }
-        if (state.warningLeadSeconds > 0 && !state.warningApplies) {
-            Text(
-                text = "Longer than this countdown, so no warning will sound.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
+    CueSettingsControls(state = state, onCues = onCues)
     Button(onClick = onStart, modifier = Modifier.fillMaxWidth(0.7f)) {
         Text("Start")
     }
@@ -278,6 +257,65 @@ private fun IdleControls(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
     )
+}
+
+/**
+ * The cue families, and what this particular countdown will actually sound. A setting that cannot
+ * apply to the length you picked says so instead of quietly doing nothing.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CueSettingsControls(state: TimerUiState, onCues: (CueSettings) -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("Cues", style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.cues.thirtySecondWarning,
+                onClick = {
+                    onCues(
+                        state.cues.copy(thirtySecondWarning = !state.cues.thirtySecondWarning)
+                    )
+                },
+                label = { Text("30s left") },
+            )
+            FilterChip(
+                selected = state.cues.finalCountdown,
+                onClick = { onCues(state.cues.copy(finalCountdown = !state.cues.finalCountdown)) },
+                label = { Text("3–2–1") },
+            )
+            FilterChip(
+                selected = state.cues.quarterCues,
+                onClick = { onCues(state.cues.copy(quarterCues = !state.cues.quarterCues)) },
+                label = { Text("¼ ½ ¾") },
+            )
+        }
+        Text(
+            text = cueExplanation(state),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+private fun cueExplanation(state: TimerUiState): String {
+    val notes = mutableListOf<String>()
+    if (state.cues.thirtySecondWarning && !state.thirtySecondWarningApplies) {
+        notes += "too short for a 30s warning"
+    }
+    if (state.cues.quarterCues && !state.quarterCuesApply) {
+        notes += if (state.draftPhase != TimerPhase.WORK) {
+            "quarter cues are for work intervals"
+        } else {
+            "quarter cues start at one minute"
+        }
+    }
+    val count = state.plannedCues.size
+    val sounding = "$count cue${if (count == 1) "" else "s"} this countdown"
+    return if (notes.isEmpty()) sounding else "$sounding — ${notes.joinToString(", ")}"
 }
 
 @Composable

@@ -30,12 +30,17 @@ class TimerAlarms(context: Context) : AlarmScheduler {
     private val alarmManager =
         appContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
+    /**
+     * Only the two cues worth waking a dead process for: thirty seconds out, and the end. The
+     * finer cues are company while you train, not something to resurrect the app over, and eight
+     * exact alarms per rest interval would be a poor trade for a phone's battery.
+     */
     override fun schedule(state: TimerState.Running) {
         cancelAll()
-        state.warningAtElapsedMs
-            ?.takeIf { !state.warningFired }
-            ?.let { schedule(TimerCue.WARNING, state.runId, it) }
-        schedule(TimerCue.FINISH, state.runId, state.deadlineElapsedMs)
+        state.plan
+            .filter { it.cue == TimerCue.THIRTY_SECONDS || it.cue == TimerCue.FINISH }
+            .filter { it.cue !in state.delivered }
+            .forEach { schedule(it.cue, state.runId, state.instantOf(it)) }
     }
 
     private fun schedule(cue: TimerCue, runId: String, triggerElapsedMs: Long) {
@@ -55,7 +60,7 @@ class TimerAlarms(context: Context) : AlarmScheduler {
 
     /** Cancelling a countdown must leave nothing pending, or a cue arrives after it was called off. */
     override fun cancelAll() {
-        TimerCue.entries.forEach { cue ->
+        BACKSTOPPED_CUES.forEach { cue ->
             alarmManager.cancel(pendingIntent(cue, runId = null, mutable = false))
         }
     }
@@ -73,6 +78,7 @@ class TimerAlarms(context: Context) : AlarmScheduler {
 
     private companion object {
         const val TAG = "TimerAlarms"
+        val BACKSTOPPED_CUES = listOf(TimerCue.THIRTY_SECONDS, TimerCue.FINISH)
     }
 }
 

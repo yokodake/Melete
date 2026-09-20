@@ -39,13 +39,16 @@ class TimerCueDeliveryTest {
     }
 
     @Test
-    fun bothCuesArePlayable() {
+    fun everyCueIsPlayable() {
         val player = TimerCuePlayer(context)
-        player.play(TimerCue.WARNING)
-        Thread.sleep(800)
-        assertEquals(AudioManager.AUDIOFOCUS_REQUEST_GRANTED, player.lastFocusResult)
-        player.play(TimerCue.FINISH)
-        Thread.sleep(1_200)
-        assertEquals(AudioManager.AUDIOFOCUS_REQUEST_GRANTED, player.lastFocusResult)
+        TimerCue.entries.forEach { cue ->
+            player.play(cue)
+            Thread.sleep(600)
+            assertEquals(
+                "$cue was refused by the audio system",
+                AudioManager.AUDIOFOCUS_REQUEST_GRANTED,
+                player.lastFocusResult,
+            )
+        }
     }
 }

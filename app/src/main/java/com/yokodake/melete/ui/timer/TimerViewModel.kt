@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yokodake.melete.MeleteApplication
+import com.yokodake.melete.data.timer.CuePlanner
+import com.yokodake.melete.data.timer.CueSettings
+import com.yokodake.melete.data.timer.PlannedCue
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerState
@@ -24,15 +27,23 @@ data class TimerUiState(
     val totalMs: Long = 0,
     val draftSeconds: Int = 180,
     val draftPhase: TimerPhase = TimerPhase.REST,
-    val warningLeadSeconds: Int = 10,
+    val cues: CueSettings = CueSettings(),
 ) {
     val isRunning: Boolean get() = state is TimerState.Running
     val isPaused: Boolean get() = state is TimerState.Paused
     val isIdle: Boolean get() = state is TimerState.Idle
 
-    /** A warning that is not shorter than the countdown is no warning at all; say so up front. */
-    val warningApplies: Boolean
-        get() = warningLeadSeconds > 0 && warningLeadSeconds < draftSeconds
+    /** What this countdown will actually sound, given its length. */
+    val plannedCues: List<PlannedCue>
+        get() = CuePlanner.plan(draftPhase, draftSeconds * 1000L, cues)
+
+    val quarterCuesApply: Boolean
+        get() = cues.quarterCues &&
+            draftPhase == TimerPhase.WORK &&
+            draftSeconds * 1000L >= CuePlanner.QUARTER_CUE_MIN_MS
+
+    val thirtySecondWarningApplies: Boolean
+        get() = cues.thirtySecondWarning && draftSeconds > 30
 
     val progress: Float
         get() = if (totalMs <= 0) 0f else (1f - remainingMs.toFloat() / totalMs).coerceIn(0f, 1f)
@@ -44,7 +55,7 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
         Draft(
             phase = TimerPhase.REST,
             seconds = controller.lastDurationSeconds(TimerPhase.REST),
-            warningLeadSeconds = controller.warningLeadSeconds,
+            cues = controller.cueSettings,
         )
     )
 
@@ -68,7 +79,7 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
                 },
                 draftSeconds = currentDraft.seconds,
                 draftPhase = currentDraft.phase,
-                warningLeadSeconds = currentDraft.warningLeadSeconds,
+                cues = currentDraft.cues,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -100,14 +111,14 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
 
     fun adjustDraftSeconds(delta: Int) = setDraftSeconds(draft.value.seconds + delta)
 
-    fun setWarningLeadSeconds(seconds: Int) {
-        controller.setWarningLeadSeconds(seconds)
-        draft.value = draft.value.copy(warningLeadSeconds = seconds)
+    fun setCueSettings(settings: CueSettings) {
+        controller.setCueSettings(settings)
+        draft.value = draft.value.copy(cues = settings)
     }
 
     fun start() {
         val current = draft.value
-        controller.start(current.phase, current.seconds, current.warningLeadSeconds)
+        controller.start(current.phase, current.seconds, current.cues)
     }
 
     fun pause() = controller.pause()
@@ -121,7 +132,7 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
     private data class Draft(
         val phase: TimerPhase,
         val seconds: Int,
-        val warningLeadSeconds: Int,
+        val cues: CueSettings,
     )
 
     companion object {
