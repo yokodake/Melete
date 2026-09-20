@@ -6,7 +6,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -15,7 +18,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.R
+import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.ui.library.ExerciseEditorRoute
 import com.yokodake.melete.ui.library.LibraryPickerRoute
 import com.yokodake.melete.ui.library.LibraryRoute
@@ -78,6 +84,7 @@ private enum class Tab(
 
 @Composable
 fun MeleteApp(navController: NavHostController = rememberNavController()) {
+    KeepScreenOnWhileCountingDown()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val bottomBar: @Composable () -> Unit = {
         MeleteNavigationBar(
@@ -128,6 +135,26 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         composable<LoggerDestination> {
             LoggerRoute(onBack = { navController.popBackStack() })
         }
+    }
+}
+
+/**
+ * Holds the screen awake while a countdown is actually running.
+ *
+ * This is a window flag rather than a wake lock, so it only applies while the app is on screen and
+ * cannot leave the display on once you put the phone down — and it is tied to a running countdown
+ * rather than to the timer tab being open, so parking on that tab does not burn the screen. Pause,
+ * cancel or the end releases it immediately.
+ */
+@Composable
+private fun KeepScreenOnWhileCountingDown() {
+    val application = LocalContext.current.applicationContext as? MeleteApplication ?: return
+    val timerState by application.container.timerController.state.collectAsStateWithLifecycle()
+    val view = LocalView.current
+    val keepAwake = timerState is TimerState.Running
+    DisposableEffect(view, keepAwake) {
+        view.keepScreenOn = keepAwake
+        onDispose { view.keepScreenOn = false }
     }
 }
 

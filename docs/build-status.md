@@ -46,6 +46,8 @@ Last updated: 2026-09-20, end of phase 3.
 - A persistent notification carries the remaining time as a countdown chronometer, with pause,
   resume and cancel buttons.
 - The logger shows the remaining time inline and offers *Rest* right after a set is confirmed.
+- The screen is held awake while a countdown is running and the app is on screen, so the phone
+  does not lock mid-rest.
 - Reaching zero never records a set. The finished notification says so in as many words.
 
 ### Bottom navigation and the effort scale
@@ -183,6 +185,10 @@ foreground service types, background audio and exact alarms.
   it kills the process — easy to hit with a one-second countdown or a start the user immediately
   cancels. The service watches the state and stands itself down instead, and `startForeground` is
   always the first thing `onStartCommand` does.
+- **Keeping the screen on is a window flag, not a wake lock.** `View.keepScreenOn` applies only
+  while the app's window is visible, so it cannot leave the display on once the phone is put down,
+  and it is tied to a countdown actually running rather than to the timer tab being open — parking
+  on that tab should not burn the screen. Pause, cancel or the end releases it at once.
 - **A foreground service does not keep the CPU awake.** A partial wake lock does, held only while
   a countdown is actually running and bounded by its remaining time plus ten seconds, so a bug
   cannot leave it held.
@@ -302,7 +308,12 @@ Phase 3:
 - No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
   not created speculatively.
 - **Still owed:** behaviour while another app is playing audio (the user is checking this against
-  Spotify), and forced Doze. A first forced-Doze attempt was inconclusive because the countdown
+  Spotify); forced Doze; and end-to-end confirmation that the screen stays awake for a whole
+  countdown. On the last one, the window flag was confirmed engaged —
+  `SCREEN_BRIGHT_WAKE_LOCK 'WindowManager/displayId:0'` attributed to the app appears in
+  `dumpsys power` while a countdown runs — but the observation that the screen outlived the
+  thirty-second timeout was confounded, because the countdown under test may have finished first.
+  The flag is doing what it should; that it holds for a full rest is unconfirmed. A first forced-Doze attempt was inconclusive because the countdown
   under test never started, so nothing can be claimed about it yet. Surviving the app being
   *killed* is explicitly not a requirement: the foreground service is what keeps the countdown
   alive in the background, and that is what was verified.
