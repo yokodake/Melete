@@ -1,5 +1,6 @@
 package com.yokodake.melete.ui.week
 
+import com.yokodake.melete.data.LibraryExercise
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
@@ -8,15 +9,34 @@ import com.yokodake.melete.data.model.PrescriptionPayload
 
 /**
  * One-line rendering of a *planned* prescription. This is never a record of performed work; the
- * logger added in phase 2 shows actuals separately and clearly distinguished.
+ * logger shows actuals separately and clearly distinguished.
  */
 object PrescriptionSummary {
 
-    fun format(occurrence: PlannedOccurrence): String {
-        if (occurrence.prescriptionUnreadable) return "Prescription could not be read"
-        val prescription = occurrence.prescription ?: return "No prescription"
+    fun format(occurrence: PlannedOccurrence): String = format(
+        prescription = occurrence.prescription,
+        mode = occurrence.mode,
+        unilateral = occurrence.unilateral,
+        unreadable = occurrence.prescriptionUnreadable,
+    )
+
+    fun formatDefault(exercise: LibraryExercise): String = format(
+        prescription = exercise.defaultPrescription,
+        mode = exercise.mode,
+        unilateral = exercise.unilateral,
+        unreadable = false,
+    )
+
+    private fun format(
+        prescription: PrescriptionPayload?,
+        mode: ExerciseMode,
+        unilateral: Boolean,
+        unreadable: Boolean,
+    ): String {
+        if (unreadable) return "Prescription could not be read"
+        if (prescription == null) return "No prescription"
         val parts = mutableListOf<String>()
-        parts += volume(prescription, occurrence.mode, occurrence.unilateral)
+        parts += volume(prescription, mode, unilateral)
         prescription.measurement?.let { parts += measurement(it) }
         prescription.restSeconds?.let { parts += "rest ${duration(it)}" }
         prescription.rpe?.let { parts += "RPE ${number(it)}" }

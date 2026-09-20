@@ -1,5 +1,6 @@
 package com.yokodake.melete.ui.week
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -54,6 +55,8 @@ import java.time.LocalDate
 
 @Composable
 fun WeekRoute(
+    onOpenOccurrence: (String) -> Unit,
+    onAddExercise: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
 ) {
@@ -65,6 +68,8 @@ fun WeekRoute(
         onCurrentWeek = viewModel::showCurrentWeek,
         onSeedSampleData = viewModel::seedSampleData,
         onClearSampleData = viewModel::clearSampleData,
+        onOpenOccurrence = onOpenOccurrence,
+        onAddExercise = { date -> onAddExercise(state.weekStart, date) },
         modifier = modifier,
     )
 }
@@ -78,6 +83,8 @@ fun WeekScreen(
     onCurrentWeek: () -> Unit,
     onSeedSampleData: () -> Unit,
     onClearSampleData: () -> Unit,
+    onOpenOccurrence: (String) -> Unit,
+    onAddExercise: (LocalDate?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val rows = remember(state) { state.toRows() }
@@ -155,9 +162,22 @@ fun WeekScreen(
         ) {
             items(items = rows, key = { it.key }) { row ->
                 when (row) {
-                    is WeekRow.SectionHeading -> SectionHeading(row.title, row.subtitle)
-                    is WeekRow.DayHeading -> DayHeading(row)
-                    is WeekRow.Occurrence -> OccurrenceCard(row.occurrence)
+                    is WeekRow.SectionHeading -> SectionHeading(
+                        title = row.title,
+                        subtitle = row.subtitle,
+                        onAdd = { onAddExercise(null) },
+                    )
+
+                    is WeekRow.DayHeading -> DayHeading(
+                        row = row,
+                        onAdd = { onAddExercise(row.date) },
+                    )
+
+                    is WeekRow.Occurrence -> OccurrenceCard(
+                        occurrence = row.occurrence,
+                        onClick = { onOpenOccurrence(row.occurrence.id) },
+                    )
+
                     is WeekRow.Hint -> Hint(row.text)
                 }
             }
@@ -198,31 +218,46 @@ private fun DeveloperMenu(
 }
 
 @Composable
-private fun SectionHeading(title: String, subtitle: String?) {
-    Column(modifier = Modifier.padding(top = 8.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        if (subtitle != null) {
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+private fun AddButton(description: String, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.semantics { contentDescription = description },
+    ) {
+        Text("+", style = MaterialTheme.typography.titleLarge)
     }
 }
 
 @Composable
-private fun DayHeading(row: WeekRow.DayHeading) {
+private fun SectionHeading(title: String, subtitle: String?, onAdd: () -> Unit) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            AddButton("Add an exercise without a date", onAdd)
+        }
+        HorizontalDivider()
+    }
+}
+
+@Composable
+private fun DayHeading(row: WeekRow.DayHeading, onAdd: () -> Unit) {
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
+                .padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -239,9 +274,10 @@ private fun DayHeading(row: WeekRow.DayHeading) {
             if (row.isToday) {
                 Chip("Today", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
             }
+            Surface(modifier = Modifier.weight(1f), color = Color.Transparent) {}
+            AddButton("Add an exercise to ${WeekMath.dayLabel(row.date)}", onAdd)
         }
         HorizontalDivider(
-            modifier = Modifier.padding(top = 4.dp),
             color = if (row.isToday) {
                 MaterialTheme.colorScheme.primary
             } else {
@@ -252,9 +288,11 @@ private fun DayHeading(row: WeekRow.DayHeading) {
 }
 
 @Composable
-private fun OccurrenceCard(occurrence: PlannedOccurrence) {
+private fun OccurrenceCard(occurrence: PlannedOccurrence, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -384,7 +422,10 @@ private fun WeekScreenPreview() {
         mode = ExerciseMode.REPETITIONS,
         unilateral = unilateral,
         measurementUnit = "kg",
+        measurementMeaning = MeasurementMeaning.TOTAL_LOAD,
         trainingDate = date,
+        weekStart = monday,
+        prescriptionId = null,
         prescription = PrescriptionPayload(
             sets = 4,
             targetReps = 8,
@@ -416,6 +457,8 @@ private fun WeekScreenPreview() {
             onCurrentWeek = {},
             onSeedSampleData = {},
             onClearSampleData = {},
+            onOpenOccurrence = {},
+            onAddExercise = {},
         )
     }
 }
