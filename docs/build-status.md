@@ -1,6 +1,6 @@
 # Build status
 
-Last updated: 2026-09-20, end of phase 2.
+Last updated: 2026-09-20, end of phase 3.
 
 ## Completed phases
 
@@ -35,7 +35,24 @@ Last updated: 2026-09-20, end of phase 2.
   `exercise_occurrences.measurementMeaningSnapshot`.
 - Navigation added (`navigation-compose`, type-safe routes in `ui/Navigation.kt`).
 
-Not implemented yet, by design: timer, modules, duration capture, dashboard, export — and moving
+### Phase 3 — the timer ✅
+
+- One countdown, for work or for rest, started from the timer tab or from the exercise being
+  logged. Adjustable before it starts, then pause, resume and cancel.
+- Advance warning of 30s, 10s or off. A warning at least as long as the countdown is dropped
+  rather than fired at the start, and the screen says so before you start.
+- A persistent notification carries the remaining time as a countdown chronometer, with pause,
+  resume and cancel buttons.
+- The logger shows the remaining time inline and offers *Rest* right after a set is confirmed.
+- Reaching zero never records a set. The finished notification says so in as many words.
+
+### Bottom navigation and the effort scale
+
+- Three tabs — week, library, timer — hidden inside the picker, exercise editor and logger.
+- Effort is a five-point verbal scale stored as its integer level; reps in reserve stays a
+  planning field and is not asked for when logging.
+
+Not implemented yet, by design: modules, duration capture, dashboard, export — and moving
 an occurrence that already has a date, which belongs to phase 4 because it needs the explicit
 distinction between moving remaining planned work and correcting a historical training date.
 
@@ -61,6 +78,16 @@ com.yokodake.melete
   ui/week/                  WeekScreen, WeekViewModel, WeekUiState, PrescriptionSummary
   ui/library/               LibraryPicker, ExerciseEditor (+ view models)
   ui/logger/                LoggerScreen, LoggerViewModel, SetDraft
+  ui/timer/                 TimerScreen, TimerViewModel
+  data/timer/
+    TimerState.kt           deadline-based state and the pure pause/resume arithmetic
+    TimerSnapshot.kt        what is persisted, and how a run is restored after a reboot
+    TimerStore.kt           SharedPreferences: snapshot, cue bookkeeping, settings
+    TimerController.kt      the single owner: start, pause, resume, cancel, cue delivery
+    TimerService.kt         foreground service (specialUse) and the notification actions
+    TimerAlarms.kt          one-shot exact alarms as the backstop, and their receiver
+    TimerCuePlayer.kt       generated USAGE_ALARM tone and vibration
+    TimerNotifications.kt   channels, the ongoing countdown, the finished alert
 ```
 
 ## Important choices
@@ -120,6 +147,54 @@ com.yokodake.melete
   part of the current Compose BOM, so navigation uses `‹` / `›` / `⋮` / `+` glyphs with
   `contentDescription` semantics. Revisit if an icon dependency is added later.
 
+## How the timer works, and why
+
+Checked against the current Android documentation on 2026-09-20; the version-sensitive parts are
+foreground service types, background audio and exact alarms.
+
+- **A countdown is a deadline on `SystemClock.elapsedRealtime()`**, never a decrementing counter.
+  A counter drifts, stops when the process is frozen and cannot be rebuilt after the UI is
+  recreated. Elapsed-realtime keeps running while the device sleeps and is immune to the wall
+  clock being changed. Rotation, navigation and process death therefore cost nothing: the state is
+  re-derived from the clock.
+- **Reboots are detected with `Settings.Global.BOOT_COUNT`**, stored beside the deadline. After a
+  restart the old deadline belongs to a clock that no longer exists, so a running countdown is
+  reported as *interrupted* rather than resumed from a fabricated number. A paused countdown does
+  survive a reboot, because its remaining time is a duration rather than a point in time.
+- **Foreground service type `specialUse`.** A training countdown matches none of the defined
+  categories. `shortService` is the obvious candidate and is wrong twice over: it is capped at
+  three minutes, which is shorter than an ordinary hangboard rest, and Android 17 excludes it from
+  background audio outright. `specialUse` has no runtime timeout, and the Play Console declaration
+  it normally requires does not apply to an app that is never published. The manifest carries the
+  required `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` explanation.
+- **The service is started from a tap while the app is visible**, which is what grants it
+  while-in-use capability. On Android 17 an app in the background may only touch audio through a
+  while-in-use-capable foreground service — with one waiver, for `USAGE_ALARM` streams from an app
+  holding exact-alarm permission. The cues use exactly those attributes and the app holds
+  `USE_EXACT_ALARM`, so the waiver covers the case that matters most: a cue owed after the process
+  has been killed.
+- **`USE_EXACT_ALARM` rather than `SCHEDULE_EXACT_ALARM`.** A countdown that warns ten seconds
+  before a hang ends is an alarm-clock-like function; the permission is granted at install and
+  cannot be revoked out from under a running countdown.
+- **The service never calls `stopService` on itself from the controller.** Stopping a service whose
+  `startForegroundService` has not yet reached `startForeground` breaks the platform's promise and
+  it kills the process — easy to hit with a one-second countdown or a start the user immediately
+  cancels. The service watches the state and stands itself down instead, and `startForeground` is
+  always the first thing `onStartCommand` does.
+- **A foreground service does not keep the CPU awake.** A partial wake lock does, held only while
+  a countdown is actually running and bounded by its remaining time plus ten seconds, so a bug
+  cannot leave it held.
+- **Two one-shot exact alarms per run, not a repeating alarm.** The countdown itself is driven in
+  process; the alarms exist only so a frozen or killed app still sounds at the warning and at the
+  end. Both are on the elapsed-realtime clock, the same clock as the deadline.
+- **Every cue passes through one delivery gate.** Durable bookkeeping records which cues a run has
+  already had, so the in-process path and the alarm path cannot both sound. The state moves on
+  whichever path wins, so a cue rung by the other one still ends the countdown rather than
+  stranding it.
+- **Audio behaviour with other apps playing.** Focus is requested as transient-may-duck, so music
+  dips for the beep rather than stopping. The notification channels are deliberately silent: the
+  cue is played explicitly, and a channel sound would double every beep.
+
 ## Commands that work
 
 `JAVA_HOME` must point at a JDK; Android Studio's bundled one works:
@@ -134,6 +209,7 @@ com.yokodake.melete
 | Install on a connected device | `./gradlew :app:installDebug` |
 | Install a built APK by hand | `adb install -r app/build/outputs/apk/debug/app-debug.apk` |
 | Launch | `adb shell am start -n com.yokodake.melete/.MainActivity` |
+| Make audio violations loud instead of silent | `adb shell cmd audio set-enable-hardening throw` |
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
@@ -182,10 +258,41 @@ Phase 2:
   the upgrade once over a populated database using `scripts/device-tests.sh` so the install is not
   wiped first.
 
+Phase 3:
+
+- `./gradlew :app:testDebugUnitTest` — 39 tests passing, 12 of them the timer arithmetic: remaining
+  time never negative, pause and resume preserving remaining time without shifting the deadline, a
+  warning already given not repeated after resuming, a warning at least as long as the countdown
+  dropped rather than fired at the start, a running countdown after a reboot reported interrupted,
+  a paused one surviving a reboot, and a run that expired while the process was gone coming back
+  finished.
+- `scripts/device-tests.sh` — 29 instrumented tests passing on the Pixel 9, 9 of them timer
+  delivery: a countdown sounding exactly once, a late backstop alarm for the same run not sounding
+  again, warning and end delivered once each and in order, cancelling leaving nothing pending,
+  pause and resume not repeating the warning, a run surviving the controller that owned it, and an
+  alarm delivering the cue when the countdown itself never got there.
+- The cue was played through the real `TimerCuePlayer` with
+  `adb shell cmd audio set-enable-hardening throw` in force: focus was granted and no
+  `AudioHardening` entries appeared in logcat, so the `USAGE_ALARM` attributes are accepted rather
+  than silently dropped.
+- A crash found by these tests and fixed: starting the foreground service and then stopping it
+  before it reached `startForeground` killed the process with
+  `ForegroundServiceDidNotStartInTimeException`.
+
 ## Known limitations
 
-- No timer, modules, duration capture, dashboard or export yet; those tables and screens are
-  deliberately not created speculatively.
+- No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
+  not created speculatively.
+- **The timer checks still owed on a real phone, in the user's hands:** that the cue is *audible*
+  with the screen locked and the app not in front, how it behaves while another app is playing
+  audio, and whether the cue still arrives under forced Doze
+  (`adb shell dumpsys battery unplug && adb shell dumpsys deviceidle force-idle`, then
+  `adb shell dumpsys battery reset`). The automated checks above establish that the audio system
+  accepts the cue and that the arithmetic recovers; they do not establish audibility from a
+  process the system has killed, and instrumentation keeps the app in a more privileged state than
+  a genuinely backgrounded one.
+- Only one countdown exists at a time, and there is no automatic work/rest sequence. That is
+  phase 7C, deliberately after the single timer has been used in a real session.
 - An occurrence that already has a date cannot be moved to another day, and a recorded set cannot
   be re-dated. Both need phase 4's explicit distinction between rescheduling remaining work and
   correcting a historical date.

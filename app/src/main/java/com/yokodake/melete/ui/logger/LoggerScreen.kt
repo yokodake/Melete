@@ -58,6 +58,8 @@ import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
+import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.ui.timer.formatClock
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.ui.components.EffortSelector
 import com.yokodake.melete.ui.components.NumberField
@@ -74,13 +76,15 @@ fun LoggerRoute(
     viewModel: LoggerViewModel = viewModel(factory = LoggerViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LoggerScreen(state = state, viewModel = viewModel, onBack = onBack)
+    val timer by viewModel.timerState.collectAsStateWithLifecycle()
+    LoggerScreen(state = state, timer = timer, viewModel = viewModel, onBack = onBack)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoggerScreen(
     state: LoggerUiState,
+    timer: LoggerTimerState,
     viewModel: LoggerViewModel,
     onBack: () -> Unit,
 ) {
@@ -140,6 +144,7 @@ fun LoggerScreen(
                     onConfirm = viewModel::confirmSet,
                     onUndo = viewModel::undoLastSet,
                     onCancelEdit = viewModel::cancelEdit,
+                    onStartRest = viewModel::startRest,
                 )
             }
         },
@@ -159,6 +164,16 @@ fun LoggerScreen(
                 PlannedCard(
                     occurrence = occurrence,
                     onEdit = viewModel::openPrescriptionEditor,
+                )
+            }
+            item {
+                TimerRow(
+                    timer = timer,
+                    canStartWork = occurrence.mode.isTimed &&
+                        occurrence.prescription?.targetDurationSeconds != null,
+                    restSeconds = occurrence.prescription?.restSeconds,
+                    onStartWork = viewModel::startWork,
+                    onStartRest = viewModel::startRest,
                 )
             }
             if (occurrence.trainingDate == null) {
@@ -311,6 +326,70 @@ private fun SectionLabel(text: String) {
             fontWeight = FontWeight.SemiBold,
         )
         HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/**
+ * The countdown, reachable from the exercise being logged. Starting one is always a deliberate
+ * tap, and a running one shows its remaining time here so there is no need to leave the logger.
+ */
+@Composable
+private fun TimerRow(
+    timer: LoggerTimerState,
+    canStartWork: Boolean,
+    restSeconds: Int?,
+    onStartWork: () -> Unit,
+    onStartRest: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (timer.active) {
+                MaterialTheme.colorScheme.tertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (timer.active) {
+                        val phase = if (timer.phase == TimerPhase.WORK) "Work" else "Rest"
+                        if (timer.paused) "$phase paused" else phase
+                    } else {
+                        "Timer"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(
+                    text = if (timer.active) {
+                        formatClock(timer.remainingMs)
+                    } else {
+                        "Not running"
+                    },
+                    style = if (timer.active) {
+                        MaterialTheme.typography.headlineSmall
+                    } else {
+                        MaterialTheme.typography.bodyMedium
+                    },
+                    color = if (timer.active) {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            if (canStartWork) {
+                TextButton(onClick = onStartWork) { Text("Work") }
+            }
+            TextButton(onClick = onStartRest) {
+                Text(restSeconds?.let { "Rest ${PrescriptionSummary.duration(it)}" } ?: "Rest")
+            }
+        }
     }
 }
 
@@ -505,6 +584,7 @@ private fun SetEntryBar(
     onConfirm: () -> Unit,
     onUndo: () -> Unit,
     onCancelEdit: () -> Unit,
+    onStartRest: () -> Unit,
 ) {
     val draft = state.draft
     Surface(
@@ -577,6 +657,7 @@ private fun SetEntryBar(
                     TextButton(onClick = onCancelEdit) { Text("Cancel") }
                 } else if (state.undoableSetId != null) {
                     TextButton(onClick = onUndo) { Text("Undo") }
+                    TextButton(onClick = onStartRest) { Text("Rest") }
                 }
                 Button(
                     onClick = onConfirm,

@@ -2,6 +2,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- The countdown keeps running, and has to be able to sound, while the phone is locked. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+      USE_EXACT_ALARM rather than SCHEDULE_EXACT_ALARM: a countdown that warns you ten seconds
+      before a hang ends is an alarm-clock-like function, the permission cannot be revoked out
+      from under it, and on Android 17 holding it is what lets a USAGE_ALARM cue sound after the
+      process has been killed.
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
     <application
         android:name=".MeleteApplication"
         android:allowBackup="true"
@@ -24,6 +38,23 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".data.timer.TimerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a single user-started training countdown running and audible while the screen is off, for rest and work intervals during a workout." />
+        </service>
+
+        <receiver
+            android:name=".data.timer.TimerAlarmReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".data.timer.TimerActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>
