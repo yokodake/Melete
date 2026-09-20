@@ -14,6 +14,9 @@ import com.yokodake.melete.data.PerformedSet
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.PreviousResult
 import com.yokodake.melete.data.TrainingRepository
+import com.yokodake.melete.data.timer.TimerController
+import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
@@ -31,12 +34,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import android.os.SystemClock
 import java.time.Clock
 import java.time.LocalDate
 
@@ -93,9 +98,56 @@ data class LoggerUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoggerViewModel(
     private val repository: TrainingRepository,
+    private val timer: TimerController,
     private val savedStateHandle: SavedStateHandle,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
+
+    /**
+     * The countdown as the logger needs to see it: a glance at the remaining time without leaving
+     * the set you are logging. The timer itself is owned elsewhere and is never advanced here.
+     */
+    val timerState: StateFlow<LoggerTimerState> = combine(
+        timer.state,
+        tickerFlow(),
+    ) { state, nowMs ->
+        LoggerTimerState(
+            phase = (state as? TimerState.Running)?.phase
+                ?: (state as? TimerState.Paused)?.phase,
+            remainingMs = when (state) {
+                is TimerState.Running -> state.remainingMs(nowMs)
+                is TimerState.Paused -> state.remainingMs
+                else -> 0
+            },
+            running = state is TimerState.Running,
+            paused = state is TimerState.Paused,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = LoggerTimerState(),
+    )
+
+    private fun tickerFlow() = flow {
+        while (true) {
+            emit(SystemClock.elapsedRealtime())
+            kotlinx.coroutines.delay(500)
+        }
+    }
+
+    /** Starts the rest prescribed for this exercise, or a sensible default when none is set. */
+    fun startRest() {
+        val seconds = uiState.value.occurrence?.prescription?.restSeconds
+            ?: timer.lastDurationSeconds(TimerPhase.REST)
+        timer.start(TimerPhase.REST, seconds)
+    }
+
+    /** Starts the prescribed work interval of a timed exercise. */
+    fun startWork() {
+        val seconds = uiState.value.occurrence?.prescription?.targetDurationSeconds
+            ?: timer.lastDurationSeconds(TimerPhase.WORK)
+        timer.start(TimerPhase.WORK, seconds)
+    }
 
     private val occurrenceId: String = savedStateHandle.toRoute<LoggerDestination>().occurrenceId
 
@@ -241,6 +293,8 @@ class LoggerViewModel(
                     side = state.draft.side,
                     trainingDate = state.targetDate,
                 )
+                // Confirming a set never starts a countdown by itself: resting is offered, not
+                // imposed, and the timer must stay independent of what was recorded.
                 transient.update { it.copy(undoableSetId = id, message = null) }
                 // Keep the values for the next set; for unilateral work move to the other side
                 // without implying that it has already been done.
@@ -390,11 +444,22 @@ class LoggerViewModel(
                     as MeleteApplication
                 LoggerViewModel(
                     application.container.trainingRepository,
+                    application.container.timerController,
                     createSavedStateHandle(),
                 )
             }
         }
     }
+}
+
+/** The countdown as shown inside the logger. */
+data class LoggerTimerState(
+    val phase: TimerPhase? = null,
+    val remainingMs: Long = 0,
+    val running: Boolean = false,
+    val paused: Boolean = false,
+) {
+    val active: Boolean get() = running || paused
 }
 
 /** True when the exercise records a duration rather than repetitions. */
