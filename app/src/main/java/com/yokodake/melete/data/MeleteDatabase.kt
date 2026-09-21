@@ -30,7 +30,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         TrainingSessionEntity::class,
         ActualSetEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)
@@ -127,7 +127,19 @@ abstract class MeleteDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        /**
+         * Retiring an exercise from the library. One nullable column: everything that already
+         * refers to an exercise keeps referring to it, so there is nothing to backfill and
+         * nothing that can be lost.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE `exercises` ADD COLUMN `deletedAtEpochMs` INTEGER")
+            }
+        }
+
+        val MIGRATIONS: Array<Migration> =
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 
         fun build(context: Context): MeleteDatabase =
             Room.databaseBuilder(context, MeleteDatabase::class.java, DATABASE_NAME)

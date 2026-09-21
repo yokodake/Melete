@@ -36,6 +36,15 @@ data class ExerciseEntity(
     val description: String? = null,
     /** Optional training-purpose grouping. Absent is a valid answer. */
     val category: ExerciseCategory? = null,
+    /**
+     * When the user retired this exercise from the library, or null while it is still in use.
+     *
+     * A tombstone rather than a delete, because the row is the anchor for everything that refers
+     * to it: scheduled copies keep working, logged sets keep grouping under the same stable id,
+     * and "previous results" still finds them. Removing the definition removes it from the
+     * *library*, which is a statement about what you plan to do next, not about what you did.
+     */
+    val deletedAtEpochMs: Long? = null,
 )
 
 /**

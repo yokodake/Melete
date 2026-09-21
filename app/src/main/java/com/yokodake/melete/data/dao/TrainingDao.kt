@@ -21,6 +21,12 @@ data class OccurrenceWithPrescription(
     val prescription: PrescriptionEntity?,
 )
 
+/** Which performed date an occurrence's work is filed under. */
+data class PerformedDateRow(
+    val occurrenceId: String,
+    val trainingDateEpochDay: Long,
+)
+
 /** A library exercise together with its current default prescription. */
 data class ExerciseWithDefaultPrescription(
     @Embedded val exercise: ExerciseEntity,
@@ -77,6 +83,32 @@ interface TrainingDao {
     @Query("DELETE FROM exercise_occurrences WHERE id = :id")
     suspend fun deleteOccurrence(id: String)
 
+    /** Every occurrence of one exercise, newest planning first. Includes retired definitions. */
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM exercise_occurrences
+        WHERE exerciseId = :exerciseId
+        ORDER BY trainingDateEpochDay DESC, createdAtEpochMs DESC
+        """
+    )
+    fun observeOccurrencesOf(exerciseId: String): Flow<List<OccurrenceWithPrescription>>
+
+    /** Occurrences sharing one slot, in the order they are shown. */
+    @Query(
+        """
+        SELECT * FROM exercise_occurrences
+        WHERE weekStartEpochDay = :weekStartEpochDay
+          AND ((:trainingDateEpochDay IS NULL AND trainingDateEpochDay IS NULL)
+               OR trainingDateEpochDay = :trainingDateEpochDay)
+        ORDER BY orderIndex, createdAtEpochMs
+        """
+    )
+    suspend fun occurrencesInSlot(
+        weekStartEpochDay: Long,
+        trainingDateEpochDay: Long?,
+    ): List<ExerciseOccurrenceEntity>
+
     @Query("DELETE FROM actual_sets WHERE occurrenceId IN (SELECT id FROM exercise_occurrences WHERE isSampleData = 1)")
     suspend fun deleteSampleActualSets()
 
@@ -93,8 +125,15 @@ interface TrainingDao {
 @Dao
 interface LibraryDao {
 
+    /** The active library: what you can still plan. Retired entries are excluded. */
     @Transaction
-    @Query("SELECT * FROM exercises ORDER BY name COLLATE NOCASE")
+    @Query(
+        """
+        SELECT * FROM exercises
+        WHERE deletedAtEpochMs IS NULL
+        ORDER BY name COLLATE NOCASE
+        """
+    )
     fun observeExercises(): Flow<List<ExerciseWithDefaultPrescription>>
 
     @Transaction
@@ -116,6 +155,12 @@ interface LibraryDao {
 
     @Query("SELECT * FROM prescriptions WHERE id = :id")
     suspend fun getPrescription(id: String): PrescriptionEntity?
+
+    @Query("UPDATE exercises SET deletedAtEpochMs = :atEpochMs WHERE id = :id")
+    suspend fun markExerciseDeleted(id: String, atEpochMs: Long)
+
+    @Query("UPDATE exercises SET deletedAtEpochMs = NULL WHERE id = :id")
+    suspend fun restoreExercise(id: String)
 }
 
 @Dao
@@ -161,4 +206,35 @@ interface LoggingDao {
 
     @Query("DELETE FROM actual_sets WHERE id = :id")
     suspend fun deleteSet(id: String)
+
+    @Query("SELECT * FROM actual_sets WHERE occurrenceId = :occurrenceId ORDER BY orderIndex")
+    suspend fun setsForOccurrence(occurrenceId: String): List<ActualSetEntity>
+
+    @Query("DELETE FROM actual_sets WHERE occurrenceId = :occurrenceId")
+    suspend fun deleteSetsForOccurrence(occurrenceId: String)
+
+    /** The distinct dates the work of one occurrence is filed under. Usually one, or none. */
+    @Query(
+        """
+        SELECT DISTINCT trainingDateEpochDay FROM actual_sets
+        WHERE occurrenceId = :occurrenceId
+        ORDER BY trainingDateEpochDay
+        """
+    )
+    fun observePerformedDates(occurrenceId: String): Flow<List<Long>>
+
+    /** Every performed date in one week, so the planner can mark the ones that moved. */
+    @Query(
+        """
+        SELECT DISTINCT a.occurrenceId AS occurrenceId,
+                        a.trainingDateEpochDay AS trainingDateEpochDay
+        FROM actual_sets a
+        JOIN exercise_occurrences o ON a.occurrenceId = o.id
+        WHERE o.weekStartEpochDay = :weekStartEpochDay
+        """
+    )
+    fun observePerformedDatesInWeek(weekStartEpochDay: Long): Flow<List<PerformedDateRow>>
+
+    @Query("UPDATE actual_sets SET trainingDateEpochDay = :date, sessionId = :sessionId WHERE occurrenceId = :occurrenceId")
+    suspend fun repointSets(occurrenceId: String, date: Long, sessionId: String)
 }

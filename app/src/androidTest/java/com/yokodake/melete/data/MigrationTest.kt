@@ -146,8 +146,41 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate3To4RetiresNothingAndKeepsEverything() {
+        val exerciseId = "exercise-3"
+        val prescriptionId = "prescription-3"
+
+        helper.createDatabase(TEST_DB, 3).use { db ->
+            db.execSQL(
+                "INSERT INTO prescriptions (id, payloadVersion, payloadJson, createdAtEpochMs, isSampleData) " +
+                    "VALUES (\'$prescriptionId\', 2, \'{\"sets\":5}\', 1000, 0)"
+            )
+            db.execSQL(
+                "INSERT INTO exercises (id, name, mode, measurementUnit, measurementMeaning, " +
+                    "unilateral, notes, defaultPrescriptionId, createdAtEpochMs, isSampleData, " +
+                    "description, category) " +
+                    "VALUES (\'$exerciseId\', \'Max hangs\', \'DURATION\', \'kg\', \'ADDED_LOAD\', 0, " +
+                    "NULL, \'$prescriptionId\', 1000, 0, \'half crimp\', \'CONDITIONING\')"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, MeleteDatabase.MIGRATION_3_4).use { db ->
+            db.query(
+                "SELECT name, description, category, deletedAtEpochMs FROM exercises WHERE id = \'$exerciseId\'"
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Max hangs", cursor.getString(0))
+                assertEquals("half crimp", cursor.getString(1))
+                assertEquals("CONDITIONING", cursor.getString(2))
+                // Every existing exercise is still in the library: the upgrade retires nothing.
+                assertTrue(cursor.isNull(3))
+            }
+        }
+    }
+
+    @Test
     fun theProductionBuilderCarriesEveryMigration() {
-        assertEquals(2, MeleteDatabase.MIGRATIONS.size)
+        assertEquals(3, MeleteDatabase.MIGRATIONS.size)
         assertNull(
             MeleteDatabase.MIGRATIONS.firstOrNull { it.startVersion >= it.endVersion }
         )

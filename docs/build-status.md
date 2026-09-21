@@ -119,6 +119,19 @@ Changes made after the app was used, from `src/feedback.md`. Schema 3.
   sounding the end of every preparation and every set, which is the property the run ids were
   protecting. **Still not run on a device.**
 
+Phase 4A — **no device was available**, so this phase was verified by compilation and unit tests
+only:
+
+- 93 unit tests passing, 9 of them a new `PlanningTest` covering the two decisions that are
+  arithmetic rather than SQL: where an item lands when nudged (clamped at both ends, unchanged for
+  an item not in the list) and what to say when a planned and a performed date differ.
+- `assembleDebug`, `assembleDebugAndroidTest` and the schema-4 export all clean.
+- A `migrate3To4…` instrumented test was written and **has not been run**; neither has the rest of
+  the instrumented suite against these changes.
+- The acceptance scenarios in the phase prompt — scheduling three weeks out, moving between weeks,
+  surviving a library deletion, the planned/performed mismatch — are **unverified end to end**.
+  They need a phone.
+
 Fifth round — all on the Pixel 9:
 
 - 33 instrumented tests passing, including the four rounds of timer work that had never run on a
@@ -195,9 +208,39 @@ There is no ducking. Ducking is the other app's decision and cannot be forced (`
 is honoured only for accessibility services), so "mixes over" is the achievable version of "does
 not interrupt".
 
-Not implemented yet, by design: modules, duration capture, dashboard, export — and moving
-an occurrence that already has a date, which belongs to phase 4 because it needs the explicit
-distinction between moving remaining planned work and correcting a historical training date.
+### Phase 4A — library and planning organisation ✅
+
+Schema 4. One nullable column: `exercises.deletedAtEpochMs`.
+
+**Deletion is a tombstone.** Retiring an exercise removes it from the *library*, which is a
+statement about what you plan to do next, not about what you did. The row stays, because it
+anchors scheduled copies, logged sets and the stable identity that makes "previous results" work.
+`LibraryDao.observeExercises` filters on `deletedAtEpochMs IS NULL`; everything else reads the row
+regardless.
+
+**Planned and performed dates were already separate, so no column was added.** The occurrence
+carries the planned placement (`trainingDateEpochDay`); every `ActualSetEntity` carries the date
+its work is filed under. Re-dating an occurrence rewrites its sets together and re-homes them into
+the session for the new day; the placement does not move. The two are allowed to disagree and the
+planner says so — `Planned Mon · Logged Tue` — rather than reconciling them.
+
+- Planner reads planned dates, history reads performed dates, previous-results still groups by the
+  stable `exerciseId`.
+- Moving or copying a placement never touches what was logged against it.
+
+**Organising.** Move to any week (day or unscheduled), copy, nudge up and down within a slot, edit
+the local prescription, and remove. Scheduling from the library reaches any week through the same
+week/day dialog. Copying duplicates the prescription into its own row, so the copies diverge.
+
+**Removing something that has been trained.** A placement with no log removes with an ordinary
+confirmation. One with a log gets a dialog naming how many sets it would destroy, and the only
+button that does it says so. History never leaves through an ambiguous yes.
+
+**Interaction.** Long press opens the contextual menu, as established for the week screen in the
+first feedback round. Every long press also has a visible `⋮` beside it, because an invisible
+gesture must not be the only route to an action.
+
+Not implemented yet, by design: modules, duration capture, dashboard, export.
 
 ## Architecture as built
 
@@ -483,6 +526,16 @@ Third round:
 
 ## Known limitations
 
+- **Removing a placement while keeping its log is not offered.** `actual_sets.occurrenceId` is a
+  RESTRICT foreign key, so the occurrence is what the evidence hangs from and cannot be deleted
+  out from under it. The choice presented is therefore "keep it" or "delete it and the sets",
+  which is honest but narrower than phase 4A's wording. Detaching a log from its placement needs a
+  nullable occurrence or a separate detached-log concept, and that is a schema change worth making
+  deliberately rather than in passing.
+- Reordering is move-up / move-down from the menu. Drag-and-drop was explicitly optional.
+- An exercise can be retired but not un-retired from the UI; `restoreExercise` exists in the
+  repository with nothing calling it yet.
+
 - No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
   not created speculatively.
 - Surviving the app being **killed** is explicitly not a requirement, and as of the fourth round
@@ -537,7 +590,12 @@ Third round:
 - The month abbreviation in week labels comes from the device locale (JDK/CLDR data), e.g. `Sep`
   in `en-US` and `Sept` in `en-GB`. Unit tests pin `Locale.US`.
 
-## Next step
+## Next step — phase 4B
+
+Modules as reusable scheduling units on top of this. Before that, two things from 4A want a device:
+the migration test, and the acceptance scenarios above.
+
+## Superseded next step
 
 **More timer work**, which the user has said they will come back to: the work/rest sequence of
 phase 7C is the obvious next piece, and the create-timer screen should be used in a real session
