@@ -215,13 +215,8 @@ fun LoggerScreen(
                     onMark = viewModel::markState,
                 )
             }
-            if (state.sets.isEmpty()) {
-                item {
-                    TextButton(onClick = { viewModel.removeOccurrence(onBack) }) {
-                        Text("Remove from this week")
-                    }
-                }
-            }
+            // Taking an exercise back out of the week lives on the week screen, behind a long
+            // press: it has no business sitting one mis-tap away from the sets being logged.
         }
     }
 
@@ -241,7 +236,6 @@ fun LoggerScreen(
                         onStateChange = viewModel::updatePrescriptionEditor,
                         mode = occurrence?.mode ?: ExerciseMode.REPETITIONS,
                         unilateral = occurrence?.unilateral == true,
-                        measurementUnit = occurrence?.measurementUnit,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }

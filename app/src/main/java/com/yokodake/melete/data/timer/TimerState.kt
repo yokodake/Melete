@@ -17,6 +17,11 @@ enum class TimerPhase {
  *
  * Which cues a run owes is fixed when it starts, and which it has already given travels with the
  * state, so pausing, resuming or rebuilding the UI can never sound the same cue twice.
+ *
+ * A run carries a [label] — the exercise it was started from, when it was started from one. It is
+ * a snapshot of a name, never a link into the record: a countdown reaching zero must not be able
+ * to touch what was logged, and a countdown outliving the screen that began it must still be able
+ * to say what it is counting.
  */
 sealed interface TimerState {
 
@@ -31,6 +36,8 @@ sealed interface TimerState {
         val deadlineElapsedMs: Long,
         val plan: List<PlannedCue>,
         val delivered: Set<TimerCue> = emptySet(),
+        /** The exercise this countdown was started from, or null for a free-standing one. */
+        val label: String? = null,
     ) : TimerState {
 
         fun remainingMs(nowElapsedMs: Long): Long =
@@ -63,6 +70,7 @@ sealed interface TimerState {
         val remainingMs: Long,
         val plan: List<PlannedCue>,
         val delivered: Set<TimerCue> = emptySet(),
+        val label: String? = null,
     ) : TimerState
 
     /** The countdown reached zero. Reaching zero records nothing: it is a cue, not a performed set. */
@@ -70,6 +78,7 @@ sealed interface TimerState {
         val runId: String,
         val phase: TimerPhase,
         val totalMs: Long,
+        val label: String? = null,
     ) : TimerState
 
     /**
@@ -81,6 +90,7 @@ sealed interface TimerState {
         val runId: String,
         val phase: TimerPhase,
         val totalMs: Long,
+        val label: String? = null,
     ) : TimerState
 
     val activeRunId: String?
@@ -89,6 +99,19 @@ sealed interface TimerState {
             is Paused -> runId
             is Finished -> runId
             is Interrupted -> runId
+            Idle -> null
+        }
+
+    /**
+     * What this countdown is for, when it was started from an exercise. Named apart from the
+     * subclasses' own `label` so that they declare it rather than override it.
+     */
+    val activeLabel: String?
+        get() = when (this) {
+            is Running -> label
+            is Paused -> label
+            is Finished -> label
+            is Interrupted -> label
             Idle -> null
         }
 }
@@ -102,12 +125,14 @@ object TimerTransitions {
         durationMs: Long,
         settings: CueSettings,
         nowElapsedMs: Long,
+        label: String? = null,
     ): TimerState.Running = TimerState.Running(
         runId = runId,
         phase = phase,
         totalMs = durationMs,
         deadlineElapsedMs = nowElapsedMs + durationMs,
         plan = CuePlanner.plan(phase, durationMs, settings),
+        label = label,
     )
 
     fun pause(state: TimerState.Running, nowElapsedMs: Long): TimerState.Paused = TimerState.Paused(
@@ -118,6 +143,7 @@ object TimerTransitions {
         plan = state.plan,
         // Carried across the pause: cues already given must not be given again on resume.
         delivered = state.delivered,
+        label = state.label,
     )
 
     fun resume(state: TimerState.Paused, nowElapsedMs: Long): TimerState.Running = TimerState.Running(
@@ -127,11 +153,42 @@ object TimerTransitions {
         deadlineElapsedMs = nowElapsedMs + state.remainingMs,
         plan = state.plan,
         delivered = state.delivered,
+        label = state.label,
     )
 
     fun finish(state: TimerState): TimerState = when (state) {
-        is TimerState.Running -> TimerState.Finished(state.runId, state.phase, state.totalMs)
-        is TimerState.Paused -> TimerState.Finished(state.runId, state.phase, state.totalMs)
+        is TimerState.Running ->
+            TimerState.Finished(state.runId, state.phase, state.totalMs, state.label)
+
+        is TimerState.Paused ->
+            TimerState.Finished(state.runId, state.phase, state.totalMs, state.label)
+
         else -> state
+    }
+
+    /**
+     * Applies changed cue settings to a countdown that is already under way.
+     *
+     * The plan is rebuilt for the same total, but every cue whose moment has already gone by is
+     * marked delivered rather than fired: switching a family on halfway through a rest must not
+     * make the phone suddenly sound three cues it owed in the past.
+     */
+    fun replan(
+        state: TimerState.Running,
+        settings: CueSettings,
+        nowElapsedMs: Long,
+    ): TimerState.Running {
+        val plan = CuePlanner.plan(state.phase, state.totalMs, settings)
+        val alreadyGone = plan
+            .filter { state.deadlineElapsedMs - it.remainingMs <= nowElapsedMs }
+            .map { it.cue }
+        return state.copy(plan = plan, delivered = state.delivered + alreadyGone)
+    }
+
+    /** The same, for a countdown that is paused: "already gone" is measured against what is left. */
+    fun replan(state: TimerState.Paused, settings: CueSettings): TimerState.Paused {
+        val plan = CuePlanner.plan(state.phase, state.totalMs, settings)
+        val alreadyGone = plan.filter { it.remainingMs >= state.remainingMs }.map { it.cue }
+        return state.copy(plan = plan, delivered = state.delivered + alreadyGone)
     }
 }

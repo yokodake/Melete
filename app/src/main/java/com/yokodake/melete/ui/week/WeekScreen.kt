@@ -1,7 +1,9 @@
 package com.yokodake.melete.ui.week
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,6 +23,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,11 +52,14 @@ import com.yokodake.melete.BuildConfig
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
+import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.theme.MeleteTheme
+import com.yokodake.melete.ui.theme.doneColors
 import java.time.LocalDate
 
 @Composable
@@ -62,8 +71,12 @@ fun WeekRoute(
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
     WeekScreen(
         state = state,
+        message = message,
+        onMessageShown = viewModel::consumeMessage,
+        onRemoveOccurrence = viewModel::removeOccurrence,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
         onCurrentWeek = viewModel::showCurrentWeek,
@@ -80,6 +93,9 @@ fun WeekRoute(
 @Composable
 fun WeekScreen(
     state: WeekUiState,
+    message: String? = null,
+    onMessageShown: () -> Unit = {},
+    onRemoveOccurrence: (String) -> Unit = {},
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onCurrentWeek: () -> Unit,
@@ -92,6 +108,14 @@ fun WeekScreen(
 ) {
     val rows = remember(state) { state.toRows() }
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            onMessageShown()
+        }
+    }
 
     // Open near today without hiding the unscheduled section: the heading for today goes to the
     // top of the list, one short scroll away from the items that have no date yet.
@@ -105,6 +129,7 @@ fun WeekScreen(
             .fillMaxSize()
             .imePadding(),
         bottomBar = bottomBar,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 // An opaque container so that list rows scrolling underneath are hidden by the
@@ -180,6 +205,7 @@ fun WeekScreen(
                     is WeekRow.Occurrence -> OccurrenceCard(
                         occurrence = row.occurrence,
                         onClick = { onOpenOccurrence(row.occurrence.id) },
+                        onRemove = { onRemoveOccurrence(row.occurrence.id) },
                     )
 
                     is WeekRow.Hint -> Hint(row.text)
@@ -291,60 +317,90 @@ private fun DayHeading(row: WeekRow.DayHeading, onAdd: () -> Unit) {
     }
 }
 
+/**
+ * One planned exercise. A tap opens what it is; a long press is the only way to take it back out
+ * of the week, which is deliberate — unplanning training should cost a moment of intent, not a
+ * mis-hit on a button that sits next to everything else.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun OccurrenceCard(occurrence: PlannedOccurrence, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = occurrence.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (occurrence.isSampleData) {
-                    Chip(
-                        text = "SAMPLE",
-                        container = MaterialTheme.colorScheme.tertiaryContainer,
-                        content = MaterialTheme.colorScheme.onTertiaryContainer,
+private fun OccurrenceCard(
+    occurrence: PlannedOccurrence,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menuExpanded = true
+                    },
+                    onLongClickLabel = "Workout actions",
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CategoryDot(occurrence.category)
+                    Text(
+                        text = occurrence.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
-                }
-                when (occurrence.state) {
-                    OccurrenceState.PLANNED -> Unit
-                    OccurrenceState.COMPLETED -> Chip(
-                        text = "Done",
-                        container = MaterialTheme.colorScheme.secondaryContainer,
-                        content = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
+                    if (occurrence.isSampleData) {
+                        Chip(
+                            text = "SAMPLE",
+                            container = MaterialTheme.colorScheme.tertiaryContainer,
+                            content = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                    }
+                    when (occurrence.state) {
+                        OccurrenceState.PLANNED -> Unit
+                        OccurrenceState.COMPLETED -> {
+                            val (container, content) = doneColors()
+                            Chip(text = "Done", container = container, content = content)
+                        }
 
-                    OccurrenceState.SKIPPED -> Chip(
-                        text = "Skipped",
-                        container = MaterialTheme.colorScheme.surfaceVariant,
-                        content = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                        OccurrenceState.SKIPPED -> Chip(
+                            text = "Skipped",
+                            container = MaterialTheme.colorScheme.surfaceVariant,
+                            content = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-            }
-            Text(
-                text = PrescriptionSummary.format(occurrence),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            occurrence.comment?.let {
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = PrescriptionSummary.format(occurrence),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                occurrence.comment?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Remove workout") },
+                onClick = {
+                    menuExpanded = false
+                    onRemove()
+                },
+            )
         }
     }
 }
@@ -419,7 +475,12 @@ private fun WeekUiState.toRows(): List<WeekRow> = buildList {
 private fun WeekScreenPreview() {
     val monday = LocalDate.of(2026, 9, 21)
 
-    fun sample(name: String, date: LocalDate?, unilateral: Boolean = false) = PlannedOccurrence(
+    fun sample(
+        name: String,
+        date: LocalDate?,
+        unilateral: Boolean = false,
+        category: ExerciseCategory? = ExerciseCategory.CONDITIONING,
+    ) = PlannedOccurrence(
         id = "$name-$date",
         exerciseId = name,
         name = name,
@@ -427,6 +488,7 @@ private fun WeekScreenPreview() {
         unilateral = unilateral,
         measurementUnit = "kg",
         measurementMeaning = MeasurementMeaning.TOTAL_LOAD,
+        category = category,
         trainingDate = date,
         weekStart = monday,
         prescriptionId = null,
@@ -450,7 +512,7 @@ private fun WeekScreenPreview() {
                 weekStart = monday,
                 today = monday.plusDays(2),
                 occurrences = listOf(
-                    sample("Mobility flow", null),
+                    sample("Mobility flow", null, category = ExerciseCategory.OPEN),
                     sample("Back squat", monday.plusDays(1)),
                     sample("Dumbbell row", monday.plusDays(2), unilateral = true),
                 ),

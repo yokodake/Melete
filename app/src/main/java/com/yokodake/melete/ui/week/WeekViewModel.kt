@@ -12,6 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -28,6 +29,11 @@ class WeekViewModel(
     private val today: LocalDate get() = LocalDate.now(clock)
 
     private val weekStart = MutableStateFlow(WeekMath.weekStartOf(today))
+
+    private val _message = MutableStateFlow<String?>(null)
+
+    /** One-shot text for the snackbar. Kept apart from the week itself, which is pure data. */
+    val message: StateFlow<String?> = _message.asStateFlow()
 
     val uiState: StateFlow<WeekUiState> = weekStart
         .flatMapLatest { start ->
@@ -68,6 +74,25 @@ class WeekViewModel(
 
     fun clearSampleData() {
         viewModelScope.launch { repository.clearSampleData() }
+    }
+
+    /**
+     * Takes a planned exercise back out of the week. Reached only by a long press and a menu,
+     * because an accidental swipe through the main screen must never quietly unplan training.
+     *
+     * Refused outright once anything has been recorded against it: removing evidence is not a
+     * side effect of tidying a plan.
+     */
+    fun removeOccurrence(occurrenceId: String) {
+        viewModelScope.launch {
+            if (!repository.deleteOccurrenceIfEmpty(occurrenceId)) {
+                _message.value = "Sets are recorded for this. Delete them in the logger first."
+            }
+        }
+    }
+
+    fun consumeMessage() {
+        _message.value = null
     }
 
     companion object {

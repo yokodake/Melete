@@ -170,6 +170,84 @@ class TimerStateTest {
     }
 
     @Test
+    fun `switching a cue family on mid-run never sounds the moments already gone`() {
+        // A three-minute rest started with no cues at all, two minutes in.
+        val silent = running(
+            totalMs = 180_000,
+            startedAt = 1_000,
+            cues = CueSettings(
+                thirtySecondWarning = false,
+                finalCountdown = false,
+                quarterCues = false,
+            ),
+        )
+        val now = 121_000L
+        val replanned = TimerTransitions.replan(silent, CueSettings(), now)
+
+        // The 30 s warning is still ahead, so it is owed and will sound.
+        assertFalse(TimerCue.THIRTY_SECONDS in replanned.delivered)
+        assertNull(replanned.dueCue(now))
+        assertEquals(TimerCue.THIRTY_SECONDS, replanned.dueCue(152_000)?.cue)
+    }
+
+    @Test
+    fun `a cue whose moment has passed is written off rather than fired late`() {
+        val silent = running(
+            totalMs = 180_000,
+            startedAt = 1_000,
+            cues = CueSettings(
+                thirtySecondWarning = false,
+                finalCountdown = false,
+                quarterCues = false,
+            ),
+        )
+        // Twenty seconds left: the thirty-second warning is ten seconds in the past.
+        val now = 161_000L
+        val replanned = TimerTransitions.replan(silent, CueSettings(), now)
+
+        assertTrue(TimerCue.THIRTY_SECONDS in replanned.delivered)
+        assertNull(replanned.dueCue(now))
+        // What is still ahead is untouched.
+        assertFalse(TimerCue.COUNT_3 in replanned.delivered)
+        assertEquals(TimerCue.COUNT_3, replanned.dueCue(178_000)?.cue)
+    }
+
+    @Test
+    fun `switching cues off while paused drops them from what is still owed`() {
+        val paused = TimerTransitions.pause(running(totalMs = 180_000, startedAt = 1_000), 61_000)
+        val quiet = TimerTransitions.replan(
+            paused,
+            CueSettings(thirtySecondWarning = false, finalCountdown = true, quarterCues = false),
+        )
+        assertFalse(quiet.plan.any { it.cue == TimerCue.THIRTY_SECONDS })
+        assertTrue(quiet.plan.any { it.cue == TimerCue.COUNT_3 })
+        // Resuming carries the trimmed plan rather than rebuilding the old one.
+        val resumed = TimerTransitions.resume(quiet, 200_000)
+        assertFalse(resumed.plan.any { it.cue == TimerCue.THIRTY_SECONDS })
+    }
+
+    @Test
+    fun `a countdown remembers the exercise it was started from across pause and finish`() {
+        val started = TimerTransitions.start(
+            runId = runId,
+            phase = TimerPhase.REST,
+            durationMs = 60_000,
+            settings = settings,
+            nowElapsedMs = 1_000,
+            label = "Back squat",
+        )
+        assertEquals("Back squat", started.label)
+        val paused = TimerTransitions.pause(started, 10_000)
+        assertEquals("Back squat", paused.label)
+        assertEquals("Back squat", TimerTransitions.resume(paused, 20_000).label)
+        assertEquals("Back squat", TimerTransitions.finish(started).activeLabel)
+        // It survives the process dying, because it travels in the snapshot.
+        val snapshot = TimerRestore.snapshot(started, bootCount = 4)
+        val restored = TimerRestore.restore(snapshot, currentBootCount = 4, nowElapsedMs = 30_000)
+        assertEquals("Back squat", restored.activeLabel)
+    }
+
+    @Test
     fun `finishing keeps the run identity and records nothing else`() {
         val finished = TimerTransitions.finish(running())
         assertEquals(TimerState.Finished(runId, TimerPhase.REST, 60_000), finished)

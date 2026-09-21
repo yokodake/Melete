@@ -14,6 +14,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
 import com.yokodake.melete.data.model.ACTUAL_SET_PAYLOAD_VERSION
 import com.yokodake.melete.data.model.ActualSetJson
 import com.yokodake.melete.data.model.ActualSetPayload
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PRESCRIPTION_PAYLOAD_VERSION
@@ -37,6 +38,8 @@ data class PlannedOccurrence(
     val unilateral: Boolean,
     val measurementUnit: String?,
     val measurementMeaning: MeasurementMeaning?,
+    /** The category as snapshotted when this copy was placed in the week. */
+    val category: ExerciseCategory?,
     val trainingDate: LocalDate?,
     val weekStart: LocalDate,
     val prescriptionId: String?,
@@ -58,6 +61,8 @@ data class LibraryExercise(
     val measurementUnit: String?,
     val measurementMeaning: MeasurementMeaning?,
     val notes: String?,
+    val description: String?,
+    val category: ExerciseCategory?,
     val defaultPrescription: PrescriptionPayload?,
     val isSampleData: Boolean,
 )
@@ -70,6 +75,8 @@ data class ExerciseDraft(
     val measurementUnit: String?,
     val measurementMeaning: MeasurementMeaning?,
     val notes: String?,
+    val description: String?,
+    val category: ExerciseCategory?,
     val defaultPrescription: PrescriptionPayload,
 )
 
@@ -143,6 +150,14 @@ class TrainingRepository(private val database: MeleteDatabase) {
     suspend fun getLibraryExercise(id: String): LibraryExercise? =
         library.getExerciseWithDefault(id)?.toLibraryExercise()
 
+    /**
+     * The library entry a planned copy came from, followed live. The explanation of a movement is
+     * reference material rather than part of the record, so it is read from the library instead
+     * of from the snapshot: an exercise that has since been deleted simply has none.
+     */
+    fun observeLibraryExercise(id: String): Flow<LibraryExercise?> =
+        library.observeExerciseWithDefault(id).map { it?.toLibraryExercise() }
+
     suspend fun createExercise(draft: ExerciseDraft): String = database.withTransaction {
         val now = System.currentTimeMillis()
         val prescription = newPrescriptionRow(draft.defaultPrescription, now)
@@ -154,6 +169,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
             measurementMeaning = draft.measurementMeaning,
             unilateral = draft.unilateral,
             notes = draft.notes?.takeIf { it.isNotBlank() },
+            description = draft.description?.takeIf { it.isNotBlank() },
+            category = draft.category,
             defaultPrescriptionId = prescription.id,
             createdAtEpochMs = now,
             isSampleData = false,
@@ -181,6 +198,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     measurementMeaning = draft.measurementMeaning,
                     unilateral = draft.unilateral,
                     notes = draft.notes?.takeIf { it.isNotBlank() },
+                    description = draft.description?.takeIf { it.isNotBlank() },
+                    category = draft.category,
                     defaultPrescriptionId = prescription.id,
                 )
             )
@@ -222,6 +241,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
             unilateralSnapshot = source.exercise.unilateral,
             measurementUnitSnapshot = source.exercise.measurementUnit,
             measurementMeaningSnapshot = source.exercise.measurementMeaning,
+            categorySnapshot = source.exercise.category,
             prescriptionId = copy?.id,
             orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
             state = OccurrenceState.PLANNED,
@@ -406,6 +426,7 @@ private fun OccurrenceWithPrescription.toPlanned(): PlannedOccurrence {
         unilateral = occurrence.unilateralSnapshot,
         measurementUnit = occurrence.measurementUnitSnapshot,
         measurementMeaning = occurrence.measurementMeaningSnapshot,
+        category = occurrence.categorySnapshot,
         trainingDate = occurrence.trainingDateEpochDay?.let(LocalDate::ofEpochDay),
         weekStart = LocalDate.ofEpochDay(occurrence.weekStartEpochDay),
         prescriptionId = occurrence.prescriptionId,
@@ -426,6 +447,8 @@ private fun ExerciseWithDefaultPrescription.toLibraryExercise() = LibraryExercis
     measurementUnit = exercise.measurementUnit,
     measurementMeaning = exercise.measurementMeaning,
     notes = exercise.notes,
+    description = exercise.description,
+    category = exercise.category,
     defaultPrescription = defaultPrescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
     },

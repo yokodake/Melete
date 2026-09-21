@@ -5,8 +5,8 @@ import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.PrescriptionEntity
 import com.yokodake.melete.data.model.EffortLevel
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
-import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PRESCRIPTION_PAYLOAD_VERSION
 import com.yokodake.melete.data.model.PrescriptionJson
@@ -37,7 +37,10 @@ object DevSampleData {
             name: String,
             mode: ExerciseMode,
             unit: String?,
+            meaning: MeasurementMeaning?,
             unilateral: Boolean,
+            category: ExerciseCategory?,
+            description: String?,
             payload: PrescriptionPayload,
             dayOffset: Int?,
             orderIndex: Int,
@@ -51,12 +54,14 @@ object DevSampleData {
                 name = NAME_PREFIX + name,
                 mode = mode,
                 measurementUnit = unit,
-                measurementMeaning = payload.measurement?.meaning,
+                measurementMeaning = unit?.let { meaning ?: MeasurementMeaning.TOTAL_LOAD },
                 unilateral = unilateral,
                 notes = null,
                 defaultPrescriptionId = defaultPrescription.id,
                 createdAtEpochMs = now,
                 isSampleData = true,
+                description = description,
+                category = category,
             )
             prescriptions += defaultPrescription
             prescriptions += scheduledCopy
@@ -70,13 +75,14 @@ object DevSampleData {
                 modeSnapshot = mode,
                 unilateralSnapshot = unilateral,
                 measurementUnitSnapshot = unit,
-                measurementMeaningSnapshot = payload.measurement?.meaning,
+                measurementMeaningSnapshot = unit?.let { meaning ?: MeasurementMeaning.TOTAL_LOAD },
                 prescriptionId = scheduledCopy.id,
                 orderIndex = orderIndex,
                 state = OccurrenceState.PLANNED,
                 comment = null,
                 createdAtEpochMs = now,
                 isSampleData = true,
+                categorySnapshot = category,
             )
         }
 
@@ -84,12 +90,15 @@ object DevSampleData {
             name = "Back squat",
             mode = ExerciseMode.REPETITIONS,
             unit = "kg",
+            meaning = MeasurementMeaning.TOTAL_LOAD,
             unilateral = false,
+            category = ExerciseCategory.CONDITIONING,
+            description = "Bar on the upper back, brace, sit between the hips and stand up. " +
+                "Depth below parallel without the pelvis tucking under.",
             payload = PrescriptionPayload(
                 sets = 4,
                 targetReps = 5,
                 restSeconds = 180,
-                measurement = Measurement(80.0, "kg", MeasurementMeaning.TOTAL_LOAD),
                 rir = 2,
             ),
             dayOffset = 1,
@@ -99,12 +108,15 @@ object DevSampleData {
             name = "Max hangs 20 mm",
             mode = ExerciseMode.DURATION,
             unit = "kg",
+            meaning = MeasurementMeaning.ADDED_LOAD,
             unilateral = false,
+            category = ExerciseCategory.CONDITIONING,
+            description = "Half crimp on the 20 mm edge, shoulders engaged, elbows soft. " +
+                "Stop the set the moment the grip position changes.",
             payload = PrescriptionPayload(
                 sets = 5,
                 targetDurationSeconds = 10,
                 restSeconds = 180,
-                measurement = Measurement(12.5, "kg", MeasurementMeaning.ADDED_LOAD),
             ),
             dayOffset = 1,
             orderIndex = 1,
@@ -113,12 +125,15 @@ object DevSampleData {
             name = "Dumbbell row",
             mode = ExerciseMode.REPETITIONS,
             unit = "kg",
+            meaning = MeasurementMeaning.TOTAL_LOAD,
             unilateral = true,
+            category = ExerciseCategory.CONDITIONING,
+            description = "One hand and one knee on the bench, back flat, pull the dumbbell to " +
+                "the hip rather than to the shoulder.",
             payload = PrescriptionPayload(
                 sets = 4,
                 targetReps = 8,
                 restSeconds = 60,
-                measurement = Measurement(22.5, "kg", MeasurementMeaning.TOTAL_LOAD),
                 effort = EffortLevel.HARD,
             ),
             dayOffset = 4,
@@ -128,7 +143,11 @@ object DevSampleData {
             name = "Couch stretch",
             mode = ExerciseMode.DURATION,
             unit = null,
+            meaning = null,
             unilateral = true,
+            category = ExerciseCategory.FLEXIBILITY,
+            description = "Rear shin against the wall, front foot forward, squeeze the glute of " +
+                "the rear leg and bring the pelvis under before leaning back.",
             payload = PrescriptionPayload(sets = 2, targetDurationSeconds = 90),
             dayOffset = 3,
             orderIndex = 0,
@@ -137,7 +156,10 @@ object DevSampleData {
             name = "Mobility flow",
             mode = ExerciseMode.ACTIVITY,
             unit = null,
+            meaning = null,
             unilateral = false,
+            category = ExerciseCategory.OPEN,
+            description = "Whatever the body asks for. No prescribed shape; move for the time.",
             payload = PrescriptionPayload(sets = 1, targetDurationSeconds = 600),
             dayOffset = null,
             orderIndex = 0,

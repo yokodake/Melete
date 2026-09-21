@@ -135,18 +135,24 @@ class LoggerViewModel(
         }
     }
 
-    /** Starts the rest prescribed for this exercise, or a sensible default when none is set. */
+    /**
+     * Starts the rest prescribed for this exercise, or a sensible default when none is set. The
+     * countdown is labelled with the exercise so it can still say what it is for once the logger
+     * is off screen.
+     */
     fun startRest() {
-        val seconds = uiState.value.occurrence?.prescription?.restSeconds
+        val occurrence = uiState.value.occurrence
+        val seconds = occurrence?.prescription?.restSeconds
             ?: timer.lastDurationSeconds(TimerPhase.REST)
-        timer.start(TimerPhase.REST, seconds)
+        timer.start(TimerPhase.REST, seconds, label = occurrence?.name)
     }
 
     /** Starts the prescribed work interval of a timed exercise. */
     fun startWork() {
-        val seconds = uiState.value.occurrence?.prescription?.targetDurationSeconds
+        val occurrence = uiState.value.occurrence
+        val seconds = occurrence?.prescription?.targetDurationSeconds
             ?: timer.lastDurationSeconds(TimerPhase.WORK)
-        timer.start(TimerPhase.WORK, seconds)
+        timer.start(TimerPhase.WORK, seconds, label = occurrence?.name)
     }
 
     private val occurrenceId: String = savedStateHandle.toRoute<LoggerDestination>().occurrenceId
@@ -359,22 +365,6 @@ class LoggerViewModel(
         transient.update { it.copy(targetDate = date) }
     }
 
-    /**
-     * Takes a mistakenly scheduled exercise back out of the week. Refused once anything has been
-     * recorded against it: removing evidence is never a side effect of tidying a plan.
-     */
-    fun removeOccurrence(onRemoved: () -> Unit) {
-        viewModelScope.launch {
-            if (repository.deleteOccurrenceIfEmpty(occurrenceId)) {
-                onRemoved()
-            } else {
-                transient.update {
-                    it.copy(message = "Delete the recorded sets first")
-                }
-            }
-        }
-    }
-
     fun markState(state: OccurrenceState) {
         viewModelScope.launch { repository.setOccurrenceState(occurrenceId, state) }
     }
@@ -398,10 +388,7 @@ class LoggerViewModel(
         val occurrence = uiState.value.occurrence ?: return
         val form = transient.value.prescriptionEditor ?: return
         viewModelScope.launch {
-            repository.updateOccurrencePrescription(
-                occurrenceId,
-                form.toPayload(occurrence.measurementUnit, occurrence.measurementMeaning),
-            )
+            repository.updateOccurrencePrescription(occurrenceId, form.toPayload())
             transient.update { it.copy(prescriptionEditor = null) }
         }
     }

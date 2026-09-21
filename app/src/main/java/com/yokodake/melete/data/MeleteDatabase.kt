@@ -30,7 +30,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         TrainingSessionEntity::class,
         ActualSetEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)
@@ -112,7 +112,22 @@ abstract class MeleteDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+        /**
+         * Adds the explanation and the category. Three nullable columns and nothing else: an
+         * exercise that had no category yesterday simply has none today, which is a valid state
+         * rather than something to backfill with a guess.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE `exercises` ADD COLUMN `description` TEXT")
+                connection.execSQL("ALTER TABLE `exercises` ADD COLUMN `category` TEXT")
+                connection.execSQL(
+                    "ALTER TABLE `exercise_occurrences` ADD COLUMN `categorySnapshot` TEXT"
+                )
+            }
+        }
+
+        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 
         fun build(context: Context): MeleteDatabase =
             Room.databaseBuilder(context, MeleteDatabase::class.java, DATABASE_NAME)

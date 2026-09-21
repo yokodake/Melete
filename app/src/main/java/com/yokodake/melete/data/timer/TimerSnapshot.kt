@@ -26,6 +26,8 @@ data class TimerSnapshot(
     val remainingMs: Long = 0,
     val plan: List<PlannedCue> = emptyList(),
     val delivered: Set<TimerCue> = emptySet(),
+    /** The exercise the run was started from. Defaulted, so older snapshots still decode. */
+    val label: String? = null,
 ) {
     enum class Status { RUNNING, PAUSED, FINISHED }
 }
@@ -43,6 +45,7 @@ object TimerRestore {
             deadlineElapsedMs = state.deadlineElapsedMs,
             plan = state.plan,
             delivered = state.delivered,
+            label = state.label,
         )
 
         is TimerState.Paused -> TimerSnapshot(
@@ -54,6 +57,7 @@ object TimerRestore {
             remainingMs = state.remainingMs,
             plan = state.plan,
             delivered = state.delivered,
+            label = state.label,
         )
 
         is TimerState.Finished -> TimerSnapshot(
@@ -62,6 +66,7 @@ object TimerRestore {
             totalMs = state.totalMs,
             bootCount = bootCount,
             status = TimerSnapshot.Status.FINISHED,
+            label = state.label,
         )
 
         // An interrupted run has already been reported; there is nothing left to restore.
@@ -90,19 +95,33 @@ object TimerRestore {
                 remainingMs = snapshot.remainingMs,
                 plan = snapshot.plan,
                 delivered = snapshot.delivered,
+                label = snapshot.label,
             )
 
-            TimerSnapshot.Status.FINISHED ->
-                TimerState.Finished(snapshot.runId, snapshot.phase, snapshot.totalMs)
+            TimerSnapshot.Status.FINISHED -> TimerState.Finished(
+                snapshot.runId,
+                snapshot.phase,
+                snapshot.totalMs,
+                snapshot.label,
+            )
 
             TimerSnapshot.Status.RUNNING -> when {
-                rebooted -> TimerState.Interrupted(snapshot.runId, snapshot.phase, snapshot.totalMs)
+                rebooted -> TimerState.Interrupted(
+                    snapshot.runId,
+                    snapshot.phase,
+                    snapshot.totalMs,
+                    snapshot.label,
+                )
 
                 // The process was gone when the countdown ran out. The arithmetic is recoverable;
                 // whether the cue was actually heard is not, so the state says finished and the
                 // screen says the app was not running rather than pretending it alerted.
-                nowElapsedMs >= snapshot.deadlineElapsedMs ->
-                    TimerState.Finished(snapshot.runId, snapshot.phase, snapshot.totalMs)
+                nowElapsedMs >= snapshot.deadlineElapsedMs -> TimerState.Finished(
+                    snapshot.runId,
+                    snapshot.phase,
+                    snapshot.totalMs,
+                    snapshot.label,
+                )
 
                 else -> TimerState.Running(
                     runId = snapshot.runId,
@@ -111,6 +130,7 @@ object TimerRestore {
                     deadlineElapsedMs = snapshot.deadlineElapsedMs,
                     plan = snapshot.plan,
                     delivered = snapshot.delivered,
+                    label = snapshot.label,
                 )
             }
         }

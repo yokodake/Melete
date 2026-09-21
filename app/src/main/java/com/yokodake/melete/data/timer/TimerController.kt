@@ -67,8 +67,35 @@ class TimerController(
 
     val cueSettings: CueSettings get() = store.cueSettings
 
+    /**
+     * Changes which cues are wanted, including in the middle of a countdown.
+     *
+     * A cue setting is a preference about the next few seconds, not a property of the run, so
+     * waiting for the timer to end before it takes effect would be useless exactly when it
+     * matters — mid-rest, realising the ticking is wrong for where you are. The run is replanned
+     * in place: cues whose moment has already passed are written off rather than fired, and both
+     * delivery paths are re-armed against the new plan so neither can sound a cue the user has
+     * just switched off.
+     */
     fun setCueSettings(settings: CueSettings) {
         store.cueSettings = settings
+        when (val current = _state.value) {
+            is TimerState.Running -> {
+                countdownJob?.cancel()
+                val replanned = TimerTransitions.replan(current, settings, now())
+                _state.value = replanned
+                persist()
+                alarms.schedule(replanned)
+                startCountdownLoop()
+            }
+
+            is TimerState.Paused -> {
+                _state.value = TimerTransitions.replan(current, settings)
+                persist()
+            }
+
+            else -> Unit
+        }
     }
 
     fun lastDurationSeconds(phase: TimerPhase): Int = when (phase) {
@@ -80,7 +107,12 @@ class TimerController(
      * Starts a countdown. Called from a tap while the app is on screen, which is what gives the
      * foreground service the while-in-use capability it needs to make a sound later on.
      */
-    fun start(phase: TimerPhase, durationSeconds: Int, settings: CueSettings = store.cueSettings) {
+    fun start(
+        phase: TimerPhase,
+        durationSeconds: Int,
+        settings: CueSettings = store.cueSettings,
+        label: String? = null,
+    ) {
         val duration = durationSeconds.coerceAtLeast(1)
         when (phase) {
             TimerPhase.WORK -> store.lastWorkSeconds = duration
@@ -94,6 +126,7 @@ class TimerController(
             durationMs = duration * 1000L,
             settings = settings,
             nowElapsedMs = now(),
+            label = label,
         )
         _state.value = running
         persist()

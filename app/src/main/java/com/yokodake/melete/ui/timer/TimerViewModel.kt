@@ -19,13 +19,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class TimerUiState(
     val state: TimerState = TimerState.Idle,
     val remainingMs: Long = 0,
     val totalMs: Long = 0,
-    val draftSeconds: Int = 180,
+    /** Typed minutes and seconds, kept as text so a half-typed field is not silently a zero. */
+    val draftMinutes: String = "3",
+    val draftSeconds: String = "00",
     val draftPhase: TimerPhase = TimerPhase.REST,
     val cues: CueSettings = CueSettings(),
 ) {
@@ -33,17 +36,35 @@ data class TimerUiState(
     val isPaused: Boolean get() = state is TimerState.Paused
     val isIdle: Boolean get() = state is TimerState.Idle
 
+    /** The countdown the typed fields add up to. Clamped only where it is actually started. */
+    val draftTotalSeconds: Int
+        get() = (draftMinutes.toIntOrNull() ?: 0) * 60 + (draftSeconds.toIntOrNull() ?: 0)
+
+    val canStart: Boolean get() = draftTotalSeconds > 0
+
     /** What this countdown will actually sound, given its length. */
     val plannedCues: List<PlannedCue>
-        get() = CuePlanner.plan(draftPhase, draftSeconds * 1000L, cues)
+        get() = CuePlanner.plan(draftPhase, draftTotalSeconds * 1000L, cues)
 
     val quarterCuesApply: Boolean
         get() = cues.quarterCues &&
             draftPhase == TimerPhase.WORK &&
-            draftSeconds * 1000L >= CuePlanner.QUARTER_CUE_MIN_MS
+            draftTotalSeconds * 1000L >= CuePlanner.QUARTER_CUE_MIN_MS
 
     val thirtySecondWarningApplies: Boolean
-        get() = cues.thirtySecondWarning && draftSeconds > 30
+        get() = cues.thirtySecondWarning && draftTotalSeconds > 30
+
+    /** The phase of whatever is on screen: the live run, or the one about to be started. */
+    val shownPhase: TimerPhase
+        get() = when (state) {
+            is TimerState.Running -> state.phase
+            is TimerState.Paused -> state.phase
+            is TimerState.Finished -> state.phase
+            is TimerState.Interrupted -> state.phase
+            TimerState.Idle -> draftPhase
+        }
+
+    val label: String? get() = state.activeLabel
 
     val progress: Float
         get() = if (totalMs <= 0) 0f else (1f - remainingMs.toFloat() / totalMs).coerceIn(0f, 1f)
@@ -75,8 +96,9 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
                     is TimerState.Paused -> state.totalMs
                     is TimerState.Finished -> state.totalMs
                     is TimerState.Interrupted -> state.totalMs
-                    TimerState.Idle -> currentDraft.seconds * 1000L
+                    TimerState.Idle -> currentDraft.totalSeconds * 1000L
                 },
+                draftMinutes = currentDraft.minutes,
                 draftSeconds = currentDraft.seconds,
                 draftPhase = currentDraft.phase,
                 cues = currentDraft.cues,
@@ -98,27 +120,35 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
         }
     }
 
+    /**
+     * Switching between work and rest changes only which kind of countdown is about to start.
+     * It deliberately does not reload the last-used duration: a number you have just typed is the
+     * thing you care about, and having it replaced the moment you classify it is maddening.
+     */
     fun setDraftPhase(phase: TimerPhase) {
-        draft.value = draft.value.copy(
-            phase = phase,
-            seconds = controller.lastDurationSeconds(phase),
-        )
+        draft.update { it.copy(phase = phase) }
     }
 
-    fun setDraftSeconds(seconds: Int) {
-        draft.value = draft.value.copy(seconds = seconds.coerceIn(1, 60 * 60))
+    fun setDraftMinutes(value: String) {
+        draft.update { it.copy(minutes = value.take(3)) }
     }
 
-    fun adjustDraftSeconds(delta: Int) = setDraftSeconds(draft.value.seconds + delta)
+    fun setDraftSeconds(value: String) {
+        draft.update { it.copy(seconds = value.take(2)) }
+    }
 
     fun setCueSettings(settings: CueSettings) {
+        // Goes through the controller first: a running countdown is replanned there, so a cue
+        // switched off mid-rest stops being owed rather than only stopping next time.
         controller.setCueSettings(settings)
-        draft.value = draft.value.copy(cues = settings)
+        draft.update { it.copy(cues = settings) }
     }
 
     fun start() {
         val current = draft.value
-        controller.start(current.phase, current.seconds, current.cues)
+        val seconds = current.totalSeconds
+        if (seconds <= 0) return
+        controller.start(current.phase, seconds, current.cues)
     }
 
     fun pause() = controller.pause()
@@ -131,11 +161,25 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
 
     private data class Draft(
         val phase: TimerPhase,
-        val seconds: Int,
+        val minutes: String,
+        val seconds: String,
         val cues: CueSettings,
-    )
+    ) {
+        constructor(phase: TimerPhase, seconds: Int, cues: CueSettings) : this(
+            phase = phase,
+            minutes = (seconds / 60).toString(),
+            seconds = (seconds % 60).toString().padStart(2, '0'),
+            cues = cues,
+        )
+
+        val totalSeconds: Int
+            get() = ((minutes.toIntOrNull() ?: 0) * 60 + (seconds.toIntOrNull() ?: 0))
+                .coerceIn(0, MAX_SECONDS)
+    }
 
     companion object {
+        private const val MAX_SECONDS = 60 * 60
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]

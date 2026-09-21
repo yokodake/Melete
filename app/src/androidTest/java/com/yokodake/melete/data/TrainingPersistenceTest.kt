@@ -4,11 +4,14 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.model.EffortLevel
+import com.yokodake.melete.data.model.ExerciseCategory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -71,9 +74,35 @@ class TrainingPersistenceTest {
         assertNotNull(row.prescription)
         assertEquals(4, row.prescription?.sets)
         assertEquals(8, row.prescription?.targetReps)
-        assertEquals(22.5, row.prescription?.measurement?.value ?: 0.0, 0.001)
+        assertEquals(60, row.prescription?.restSeconds)
+        assertEquals(EffortLevel.HARD, row.prescription?.effort)
+        // A plan fixes the shape of the work, never the weight: the load belongs to the set that
+        // was actually performed, and a prescription that carried one would be a number to argue
+        // with before every set.
+        assertNull(row.prescription?.measurement)
         assertTrue(row.unilateral)
         assertTrue(week.none { it.prescriptionUnreadable })
+    }
+
+    @Test
+    fun theCategorySnapshotSurvivesReopeningAndIsPerOccurrence() = runBlocking {
+        TrainingRepository(database).seedSampleWeek(weekStart)
+        database.close()
+        database = open()
+
+        val week = TrainingRepository(database).observeWeek(weekStart).first()
+        assertEquals(
+            ExerciseCategory.CONDITIONING,
+            week.first { it.name.endsWith("Dumbbell row") }.category,
+        )
+        assertEquals(
+            ExerciseCategory.FLEXIBILITY,
+            week.first { it.name.endsWith("Couch stretch") }.category,
+        )
+        assertEquals(
+            ExerciseCategory.OPEN,
+            week.first { it.name.endsWith("Mobility flow") }.category,
+        )
     }
 
     @Test

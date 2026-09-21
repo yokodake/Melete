@@ -3,6 +3,7 @@ package com.yokodake.melete.data
 import androidx.room.TypeConverter
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 
@@ -30,6 +31,17 @@ class MeleteConverters {
     @TypeConverter
     fun stringToMeasurementMeaning(value: String?): MeasurementMeaning? =
         value?.let(MeasurementMeaning::valueOf)
+
+    @TypeConverter
+    fun exerciseCategoryToString(value: ExerciseCategory?): String? = value?.name
+
+    /**
+     * A category written by a newer version is read as "no category" rather than crashing the
+     * whole query: an unknown label must not make the training record unreadable.
+     */
+    @TypeConverter
+    fun stringToExerciseCategory(value: String?): ExerciseCategory? =
+        value?.let { name -> ExerciseCategory.entries.firstOrNull { it.name == name } }
 
     @TypeConverter
     fun bodySideToString(value: BodySide?): String? = value?.name
