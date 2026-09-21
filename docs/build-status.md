@@ -436,9 +436,11 @@ Third round:
 - Starting a one-off *work* timer from the logger now also leads with the five-second preparation.
   That follows from "always five seconds before a set" but is a behaviour change to a path that
   was not about programs.
-- Skipping with next/previous moves one interval, not one set: from a rest, next lands on the
-  following set; from a set, previous lands on the rest before it. Previous from the very first
-  interval restarts it rather than doing nothing.
+- Next moves one interval, not one set: from a set to its rest, from a rest to the next set.
+  Previous restarts the interval on screen, unless it is pressed within
+  `TimerTransitions.RESTART_WINDOW_MS` (one second) of that interval starting, in which case it
+  goes to the one before. A set of reps has no elapsed time to measure, so it has no window and
+  previous always steps back.
 - A reps program waiting on `AwaitingSet` waits forever. There is no timeout, because there is no
   honest length for a set of repetitions — but it does mean a forgotten timer sits in the
   notification shade until it is cancelled.
