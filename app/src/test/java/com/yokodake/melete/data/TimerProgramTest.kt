@@ -267,8 +267,17 @@ class TimerProgramTest {
         else -> state.toString()
     }
 
-    private fun skip(state: TimerState, delta: Int, now: Long = 50_000) =
-        TimerTransitions.step(state, delta, settings, now, id())
+    private fun forward(state: TimerState, now: Long = 50_000) =
+        TimerTransitions.next(state, settings, now, id())
+
+    private fun back(state: TimerState, now: Long = 50_000) =
+        TimerTransitions.previous(state, settings, now, id())
+
+    /** The instant a running interval started, so a test can say how far into it we are. */
+    private fun startedAt(state: TimerState): Long = when (state) {
+        is TimerState.Running -> state.deadlineElapsedMs - state.totalMs
+        else -> error("not a countdown")
+    }
 
     @Test
     fun `skipping forward out of a rest lands on the next set with its five seconds`() {
@@ -279,31 +288,58 @@ class TimerProgramTest {
         assertEquals("rest set1 180s", describe(state))
 
         // Skipping is a button press, so the rest is no longer the run-up: the preparation is.
-        val skipped = skip(state, 1)
+        val skipped = forward(state)
         assertEquals("prepare set2 5s", describe(skipped))
         assertEquals("work set2 10s", describe(TimerTransitions.advance(skipped, settings, 55_000, id())))
     }
 
     @Test
-    fun `skipping back from a set lands on the rest before it`() {
+    fun `back, once a countdown has been running, restarts it`() {
+        // Ninety seconds into a three-minute rest, and the wrong button gets pressed. Losing the
+        // ninety seconds is worse than losing nothing, so this one starts the rest again.
+        var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        state = TimerTransitions.advance(state, settings, 6_000, id())
+        state = TimerTransitions.advance(state, settings, 16_000, id())
+        assertEquals("rest set1 180s", describe(state))
+
+        val restarted = back(state, now = startedAt(state) + 90_000)
+        assertEquals("rest set1 180s", describe(restarted))
+        assertEquals(180_000, (restarted as TimerState.Running).remainingMs(startedAt(state) + 90_000))
+    }
+
+    @Test
+    fun `back, straight after an interval starts, goes to the one before it`() {
+        var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        state = TimerTransitions.advance(state, settings, 6_000, id())
+        state = TimerTransitions.advance(state, settings, 16_000, id())
+        assertEquals("rest set1 180s", describe(state))
+
+        // Half a second in: this was a correction, not a restart.
+        assertEquals("prepare set1 5s", describe(back(state, now = startedAt(state) + 500)))
+    }
+
+    @Test
+    fun `back from a set that just started lands on the rest before it`() {
         var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
         repeat(3) { state = TimerTransitions.advance(state, settings, 10_000L * (it + 1), id()) }
         assertEquals("work set2 10s", describe(state))
 
-        assertEquals("rest set1 180s", describe(skip(state, -1)))
+        assertEquals("rest set1 180s", describe(back(state, now = startedAt(state) + 200)))
     }
 
     @Test
-    fun `skipping back from the first set restarts it rather than doing nothing`() {
+    fun `back from the very first interval restarts it rather than doing nothing`() {
         val state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
         assertEquals("prepare set1 5s", describe(state))
-        assertEquals("prepare set1 5s", describe(skip(state, -1)))
+        // Both sides of the window clamp to the same place, because there is nothing before it.
+        assertEquals("prepare set1 5s", describe(back(state, now = 1_200)))
+        assertEquals("prepare set1 5s", describe(back(state, now = 4_000)))
     }
 
     @Test
     fun `skipping past the last interval ends the program`() {
         val last = TimerTransitions.startProgram(id(), TimerProgram.work(10), settings, 1_000)
-        assertEquals("finished 1", describe(skip(last, 1)))
+        assertEquals("finished 1", describe(forward(last)))
     }
 
     @Test
@@ -311,10 +347,23 @@ class TimerProgramTest {
         val reps = TimerProgram(sets = 3, work = WorkKind.REPS, restSeconds = 60)
         val state: TimerState = TimerTransitions.startProgram(id(), reps, settings, 1_000)
         assertEquals("reps set1", describe(state))
-        val rest = skip(state, 1)
+        val rest = forward(state)
         assertEquals("rest set1 60s", describe(rest))
         // A set of reps never gets a preparation: it does not start without you.
-        assertEquals("reps set2", describe(skip(rest, 1)))
+        assertEquals("reps set2", describe(forward(rest)))
+    }
+
+    @Test
+    fun `back from a set of reps goes to the interval before it, with no window`() {
+        // Nothing is counting, so there is no elapsed time to measure and restarting would do
+        // nothing you could see.
+        val reps = TimerProgram(sets = 3, work = WorkKind.REPS, restSeconds = 60)
+        var state: TimerState = TimerTransitions.startProgram(id(), reps, settings, 1_000)
+        state = TimerTransitions.completeSet(state as TimerState.AwaitingSet, settings, 6_000, id())
+        state = TimerTransitions.advance(state, settings, 66_000, id())
+        assertEquals("reps set2", describe(state))
+
+        assertEquals("rest set1 60s", describe(back(state, now = 999_999)))
     }
 
     @Test

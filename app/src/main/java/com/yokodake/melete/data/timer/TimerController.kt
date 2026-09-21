@@ -231,20 +231,28 @@ class TimerController(
     }
 
     /** Skips to the next interval of the program. */
-    fun next() = step(delta = 1)
+    fun next() = step { state, settings, nowMs, runId ->
+        TimerTransitions.next(state, settings, nowMs, runId)
+    }
 
-    /** Goes back to the previous interval, or restarts the first one. */
-    fun previous() = step(delta = -1)
+    /**
+     * Restarts the interval on screen, or steps back to the one before it when pressed straight
+     * after this one began.
+     */
+    fun previous() = step { state, settings, nowMs, runId ->
+        TimerTransitions.previous(state, settings, nowMs, runId)
+    }
 
-    private fun step(delta: Int) {
+    private fun step(
+        move: (TimerState, CueSettings, Long, String) -> TimerState,
+    ) {
         val current = _state.value
         if (!hasActiveProgram) return
-        val next = TimerTransitions.step(
-            state = current,
-            delta = delta,
-            settings = store.cueSettings,
-            nowElapsedMs = now(),
-            nextRunId = UUID.randomUUID().toString(),
+        val next = move(
+            current,
+            store.cueSettings,
+            now(),
+            UUID.randomUUID().toString(),
         )
         if (next === current) return
         alarms.cancelAll()

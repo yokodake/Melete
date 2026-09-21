@@ -164,6 +164,14 @@ sealed interface TimerState {
 object TimerTransitions {
 
     /**
+     * How long after an interval starts that "previous" still means the interval before it.
+     *
+     * Short on purpose: past this, pressing back means "let me do this one again", which is the
+     * far commoner intent once a countdown has been running for a while.
+     */
+    const val RESTART_WINDOW_MS: Long = 1_000
+
+    /**
      * Begins [program] at its first interval, with a preparation countdown if that interval is
      * timed work — a set that starts the instant you press a button starts without you.
      */
@@ -354,33 +362,61 @@ object TimerTransitions {
         )
     }
 
-    /**
-     * Skips to the next interval, or back to the previous one.
-     *
-     * Landing on a set this way always gets the preparation countdown, whichever direction you
-     * came from: you pressed a button, so the set is about to start on your say-so rather than
-     * flowing out of a rest that gave you time to get ready. Going back from a preparation
-     * countdown steps off the set entirely rather than restarting its lead-in, so that pressing
-     * back twice does not leave you where you began.
-     */
-    fun step(
+    /** Skips forward one interval. */
+    fun next(
         state: TimerState,
-        delta: Int,
         settings: CueSettings,
         nowElapsedMs: Long,
         nextRunId: String,
     ): TimerState {
         val interval = intervalOf(state) ?: return state
-        val program = interval.program
-        val current = program.stepIndexOf(interval.setIndex, interval.phase)
+        val current = interval.program.stepIndexOf(interval.setIndex, interval.phase)
         if (current < 0) return state
-        val target = current + delta
-        if (target < 0) {
-            // Already at the start: restart the first interval rather than doing nothing, which
-            // is the same thing a media player does and is what a mis-tap wants.
-            return enterStep(nextRunId, program, 0, settings, nowElapsedMs, prepare = true)
-        }
-        if (target >= program.steps.size) {
+        return goToStep(interval, current + 1, settings, nowElapsedMs, nextRunId)
+    }
+
+    /**
+     * Goes back, the way a music player does: this interval from the top, unless you pressed it
+     * straight after the interval started, in which case you meant the one before.
+     *
+     * Restarting is what a mis-tap nearly always wants — you are a minute into a rest and you hit
+     * the wrong thing, and losing the minute is worse than losing nothing. Wanting the previous
+     * interval is real too, so the short window at the start says so unambiguously without a
+     * second control.
+     *
+     * A set of reps has no elapsed time to measure, so there is no window: nothing is counting,
+     * restarting it would do nothing visible, and going back is the only thing it could mean.
+     */
+    fun previous(
+        state: TimerState,
+        settings: CueSettings,
+        nowElapsedMs: Long,
+        nextRunId: String,
+    ): TimerState {
+        val interval = intervalOf(state) ?: return state
+        val current = interval.program.stepIndexOf(interval.setIndex, interval.phase)
+        if (current < 0) return state
+        val elapsed = elapsedMs(state, nowElapsedMs)
+        val target = if (elapsed != null && elapsed > RESTART_WINDOW_MS) current else current - 1
+        return goToStep(interval, target, settings, nowElapsedMs, nextRunId)
+    }
+
+    /**
+     * Moves to an interval by index, clamping at the start and ending the program past the end.
+     *
+     * Landing on a set this way always gets the preparation countdown, whichever direction you
+     * came from: you pressed a button, so the set is about to start on your say-so rather than
+     * flowing out of a rest that gave you time to get ready.
+     */
+    private fun goToStep(
+        interval: Interval,
+        stepIndex: Int,
+        settings: CueSettings,
+        nowElapsedMs: Long,
+        nextRunId: String,
+    ): TimerState {
+        val program = interval.program
+        if (stepIndex >= program.steps.size) {
             return TimerState.Finished(
                 runId = interval.runId,
                 phase = interval.phase,
@@ -389,7 +425,16 @@ object TimerTransitions {
                 setsCompleted = program.sets,
             )
         }
-        return enterStep(nextRunId, program, target, settings, nowElapsedMs, prepare = true)
+        return enterStep(
+            nextRunId, program, stepIndex.coerceAtLeast(0), settings, nowElapsedMs, prepare = true,
+        )
+    }
+
+    /** How far into its interval a state is, or null when nothing is counting. */
+    private fun elapsedMs(state: TimerState, nowElapsedMs: Long): Long? = when (state) {
+        is TimerState.Running -> state.totalMs - state.remainingMs(nowElapsedMs)
+        is TimerState.Paused -> state.totalMs - state.remainingMs
+        else -> null
     }
 
     /** The interval a state is on, whatever kind of state it is. */
