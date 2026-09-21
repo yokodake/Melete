@@ -12,11 +12,9 @@ import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.data.OccurrenceDetail
 import com.yokodake.melete.data.PerformedSet
 import com.yokodake.melete.data.PlannedOccurrence
+import com.yokodake.melete.data.SetWrite
 import com.yokodake.melete.data.PreviousResult
 import com.yokodake.melete.data.TrainingRepository
-import com.yokodake.melete.data.timer.TimerController
-import com.yokodake.melete.data.timer.TimerPhase
-import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
@@ -28,6 +26,7 @@ import com.yokodake.melete.ui.LoggerDestination
 import com.yokodake.melete.ui.components.PrescriptionFormState
 import com.yokodake.melete.ui.components.trimNumber
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,10 +37,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import android.os.SystemClock
 import java.time.Clock
 import java.time.LocalDate
 
@@ -88,11 +87,15 @@ data class SetRow(
     /** The load, or the left-hand load when the exercise is unilateral. */
     val load: String = "",
     val loadRight: String = "",
-    /** Ids of the actual sets this row wrote: one, or two for a unilateral row. */
-    val recordedIds: List<String> = emptyList(),
-) {
-    val done: Boolean get() = recordedIds.isNotEmpty()
-}
+    /**
+     * Whether this set happened.
+     *
+     * A claim the user makes, not a record that exists: nothing reaches the database until the
+     * workout is marked done. Planned rows start true, because the ordinary case is that you did
+     * what you planned, and unticking is how you say otherwise.
+     */
+    val done: Boolean = true,
+)
 
 /**
  * The table as a whole.
@@ -106,7 +109,46 @@ data class SetTable(
     val maxLoad: String = "",
     val maxLoadRight: String = "",
     val effort: EffortLevel? = null,
-)
+    /** True once the sets have been written, so marking done again corrects rather than doubles. */
+    val committed: Boolean = false,
+) {
+    /** The rows that claim to have happened. Only these are ever written. */
+    val doneRows: List<SetRow> get() = rows.filter { it.done }
+
+    /**
+     * Whether there is enough here to log, for an exercise that measures a load.
+     *
+     * Either every set says what it weighed, or the max load does and stands for all of them.
+     * Anything less would be recording that work happened without recording what the work was.
+     */
+    fun loggable(measured: Boolean): Boolean {
+        if (!measured) return doneRows.isNotEmpty()
+        if (doneRows.isEmpty()) return false
+        if (maxLoad.isNotBlank()) return true
+        return doneRows.all { it.load.isNotBlank() }
+    }
+
+    /** What is missing, said plainly, or null when nothing is. */
+    fun blocker(measured: Boolean): String? = when {
+        doneRows.isEmpty() -> "Tick at least one set"
+        !measured -> null
+        loggable(measured = true) -> null
+        else -> "Fill in the max load, or every set's load"
+    }
+
+    /**
+     * The table as it will be written: a row with no load of its own falls back to the max load.
+     *
+     * This is where "ticked, but nothing typed in the rows" becomes a real number, so the fallback
+     * lives in one place rather than being applied differently by each caller.
+     */
+    fun resolved(): List<SetRow> = doneRows.map { row ->
+        row.copy(
+            load = row.load.ifBlank { maxLoad },
+            loadRight = row.loadRight.ifBlank { maxLoadRight.ifBlank { maxLoad } },
+        )
+    }
+}
 
 data class LoggerUiState(
     val loading: Boolean = true,
@@ -134,67 +176,17 @@ data class LoggerUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoggerViewModel(
     private val repository: TrainingRepository,
-    private val timer: TimerController,
     private val savedStateHandle: SavedStateHandle,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
-
-    /**
-     * The countdown as the logger needs to see it: a glance at the remaining time without leaving
-     * the set you are logging. The timer itself is owned elsewhere and is never advanced here.
-     */
-    val timerState: StateFlow<LoggerTimerState> = combine(
-        timer.state,
-        tickerFlow(),
-    ) { state, nowMs ->
-        LoggerTimerState(
-            phase = (state as? TimerState.Running)?.phase
-                ?: (state as? TimerState.Paused)?.phase,
-            remainingMs = when (state) {
-                is TimerState.Running -> state.remainingMs(nowMs)
-                is TimerState.Paused -> state.remainingMs
-                else -> 0
-            },
-            running = state is TimerState.Running,
-            paused = state is TimerState.Paused,
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = LoggerTimerState(),
-    )
-
-    private fun tickerFlow() = flow {
-        while (true) {
-            emit(SystemClock.elapsedRealtime())
-            kotlinx.coroutines.delay(500)
-        }
-    }
-
-    /**
-     * Starts the rest prescribed for this exercise, or a sensible default when none is set. The
-     * countdown is labelled with the exercise so it can still say what it is for once the logger
-     * is off screen.
-     */
-    fun startRest() {
-        val occurrence = uiState.value.occurrence
-        val seconds = occurrence?.prescription?.restSeconds
-            ?: timer.lastDurationSeconds(TimerPhase.REST)
-        timer.start(TimerPhase.REST, seconds, label = occurrence?.name)
-    }
-
-    /** Starts the prescribed work interval of a timed exercise. */
-    fun startWork() {
-        val occurrence = uiState.value.occurrence
-        val seconds = occurrence?.prescription?.targetDurationSeconds
-            ?: timer.lastDurationSeconds(TimerPhase.WORK)
-        timer.start(TimerPhase.WORK, seconds, label = occurrence?.name)
-    }
 
     private val occurrenceId: String = savedStateHandle.toRoute<LoggerDestination>().occurrenceId
 
     private val draft = MutableStateFlow(savedStateHandle.readDraft())
     private val table = MutableStateFlow(SetTable())
+
+    /** Emitted once the workout has been written, so the screen knows to close itself. */
+    val finished = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val transient = MutableStateFlow(TransientState())
     private var prefilled = false
     private var seeded = false
@@ -321,26 +313,25 @@ class LoggerViewModel(
         // A unilateral row wrote two sets, left then right, so they come back in pairs.
         val grouped = if (occurrence.unilateral) recorded.chunked(2) else recorded.map { listOf(it) }
 
-        // Last time is the best guess at this time. It is only a suggestion: nothing is recorded
-        // until a row is ticked.
-        val lastTime = previousResults.firstOrNull()?.sets.orEmpty()
-        val suggestedLeft = lastTime.firstOrNull { it.side != BodySide.RIGHT }?.load().orEmpty()
-        val suggestedRight = lastTime.firstOrNull { it.side == BodySide.RIGHT }?.load().orEmpty()
-
+        // What was already written, if this workout has been logged before. Reopening it shows
+        // what it said, so that marking done again corrects the record rather than adding to it.
         val count = maxOf(planned, grouped.size).coerceAtLeast(1)
         table.value = SetTable(
             rows = (0 until count).map { index ->
-                val done = grouped.getOrNull(index)
+                val written = grouped.getOrNull(index)
                 SetRow(
                     number = index + 1,
                     reps = occurrence.prescription?.targetReps,
-                    load = done?.getOrNull(0)?.load() ?: suggestedLeft,
-                    loadRight = done?.getOrNull(1)?.load() ?: suggestedRight,
-                    recordedIds = done?.map { it.id }.orEmpty(),
+                    load = written?.getOrNull(0)?.load().orEmpty(),
+                    loadRight = written?.getOrNull(1)?.load().orEmpty(),
+                    // Everything planned starts ticked; a reopened log shows what it has.
+                    done = if (recorded.isEmpty()) true else written != null,
                 )
             },
-            maxLoad = suggestedLeft,
-            maxLoadRight = suggestedRight,
+            // The plan says how hard this was meant to feel, so that is what the logger starts
+            // from; a reopened log shows what it was actually rated.
+            effort = recorded.firstOrNull()?.payload?.effort ?: occurrence.prescription?.effort,
+            committed = recorded.isNotEmpty(),
         )
     }
 
@@ -353,15 +344,18 @@ class LoggerViewModel(
      * having the remainder agree is the whole ergonomic point. Rows already recorded are left
      * alone: those are history, and history does not get rewritten by typing above it.
      */
+    /**
+     * Sets a row's load, and lets every row below it follow.
+     *
+     * A load typed once describes the rest of the session; a set that differs is corrected in its
+     * own row and carries downward from there. Nothing here touches the database: the table is a
+     * draft until the workout is marked done.
+     */
     fun setRowLoad(number: Int, value: String, right: Boolean = false) {
         table.update { current ->
             current.copy(
                 rows = current.rows.map { row ->
-                    when {
-                        row.number < number -> row
-                        row.number > number && row.done -> row
-                        else -> row.withLoad(value, right)
-                    }
+                    if (row.number < number) row else row.withLoad(value, right)
                 }
             )
         }
@@ -370,7 +364,7 @@ class LoggerViewModel(
     /** Fills every row that has not been ticked yet. */
     fun setMaxLoad(value: String, right: Boolean = false) {
         table.update { current ->
-            val rows = current.rows.map { if (it.done) it else it.withLoad(value, right) }
+            val rows = current.rows.map { it.withLoad(value, right) }
             if (right) {
                 current.copy(maxLoadRight = value, rows = rows)
             } else {
@@ -393,29 +387,14 @@ class LoggerViewModel(
      * performed work even though they are one line on screen. Unticking deletes exactly what that
      * row wrote and nothing else.
      */
+    /** Says whether a set happened. Costs nothing until the workout is marked done. */
     fun toggleRow(number: Int) {
-        val state = uiState.value
-        val occurrence = state.occurrence ?: return
-        val row = state.table.rows.firstOrNull { it.number == number } ?: return
-        viewModelScope.launch {
-            val ids = if (row.done) {
-                row.recordedIds.forEach { repository.deleteSet(it) }
-                emptyList()
-            } else if (occurrence.unilateral) {
-                listOf(
-                    record(occurrence, row, row.load, BodySide.LEFT, state.targetDate),
-                    record(occurrence, row, row.loadRight, BodySide.RIGHT, state.targetDate),
-                )
-            } else {
-                listOf(record(occurrence, row, row.load, null, state.targetDate))
-            }
-            table.update { current ->
-                current.copy(
-                    rows = current.rows.map {
-                        if (it.number == number) it.copy(recordedIds = ids) else it
-                    }
-                )
-            }
+        table.update { current ->
+            current.copy(
+                rows = current.rows.map {
+                    if (it.number == number) it.copy(done = !it.done) else it
+                }
+            )
         }
     }
 
@@ -427,21 +406,27 @@ class LoggerViewModel(
         trainingDate: LocalDate,
     ): String = repository.logSet(
         occurrenceId = occurrenceId,
-        payload = ActualSetPayload(
-            reps = row.reps,
-            measurement = load.toDoubleOrNull()?.let { value ->
-                occurrence.measurementUnit?.let { unit ->
-                    Measurement(
-                        value,
-                        unit,
-                        occurrence.measurementMeaning ?: MeasurementMeaning.TOTAL_LOAD,
-                    )
-                }
-            },
-            effort = uiState.value.table.effort,
-        ),
+        payload = payloadFor(occurrence, row, load),
         side = side,
         trainingDate = trainingDate,
+    )
+
+    private fun payloadFor(
+        occurrence: PlannedOccurrence,
+        row: SetRow,
+        load: String,
+    ): ActualSetPayload = ActualSetPayload(
+        reps = row.reps,
+        measurement = load.toDoubleOrNull()?.let { value ->
+            occurrence.measurementUnit?.let { unit ->
+                Measurement(
+                    value,
+                    unit,
+                    occurrence.measurementMeaning ?: MeasurementMeaning.TOTAL_LOAD,
+                )
+            }
+        },
+        effort = uiState.value.table.effort,
     )
 
     /** An extra set beyond the plan. Four planned and six performed is a perfectly good session. */
@@ -561,6 +546,50 @@ class LoggerViewModel(
         transient.update { it.copy(targetDate = date) }
     }
 
+    /**
+     * Marks the workout done: writes what the table says, and finishes.
+     *
+     * This is the moment the session becomes a record. Everything before it is a draft that can be
+     * ticked, unticked and retyped freely, which is why nothing is written as you go: a half-filled
+     * table is not a claim about anything.
+     *
+     * Marking done a second time replaces what was written rather than adding to it, so correcting
+     * a logged workout is the same gesture as logging it.
+     */
+    fun markDone() {
+        val state = uiState.value
+        val occurrence = state.occurrence ?: return
+        val measured = occurrence.measurementUnit != null
+        val blocker = state.table.blocker(measured)
+        if (blocker != null) {
+            transient.update { it.copy(message = blocker) }
+            return
+        }
+        val rows = state.table.resolved()
+        viewModelScope.launch {
+            repository.replaceSetsForOccurrence(
+                occurrenceId = occurrenceId,
+                trainingDate = state.targetDate,
+                sets = rows.flatMap { row -> writesFor(occurrence, row) },
+            )
+            repository.setOccurrenceState(occurrenceId, OccurrenceState.COMPLETED)
+            finished.emit(Unit)
+        }
+    }
+
+    /** One row becomes one set, or a left/right pair when the exercise is unilateral. */
+    private fun writesFor(
+        occurrence: PlannedOccurrence,
+        row: SetRow,
+    ): List<SetWrite> = if (occurrence.unilateral) {
+        listOf(
+            SetWrite(payloadFor(occurrence, row, row.load), BodySide.LEFT),
+            SetWrite(payloadFor(occurrence, row, row.loadRight), BodySide.RIGHT),
+        )
+    } else {
+        listOf(SetWrite(payloadFor(occurrence, row, row.load), null))
+    }
+
     fun markState(state: OccurrenceState) {
         viewModelScope.launch { repository.setOccurrenceState(occurrenceId, state) }
     }
@@ -627,7 +656,6 @@ class LoggerViewModel(
                     as MeleteApplication
                 LoggerViewModel(
                     application.container.trainingRepository,
-                    application.container.timerController,
                     createSavedStateHandle(),
                 )
             }
@@ -635,15 +663,6 @@ class LoggerViewModel(
     }
 }
 
-/** The countdown as shown inside the logger. */
-data class LoggerTimerState(
-    val phase: TimerPhase? = null,
-    val remainingMs: Long = 0,
-    val running: Boolean = false,
-    val paused: Boolean = false,
-) {
-    val active: Boolean get() = running || paused
-}
 
 /** True when the exercise records a duration rather than repetitions. */
 val ExerciseMode.isTimed: Boolean

@@ -68,6 +68,15 @@ data class ExerciseDetailUiState(
     /** Non-null while the user is being asked whether to call off a countdown already running. */
     val replacePrompt: RunningCountdown? = null,
 ) {
+    /**
+     * What the logging button offers.
+     *
+     * Logging is no longer something this button does — it opens the sheet where the sets live,
+     * and the workout is written from there. So it says what you will find, not what will happen.
+     */
+    val logButtonLabel: String
+        get() = if (occurrenceState == OccurrenceState.COMPLETED) "Update log" else "See log"
+
     /** What the start button offers, spelled out so pressing it holds no surprise. */
     val timerButtonLabel: String
         get() {
