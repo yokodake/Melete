@@ -193,12 +193,24 @@ fun LoggerScreen(
                 }
             }
             item {
-                SectionLabel("Effort")
-                EffortSelector(
-                    selected = state.table.effort,
-                    onSelect = viewModel::setTableEffort,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                // Label and control on one line. A heading, a rule and a full-width box was
+                // three bands of screen for one optional word.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Effort",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    EffortSelector(
+                        selected = state.table.effort,
+                        onSelect = viewModel::setTableEffort,
+                        modifier = Modifier.width(190.dp),
+                    )
+                }
             }
             if (occurrence.measurementUnit != null) {
                 item {
@@ -216,14 +228,21 @@ fun LoggerScreen(
                     unilateral = occurrence.unilateral,
                 )
             }
-            items(items = state.table.rows, key = { it.number }) { row ->
-                SetTableRow(
-                    row = row,
-                    unit = occurrence.measurementUnit,
-                    unilateral = occurrence.unilateral,
-                    onLoad = viewModel::setRowLoad,
-                    onToggle = { viewModel.toggleRow(row.number) },
-                )
+            item {
+                // One item holding the whole table: the gap between sets is then 4dp rather than
+                // the 8dp the page puts between its sections, which is the right relationship —
+                // rows of one table belong closer together than sections of a screen.
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    state.table.rows.forEach { row ->
+                        SetTableRow(
+                            row = row,
+                            unit = occurrence.measurementUnit,
+                            unilateral = occurrence.unilateral,
+                            onLoad = viewModel::setRowLoad,
+                            onToggle = { viewModel.toggleRow(row.number) },
+                        )
+                    }
+                }
             }
             item {
                 TextButton(
@@ -638,35 +657,28 @@ private fun MaxLoadRow(
     unilateral: Boolean,
     onMaxLoad: (String, Boolean) -> Unit,
 ) {
-    // The heading sits above the fields rather than beside them. An OutlinedTextField asks for
-    // 280dp by default, so two of them on one line leave a label nothing to render into and it
-    // wraps to a letter per row.
-    Column(
+    // Label beside the fields. This only became possible once the fields stopped being
+    // OutlinedTextFields, which demand 280dp each and left a heading no room to render into.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp),
+            .padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = "Max load ($unit)",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (unilateral) {
-                SideLabel("L")
-                LoadField(table.maxLoad, modifier = Modifier.weight(1f)) { onMaxLoad(it, false) }
-                Spacer(Modifier.width(8.dp))
-                SideLabel("R")
-                LoadField(table.maxLoadRight, modifier = Modifier.weight(1f)) {
-                    onMaxLoad(it, true)
-                }
-            } else {
-                LoadField(table.maxLoad, modifier = Modifier.weight(1f)) { onMaxLoad(it, false) }
-            }
+        if (unilateral) {
+            SideLabel("L")
+            LoadField(table.maxLoad, modifier = Modifier.width(76.dp)) { onMaxLoad(it, false) }
+            Spacer(Modifier.width(8.dp))
+            SideLabel("R")
+            LoadField(table.maxLoadRight, modifier = Modifier.width(76.dp)) { onMaxLoad(it, true) }
+        } else {
+            LoadField(table.maxLoad, modifier = Modifier.width(120.dp)) { onMaxLoad(it, false) }
         }
     }
 }
@@ -727,7 +739,7 @@ private fun SetTableRow(
         ),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -793,11 +805,16 @@ private fun LoadField(
 @Composable
 private fun DoneCheck(done: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val (container, content) = doneColors()
-    IconButton(
-        onClick = onToggle,
-        modifier = modifier.semantics {
-            contentDescription = if (done) "Recorded, tap to take it back" else "Record this set"
-        },
+    // Not an IconButton: that enforces a 48dp touch target, and with a 40dp field beside it the
+    // tick alone was setting the height of every row. 40dp is still a comfortable target.
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(40.dp)
+            .clickable(onClick = onToggle)
+            .semantics {
+                contentDescription = if (done) "Recorded, tap to take it back" else "Record this set"
+            },
     ) {
         Box(
             contentAlignment = Alignment.Center,
