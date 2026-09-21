@@ -71,11 +71,12 @@ data class ExerciseDetailUiState(
     /**
      * What the logging button offers.
      *
-     * Logging is no longer something this button does — it opens the sheet where the sets live,
-     * and the workout is written from there. So it says what you will find, not what will happen.
+     * Planned work has no log yet, so the button offers to make one. Once the workout has been
+     * written the same button reopens what it says, which is a different promise and gets
+     * different words.
      */
     val logButtonLabel: String
-        get() = if (occurrenceState == OccurrenceState.COMPLETED) "Update log" else "See log"
+        get() = if (occurrenceState == OccurrenceState.COMPLETED) "Update log" else "Log the workout"
 
     /** What the start button offers, spelled out so pressing it holds no surprise. */
     val timerButtonLabel: String
