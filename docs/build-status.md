@@ -545,9 +545,10 @@ Sixth round (logging as one act, density, release build):
 - The unilateral write path was checked against the real database pulled off the phone: a
   4-set unilateral workout stores 8 rows, `LEFT`/`RIGHT` correctly paired and ordered by
   `orderIndex`.
-- **Not verified:** none of the logging changes have been driven end to end on the device by the
-  author of them. The screens have been looked at in screenshots; marking done, reopening a logged
-  workout and correcting it have not been exercised beyond the unit tests.
+- **Verified on the phone by the user**, repeatedly: marking done, reopening the logged workout,
+  correcting it and saving again. That is the path that deletes and rewrites rows, and the one
+  `replaceSetsForOccurrence` exists to make idempotent, so it is the one that most needed a real
+  session rather than a unit test.
 
 Phase 1:
 
