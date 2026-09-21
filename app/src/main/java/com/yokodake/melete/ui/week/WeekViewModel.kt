@@ -91,6 +91,59 @@ class WeekViewModel(
         }
     }
 
+    /**
+     * How much evidence a placement carries, so a deletion can say what it would cost before it
+     * happens rather than after.
+     */
+    suspend fun loggedSetCount(occurrenceId: String): Int =
+        repository.loggedSetCount(occurrenceId)
+
+    /**
+     * Deletes a placement together with everything logged against it.
+     *
+     * Only ever reached from a confirmation that names the number of sets it will destroy. History
+     * never goes through an ambiguous yes.
+     */
+    fun deleteOccurrenceAndLog(occurrenceId: String, sets: Int) {
+        viewModelScope.launch {
+            repository.deleteOccurrenceAndLog(occurrenceId)
+            _message.value = "Removed, along with $sets recorded set${if (sets == 1) "" else "s"}"
+        }
+    }
+
+    /** Moves a placement to any week, on a day or into that week's unscheduled area. */
+    fun moveOccurrence(occurrenceId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
+        viewModelScope.launch {
+            repository.moveOccurrence(occurrenceId, weekStart, trainingDate)
+            _message.value = "Moved to ${trainingDate?.let(WeekMath::dayLabel) ?: "unscheduled"}"
+        }
+    }
+
+    fun copyOccurrence(occurrenceId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
+        viewModelScope.launch {
+            repository.copyOccurrence(occurrenceId, weekStart, trainingDate)
+            _message.value = "Copied to ${trainingDate?.let(WeekMath::dayLabel) ?: "unscheduled"}"
+        }
+    }
+
+    fun reorderOccurrence(occurrenceId: String, delta: Int) {
+        viewModelScope.launch { repository.reorderOccurrence(occurrenceId, delta) }
+    }
+
+    /**
+     * Re-dates the work, not the plan. The placement stays where it was planned, so the planner
+     * keeps telling the truth about the intention and history keeps telling it about the day.
+     */
+    fun setPerformedDate(occurrenceId: String, performedDate: LocalDate) {
+        viewModelScope.launch {
+            repository.setPerformedDate(occurrenceId, performedDate)
+            _message.value = "Logged under ${WeekMath.dayLabel(performedDate)}"
+        }
+    }
+
+    /** The week the planner is currently showing, for defaulting a move or a copy. */
+    val shownWeekStart: LocalDate get() = weekStart.value
+
     fun consumeMessage() {
         _message.value = null
     }

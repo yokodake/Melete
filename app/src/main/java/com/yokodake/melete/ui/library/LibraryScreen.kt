@@ -1,6 +1,32 @@
 package com.yokodake.melete.ui.library
 
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.Surface
+import androidx.compose.ui.tooling.preview.Preview
+import com.yokodake.melete.data.model.ExerciseCategory
+import com.yokodake.melete.data.model.ExerciseMode
+import com.yokodake.melete.data.model.MeasurementMeaning
+import com.yokodake.melete.data.model.PrescriptionPayload
+import com.yokodake.melete.ui.theme.MeleteTheme
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.ui.components.PlanTarget
+import com.yokodake.melete.ui.components.PlanTargetDialog
+import java.time.LocalDate
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,13 +71,24 @@ fun LibraryRoute(
     bottomBar: @Composable () -> Unit = {},
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
-    val exercises by viewModel.exercises.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     LibraryScreen(
         title = "Library",
         subtitle = null,
-        exercises = exercises,
-        emptyMessage = "No exercises yet. Everything here is yours to define — " +
-            "nothing is built in.",
+        exercises = state.exercises,
+        emptyMessage = if (state.noMatches) {
+            "Nothing matches \"${state.query}\"."
+        } else {
+            "No exercises yet. Everything here is yours to define — nothing is built in."
+        },
+        query = state.query,
+        onQueryChange = viewModel::setQuery,
+        message = state.message,
+        onMessageShown = viewModel::consumeMessage,
+        today = state.today,
+        defaultWeekStart = viewModel.currentWeekStart,
+        onSchedule = viewModel::schedule,
+        onRetire = viewModel::retire,
         onRowClick = onOpenExercise,
         onNewExercise = onNewExercise,
         onBack = null,
@@ -93,11 +130,31 @@ fun LibraryScreen(
     onNewExercise: () -> Unit,
     onBack: (() -> Unit)?,
     onSecondaryAction: Pair<(String) -> Unit, String>? = null,
+    query: String? = null,
+    onQueryChange: (String) -> Unit = {},
+    message: String? = null,
+    onMessageShown: () -> Unit = {},
+    today: LocalDate = LocalDate.now(),
+    defaultWeekStart: LocalDate = WeekMath.weekStartOf(today),
+    onSchedule: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
+    onRetire: (LibraryExercise) -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    var scheduling by remember { mutableStateOf<LibraryExercise?>(null) }
+    var retiring by remember { mutableStateOf<LibraryExercise?>(null) }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            onMessageShown()
+        }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = bottomBar,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -141,6 +198,22 @@ fun LibraryScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (query != null) {
+                item {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        label = { Text("Search") },
+                        singleLine = true,
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                TextButton(onClick = { onQueryChange("") }) { Text("Clear") }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             if (exercises.isEmpty()) {
                 item {
                     Text(
@@ -155,22 +228,81 @@ fun LibraryScreen(
                     exercise = exercise,
                     onClick = { onRowClick(exercise.id) },
                     secondaryAction = onSecondaryAction,
+                    onAddToPlan = { scheduling = exercise },
+                    onRetire = { retiring = exercise },
                 )
             }
         }
     }
+
+    scheduling?.let { exercise ->
+        PlanTargetDialog(
+            title = "Add ${exercise.name} to",
+            initial = PlanTarget(defaultWeekStart, null),
+            confirmLabel = "Add",
+            today = today,
+            onConfirm = { target ->
+                scheduling = null
+                onSchedule(exercise.id, target.weekStart, target.trainingDate)
+            },
+            onDismiss = { scheduling = null },
+        )
+    }
+
+    retiring?.let { exercise ->
+        AlertDialog(
+            onDismissRequest = { retiring = null },
+            title = { Text("Remove ${exercise.name}?") },
+            text = {
+                Text(
+                    "It stops being offered when you plan. Anything already scheduled keeps " +
+                        "working, and everything you have logged against it stays exactly where " +
+                        "it is — including in previous results."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        retiring = null
+                        onRetire(exercise)
+                    }
+                ) { Text("Remove from library") }
+            },
+            dismissButton = { TextButton(onClick = { retiring = null }) { Text("Keep") } },
+        )
+    }
 }
 
+/**
+ * One library entry.
+ *
+ * A tap opens it; a long press offers the things that change the plan or the library itself. The
+ * overflow beside it does the same job for anyone who cannot discover or perform a long press —
+ * an invisible gesture must not be the only route to an action.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LibraryRow(
     exercise: LibraryExercise,
     onClick: () -> Unit,
     secondaryAction: Pair<(String) -> Unit, String>?,
+    onAddToPlan: () -> Unit = {},
+    onRetire: () -> Unit = {},
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    menuExpanded = true
+                },
+                onLongClickLabel = "Exercise actions",
+            ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -199,6 +331,172 @@ private fun LibraryRow(
             if (secondaryAction != null) {
                 val (action, label) = secondaryAction
                 TextButton(onClick = { action(exercise.id) }) { Text(label) }
+            } else {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.semantics { contentDescription = "Exercise actions" },
+                ) {
+                    Text("⋮", style = MaterialTheme.typography.titleLarge)
+                }
+            }
+        }
+    }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Add to plan") },
+                onClick = {
+                    menuExpanded = false
+                    onAddToPlan()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Open") },
+                onClick = {
+                    menuExpanded = false
+                    onClick()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Remove from library") },
+                onClick = {
+                    menuExpanded = false
+                    onRetire()
+                },
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------- previews
+
+private fun previewExercise(
+    name: String,
+    category: ExerciseCategory?,
+    sets: Int = 4,
+    reps: Int? = 8,
+    seconds: Int? = null,
+    unit: String? = "kg",
+    retired: Boolean = false,
+) = LibraryExercise(
+    id = name,
+    name = name,
+    mode = if (seconds != null) ExerciseMode.DURATION else ExerciseMode.REPETITIONS,
+    unilateral = false,
+    measurementUnit = unit,
+    measurementMeaning = unit?.let { MeasurementMeaning.TOTAL_LOAD },
+    notes = null,
+    description = "How to do it, read on the exercise itself rather than in this list.",
+    category = category,
+    defaultPrescription = PrescriptionPayload(
+        sets = sets,
+        targetReps = reps,
+        targetDurationSeconds = seconds,
+        restSeconds = 180,
+    ),
+    isSampleData = false,
+    deletedAtEpochMs = if (retired) 1_700_000_000_000 else null,
+)
+
+private val previewLibrary = listOf(
+    previewExercise("Back squat", ExerciseCategory.CONDITIONING, reps = 5),
+    previewExercise("Bouldering session", ExerciseCategory.OPEN, sets = 1, reps = null, seconds = 5400, unit = null),
+    previewExercise("Couch stretch", ExerciseCategory.FLEXIBILITY, sets = 2, reps = null, seconds = 90, unit = null),
+    previewExercise("Dumbbell row", ExerciseCategory.CONDITIONING),
+    previewExercise("Max hangs 20 mm", ExerciseCategory.CONDITIONING, sets = 5, reps = null, seconds = 10),
+)
+
+@Preview(name = "Library · populated", showBackground = true, heightDp = 760)
+@Composable
+private fun LibraryPopulatedPreview() {
+    MeleteTheme {
+        LibraryScreen(
+            title = "Library",
+            subtitle = null,
+            exercises = previewLibrary,
+            emptyMessage = "",
+            query = "",
+            onRowClick = {},
+            onNewExercise = {},
+            onBack = null,
+        )
+    }
+}
+
+@Preview(name = "Library · search results", showBackground = true, heightDp = 760)
+@Composable
+private fun LibrarySearchPreview() {
+    MeleteTheme {
+        LibraryScreen(
+            title = "Library",
+            subtitle = null,
+            exercises = previewLibrary.filter { it.name.contains("ha", ignoreCase = true) },
+            emptyMessage = "",
+            query = "ha",
+            onRowClick = {},
+            onNewExercise = {},
+            onBack = null,
+        )
+    }
+}
+
+/**
+ * A retired definition still rendering correctly.
+ *
+ * It no longer appears in the library — that is the whole point of retiring it — but everything
+ * that refers to it keeps working, so the row still has a name, a category and a plan to show
+ * wherever history puts it in front of you.
+ */
+@Preview(name = "Library · retired, history intact", showBackground = true, heightDp = 400)
+@Composable
+private fun LibraryRetiredPreview() {
+    MeleteTheme {
+        LibraryScreen(
+            title = "Previously trained",
+            subtitle = "Removed from the library",
+            exercises = listOf(previewExercise("Pull-up", ExerciseCategory.CONDITIONING, retired = true)),
+            emptyMessage = "",
+            onRowClick = {},
+            onNewExercise = {},
+            onBack = {},
+        )
+    }
+}
+
+@Preview(name = "Library · choose a week and day", showBackground = true, heightDp = 700)
+@Composable
+private fun PlanTargetPreview() {
+    val monday = LocalDate.of(2026, 9, 21)
+    MeleteTheme {
+        PlanTargetDialog(
+            title = "Add Max hangs 20 mm to",
+            initial = PlanTarget(monday, null),
+            confirmLabel = "Add",
+            today = monday.plusDays(2),
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+/**
+ * What a long press offers.
+ *
+ * Rendered as a plain surface rather than a real DropdownMenu: a menu is a popup window, and
+ * popups do not compose into a preview. The items and their order are what this is for.
+ */
+@Preview(name = "Library · long-press menu", showBackground = true, widthDp = 260)
+@Composable
+private fun LibraryMenuPreview() {
+    MeleteTheme {
+        Surface(tonalElevation = 3.dp) {
+            Column {
+                listOf("Add to plan", "Open", "Remove from library").forEach {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    )
+                }
             }
         }
     }

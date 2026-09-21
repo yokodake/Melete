@@ -1,6 +1,7 @@
 package com.yokodake.melete.data
 
 import androidx.room.withTransaction
+import com.yokodake.melete.core.Planning
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.dao.ExerciseWithDefaultPrescription
 import com.yokodake.melete.data.dao.OccurrenceWithPrescription
@@ -46,6 +47,11 @@ data class PlannedOccurrence(
     val prescription: PrescriptionPayload?,
     /** True when a prescription row exists but its payload could not be read. */
     val prescriptionUnreadable: Boolean,
+    /**
+     * The date the work was actually filed under, when any has been logged. Deliberately separate
+     * from [trainingDate], which is where the *plan* put it: the two are allowed to disagree.
+     */
+    val performedDate: LocalDate? = null,
     val state: OccurrenceState,
     val comment: String?,
     val orderIndex: Int,
@@ -65,6 +71,8 @@ data class LibraryExercise(
     val category: ExerciseCategory?,
     val defaultPrescription: PrescriptionPayload?,
     val isSampleData: Boolean,
+    /** Retired from the library, but still the anchor for everything that refers to it. */
+    val deletedAtEpochMs: Long? = null,
 )
 
 /** Everything the exercise editor writes. Identity and default prescription travel together. */
@@ -113,8 +121,28 @@ class TrainingRepository(private val database: MeleteDatabase) {
 
     // ---------------------------------------------------------------- week
 
-    fun observeWeek(weekStart: LocalDate): Flow<List<PlannedOccurrence>> =
-        dao.observeWeek(weekStart.toEpochDay()).map { rows -> rows.map { it.toPlanned() } }
+    /**
+     * The planner's view of a week: placements by *planned* date, each annotated with where its
+     * work was actually logged when that differs.
+     */
+    fun observeWeek(weekStart: LocalDate): Flow<List<PlannedOccurrence>> = combine(
+        dao.observeWeek(weekStart.toEpochDay()),
+        logging.observePerformedDatesInWeek(weekStart.toEpochDay()),
+    ) { rows, performed ->
+        val byOccurrence = performed.groupBy { it.occurrenceId }
+        rows.map { row ->
+            // Several performed dates for one occurrence is possible if sets were logged across
+            // midnight; the earliest is the honest answer for a single marker.
+            val date = byOccurrence[row.occurrence.id]
+                ?.minOfOrNull { it.trainingDateEpochDay }
+                ?.let(LocalDate::ofEpochDay)
+            row.toPlanned(performedDate = date)
+        }
+    }
+
+    /** Every placement of one exercise, including those whose definition has been retired. */
+    fun observeOccurrencesOf(exerciseId: String): Flow<List<PlannedOccurrence>> =
+        dao.observeOccurrencesOf(exerciseId).map { rows -> rows.map { it.toPlanned() } }
 
     fun observeOccurrence(occurrenceId: String): Flow<OccurrenceDetail?> =
         combine(
@@ -221,6 +249,19 @@ class TrainingRepository(private val database: MeleteDatabase) {
         }
     }
 
+    /**
+     * Retires an exercise from the library.
+     *
+     * A tombstone, never a delete. The row anchors scheduled copies, logged sets and the grouping
+     * that makes "previous results" work; removing it would take history with it. What the user
+     * is asking for is "stop offering me this", which is exactly what this does.
+     */
+    suspend fun retireExercise(exerciseId: String) {
+        library.markExerciseDeleted(exerciseId, System.currentTimeMillis())
+    }
+
+    suspend fun restoreExercise(exerciseId: String) = library.restoreExercise(exerciseId)
+
     // ---------------------------------------------------------- scheduling
 
     /**
@@ -299,6 +340,123 @@ class TrainingRepository(private val database: MeleteDatabase) {
             )
         }
     }
+
+    /**
+     * Moves a placement to any week, on a day or into that week's unscheduled area.
+     *
+     * Only the *plan* moves. Anything already logged against it keeps the performed date it was
+     * logged on, because moving a plan is a statement about the future and re-dating evidence is
+     * a different decision the user has to make on purpose.
+     */
+    suspend fun moveOccurrence(
+        occurrenceId: String,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+    ) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            dao.updateOccurrence(
+                occurrence.copy(
+                    weekStartEpochDay = weekStart.toEpochDay(),
+                    trainingDateEpochDay = trainingDate?.toEpochDay(),
+                    orderIndex = dao.nextOrderIndex(
+                        weekStart.toEpochDay(),
+                        trainingDate?.toEpochDay(),
+                    ),
+                )
+            )
+        }
+    }
+
+    /**
+     * Places a second copy of an existing placement elsewhere.
+     *
+     * The prescription is copied by value into its own row, exactly as scheduling from the library
+     * does, so editing one copy never reaches the other. Nothing logged is copied: the new copy is
+     * a plan, and has not happened yet.
+     */
+    suspend fun copyOccurrence(
+        occurrenceId: String,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+    ): String? = database.withTransaction {
+        val source = dao.getOccurrence(occurrenceId) ?: return@withTransaction null
+        val now = System.currentTimeMillis()
+        val prescriptionCopy = source.prescriptionId
+            ?.let { library.getPrescription(it) }
+            ?.let {
+                PrescriptionEntity(
+                    id = UUID.randomUUID().toString(),
+                    payloadVersion = it.payloadVersion,
+                    payloadJson = it.payloadJson,
+                    createdAtEpochMs = now,
+                    isSampleData = false,
+                )
+            }
+        prescriptionCopy?.let { library.insertPrescription(it) }
+        val copy = source.copy(
+            id = UUID.randomUUID().toString(),
+            weekStartEpochDay = weekStart.toEpochDay(),
+            trainingDateEpochDay = trainingDate?.toEpochDay(),
+            prescriptionId = prescriptionCopy?.id,
+            orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
+            state = OccurrenceState.PLANNED,
+            comment = null,
+            createdAtEpochMs = now,
+        )
+        dao.insertOccurrences(listOf(copy))
+        copy.id
+    }
+
+    /** Nudges a placement up or down within its own day, or within the unscheduled area. */
+    suspend fun reorderOccurrence(occurrenceId: String, delta: Int) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            val slot = dao.occurrencesInSlot(
+                occurrence.weekStartEpochDay,
+                occurrence.trainingDateEpochDay,
+            )
+            val moving = slot.firstOrNull { it.id == occurrenceId } ?: return@withTransaction
+            val reordered = Planning.reorder(slot, moving, delta)
+            if (reordered == slot) return@withTransaction
+            reordered.forEachIndexed { index, row ->
+                if (row.orderIndex != index) dao.updateOccurrence(row.copy(orderIndex = index))
+            }
+        }
+    }
+
+    /**
+     * Re-dates the work logged against one occurrence, as a whole.
+     *
+     * Every set moves together and is re-homed into the session for the new date, because a set is
+     * evidence of a day's training and a day's training is what a session groups. The *plan* is
+     * untouched: an exercise can stay planned on Monday while its work is recorded on Tuesday, and
+     * the planner and the history are both then telling the truth.
+     */
+    suspend fun setPerformedDate(occurrenceId: String, performedDate: LocalDate) {
+        database.withTransaction {
+            val session = ensureSession(performedDate)
+            logging.repointSets(occurrenceId, performedDate.toEpochDay(), session.id)
+        }
+    }
+
+    /**
+     * Deletes a placement *and* the work logged against it.
+     *
+     * Separate from [deleteOccurrenceIfEmpty] on purpose: that one refuses when evidence exists,
+     * and this one is the deliberate stronger answer. Nothing calls it without saying out loud
+     * what is about to be destroyed.
+     */
+    suspend fun deleteOccurrenceAndLog(occurrenceId: String) {
+        database.withTransaction {
+            logging.deleteSetsForOccurrence(occurrenceId)
+            dao.deleteOccurrence(occurrenceId)
+        }
+    }
+
+    /** How many sets are recorded against a placement, for deciding what a deletion would cost. */
+    suspend fun loggedSetCount(occurrenceId: String): Int =
+        logging.countSetsForOccurrence(occurrenceId)
 
     suspend fun setOccurrenceState(occurrenceId: String, state: OccurrenceState) {
         database.withTransaction {
@@ -429,7 +587,9 @@ class TrainingRepository(private val database: MeleteDatabase) {
     )
 }
 
-private fun OccurrenceWithPrescription.toPlanned(): PlannedOccurrence {
+private fun OccurrenceWithPrescription.toPlanned(
+    performedDate: LocalDate? = null,
+): PlannedOccurrence {
     val payload: PrescriptionPayload? = prescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
     }
@@ -447,6 +607,7 @@ private fun OccurrenceWithPrescription.toPlanned(): PlannedOccurrence {
         prescriptionId = occurrence.prescriptionId,
         prescription = payload,
         prescriptionUnreadable = prescription != null && payload == null,
+        performedDate = performedDate,
         state = occurrence.state,
         comment = occurrence.comment,
         orderIndex = occurrence.orderIndex,
@@ -464,6 +625,7 @@ private fun ExerciseWithDefaultPrescription.toLibraryExercise() = LibraryExercis
     notes = exercise.notes,
     description = exercise.description,
     category = exercise.category,
+    deletedAtEpochMs = exercise.deletedAtEpochMs,
     defaultPrescription = defaultPrescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
     },
