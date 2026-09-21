@@ -112,6 +112,25 @@ data class SetTable(
     /** True once the sets have been written, so marking done again corrects rather than doubles. */
     val committed: Boolean = false,
 ) {
+    /**
+     * The table with its max load read back off the rows.
+     *
+     * The heaviest set *is* the max load, so it is shown rather than asked for again. Typing into
+     * the field still works and still fills the rows; this only keeps the number from sitting
+     * empty above a table that plainly answers it.
+     */
+    fun withDeducedMax(): SetTable {
+        fun heaviest(of: (SetRow) -> String): String =
+            rows.mapNotNull { of(it).takeIf(String::isNotBlank) }
+                .maxByOrNull { it.toDoubleOrNull() ?: Double.NEGATIVE_INFINITY }
+                .orEmpty()
+
+        return copy(
+            maxLoad = heaviest { it.load }.ifBlank { maxLoad },
+            maxLoadRight = heaviest { it.loadRight }.ifBlank { maxLoadRight },
+        )
+    }
+
     /** The rows that claim to have happened. Only these are ever written. */
     val doneRows: List<SetRow> get() = rows.filter { it.done }
 
@@ -163,7 +182,8 @@ data class LoggerUiState(
     /** Last set saved in this screen, offered for a one-tap undo. */
     val undoableSetId: String? = null,
     val prescriptionEditor: PrescriptionFormState? = null,
-    val commentEditor: String? = null,
+    /** The note as it currently reads: the edit in progress, or what is stored. */
+    val comment: String = "",
     val message: String? = null,
 ) {
     val canConfirm: Boolean
@@ -252,7 +272,7 @@ class LoggerViewModel(
             today = today,
             undoableSetId = extras.undoableSetId,
             prescriptionEditor = extras.prescriptionEditor,
-            commentEditor = extras.commentEditor,
+            comment = extras.commentEditor ?: occurrenceDetail?.occurrence?.comment.orEmpty(),
             message = extras.message,
         )
     }
@@ -332,7 +352,7 @@ class LoggerViewModel(
             // from; a reopened log shows what it was actually rated.
             effort = recorded.firstOrNull()?.payload?.effort ?: occurrence.prescription?.effort,
             committed = recorded.isNotEmpty(),
-        )
+        ).withDeducedMax()
     }
 
     private fun PerformedSet.load(): String? = payload.measurement?.value?.let(::trimNumber)
@@ -357,7 +377,7 @@ class LoggerViewModel(
                 rows = current.rows.map { row ->
                     if (row.number < number) row else row.withLoad(value, right)
                 }
-            )
+            ).withDeducedMax()
         }
     }
 
@@ -572,6 +592,7 @@ class LoggerViewModel(
                 trainingDate = state.targetDate,
                 sets = rows.flatMap { row -> writesFor(occurrence, row) },
             )
+            repository.setOccurrenceComment(occurrenceId, state.comment)
             repository.setOccurrenceState(occurrenceId, OccurrenceState.COMPLETED)
             finished.emit(Unit)
         }
@@ -618,24 +639,14 @@ class LoggerViewModel(
         }
     }
 
-    fun openCommentEditor() {
-        transient.update { it.copy(commentEditor = uiState.value.occurrence?.comment.orEmpty()) }
-    }
-
-    fun updateCommentEditor(value: String) {
+    /**
+     * Types into the note.
+     *
+     * Held with the rest of the draft and written when the workout is marked done, so that one
+     * button still accounts for everything this screen has to say.
+     */
+    fun updateComment(value: String) {
         transient.update { it.copy(commentEditor = value) }
-    }
-
-    fun dismissCommentEditor() {
-        transient.update { it.copy(commentEditor = null) }
-    }
-
-    fun saveComment() {
-        val comment = transient.value.commentEditor ?: return
-        viewModelScope.launch {
-            repository.setOccurrenceComment(occurrenceId, comment)
-            transient.update { it.copy(commentEditor = null) }
-        }
     }
 
     fun consumeMessage() {
