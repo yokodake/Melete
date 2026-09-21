@@ -4,6 +4,7 @@ import com.yokodake.melete.data.timer.CuePlanner
 import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerCue
 import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerRestore
 import com.yokodake.melete.data.timer.TimerSnapshot
 import com.yokodake.melete.data.timer.TimerState
@@ -119,7 +120,11 @@ class TimerStateTest {
     fun `a running countdown that outlived a reboot is reported interrupted`() {
         val snapshot = TimerRestore.snapshot(running(), bootCount = 7) as TimerSnapshot
         val restored = TimerRestore.restore(snapshot, currentBootCount = 8, nowElapsedMs = 5_000)
-        assertEquals(TimerState.Interrupted(runId, TimerPhase.REST, 60_000), restored)
+        // The program travels with the state, so a restored run still knows what it was.
+        assertEquals(
+            TimerState.Interrupted(runId, TimerPhase.REST, 60_000, TimerProgram.rest(60)),
+            restored,
+        )
     }
 
     @Test
@@ -134,7 +139,10 @@ class TimerStateTest {
     fun `a countdown that ran out while the process was gone comes back finished`() {
         val snapshot = TimerRestore.snapshot(running(), bootCount = 7) as TimerSnapshot
         val restored = TimerRestore.restore(snapshot, currentBootCount = 7, nowElapsedMs = 120_000)
-        assertEquals(TimerState.Finished(runId, TimerPhase.REST, 60_000), restored)
+        assertEquals(
+            TimerState.Finished(runId, TimerPhase.REST, 60_000, TimerProgram.rest(60), 1),
+            restored,
+        )
     }
 
     @Test
@@ -236,10 +244,10 @@ class TimerStateTest {
             nowElapsedMs = 1_000,
             label = "Back squat",
         )
-        assertEquals("Back squat", started.label)
+        assertEquals("Back squat", started.activeLabel)
         val paused = TimerTransitions.pause(started, 10_000)
-        assertEquals("Back squat", paused.label)
-        assertEquals("Back squat", TimerTransitions.resume(paused, 20_000).label)
+        assertEquals("Back squat", paused.activeLabel)
+        assertEquals("Back squat", TimerTransitions.resume(paused, 20_000).activeLabel)
         assertEquals("Back squat", TimerTransitions.finish(started).activeLabel)
         // It survives the process dying, because it travels in the snapshot.
         val snapshot = TimerRestore.snapshot(started, bootCount = 4)
@@ -250,7 +258,10 @@ class TimerStateTest {
     @Test
     fun `finishing keeps the run identity and records nothing else`() {
         val finished = TimerTransitions.finish(running())
-        assertEquals(TimerState.Finished(runId, TimerPhase.REST, 60_000), finished)
+        assertTrue(finished is TimerState.Finished)
+        assertEquals(runId, (finished as TimerState.Finished).runId)
+        assertEquals(TimerPhase.REST, finished.phase)
+        assertEquals(60_000, finished.totalMs)
         // Finishing is idempotent, so a late alarm cannot turn it into anything else.
         assertEquals(finished, TimerTransitions.finish(finished))
     }

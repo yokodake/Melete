@@ -73,6 +73,13 @@ class TimerService : Service() {
                 promoteToForeground(state)
             }
 
+            // Reps in progress: nothing is counting, so nothing needs the CPU held awake, but the
+            // service stays up because the program is not over and the phone may be in a pocket.
+            is TimerState.AwaitingSet -> {
+                releaseWakeLock()
+                promoteToForeground(state)
+            }
+
             TimerState.Idle, is TimerState.Finished, is TimerState.Interrupted -> {
                 releaseWakeLock()
                 stopSelf()
@@ -134,6 +141,7 @@ class TimerActionReceiver : BroadcastReceiver() {
             ACTION_PAUSE -> controller.pause()
             ACTION_RESUME -> controller.resume()
             ACTION_CANCEL -> controller.cancel()
+            ACTION_SET_DONE -> controller.completeSet()
         }
     }
 
@@ -141,5 +149,6 @@ class TimerActionReceiver : BroadcastReceiver() {
         const val ACTION_PAUSE = "com.yokodake.melete.TIMER_PAUSE"
         const val ACTION_RESUME = "com.yokodake.melete.TIMER_RESUME"
         const val ACTION_CANCEL = "com.yokodake.melete.TIMER_CANCEL"
+        const val ACTION_SET_DONE = "com.yokodake.melete.TIMER_SET_DONE"
     }
 }

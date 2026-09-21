@@ -11,7 +11,9 @@ import kotlinx.serialization.Serializable
  * the two situations apart without guessing.
  *
  * The cue plan is stored with the run rather than recomputed, so changing the cue settings cannot
- * reach back into a countdown that is already under way.
+ * reach back into a countdown that is already under way. The program is stored too: a five-set
+ * timer that loses its process must come back knowing it was on set three, or it silently becomes
+ * a one-set timer.
  */
 @Serializable
 data class TimerSnapshot(
@@ -26,10 +28,12 @@ data class TimerSnapshot(
     val remainingMs: Long = 0,
     val plan: List<PlannedCue> = emptyList(),
     val delivered: Set<TimerCue> = emptySet(),
-    /** The exercise the run was started from. Defaulted, so older snapshots still decode. */
-    val label: String? = null,
+    /** Defaulted, so snapshots written before programs existed still decode. */
+    val program: TimerProgram = TimerProgram(),
+    val setIndex: Int = 0,
+    val setsCompleted: Int = 1,
 ) {
-    enum class Status { RUNNING, PAUSED, FINISHED }
+    enum class Status { RUNNING, PAUSED, AWAITING_SET, FINISHED }
 }
 
 object TimerRestore {
@@ -45,7 +49,8 @@ object TimerRestore {
             deadlineElapsedMs = state.deadlineElapsedMs,
             plan = state.plan,
             delivered = state.delivered,
-            label = state.label,
+            program = state.program,
+            setIndex = state.setIndex,
         )
 
         is TimerState.Paused -> TimerSnapshot(
@@ -57,7 +62,20 @@ object TimerRestore {
             remainingMs = state.remainingMs,
             plan = state.plan,
             delivered = state.delivered,
-            label = state.label,
+            program = state.program,
+            setIndex = state.setIndex,
+        )
+
+        // Nothing is counting, so there is no deadline to go stale: a set of reps interrupted by
+        // the process dying, or by a reboot, is still the same set of reps when you come back.
+        is TimerState.AwaitingSet -> TimerSnapshot(
+            runId = state.runId,
+            phase = TimerPhase.WORK,
+            totalMs = 0,
+            bootCount = bootCount,
+            status = TimerSnapshot.Status.AWAITING_SET,
+            program = state.program,
+            setIndex = state.setIndex,
         )
 
         is TimerState.Finished -> TimerSnapshot(
@@ -66,7 +84,8 @@ object TimerRestore {
             totalMs = state.totalMs,
             bootCount = bootCount,
             status = TimerSnapshot.Status.FINISHED,
-            label = state.label,
+            program = state.program,
+            setsCompleted = state.setsCompleted,
         )
 
         // An interrupted run has already been reported; there is nothing left to restore.
@@ -95,14 +114,22 @@ object TimerRestore {
                 remainingMs = snapshot.remainingMs,
                 plan = snapshot.plan,
                 delivered = snapshot.delivered,
-                label = snapshot.label,
+                program = snapshot.program,
+                setIndex = snapshot.setIndex,
+            )
+
+            TimerSnapshot.Status.AWAITING_SET -> TimerState.AwaitingSet(
+                runId = snapshot.runId,
+                program = snapshot.program,
+                setIndex = snapshot.setIndex,
             )
 
             TimerSnapshot.Status.FINISHED -> TimerState.Finished(
-                snapshot.runId,
-                snapshot.phase,
-                snapshot.totalMs,
-                snapshot.label,
+                runId = snapshot.runId,
+                phase = snapshot.phase,
+                totalMs = snapshot.totalMs,
+                program = snapshot.program,
+                setsCompleted = snapshot.setsCompleted,
             )
 
             TimerSnapshot.Status.RUNNING -> when {
@@ -110,7 +137,7 @@ object TimerRestore {
                     snapshot.runId,
                     snapshot.phase,
                     snapshot.totalMs,
-                    snapshot.label,
+                    snapshot.program,
                 )
 
                 // The process was gone when the countdown ran out. The arithmetic is recoverable;
@@ -120,7 +147,8 @@ object TimerRestore {
                     snapshot.runId,
                     snapshot.phase,
                     snapshot.totalMs,
-                    snapshot.label,
+                    snapshot.program,
+                    snapshot.setIndex + 1,
                 )
 
                 else -> TimerState.Running(
@@ -130,7 +158,8 @@ object TimerRestore {
                     deadlineElapsedMs = snapshot.deadlineElapsedMs,
                     plan = snapshot.plan,
                     delivered = snapshot.delivered,
-                    label = snapshot.label,
+                    program = snapshot.program,
+                    setIndex = snapshot.setIndex,
                 )
             }
         }

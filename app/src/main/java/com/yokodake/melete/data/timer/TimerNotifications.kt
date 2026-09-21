@@ -59,8 +59,8 @@ class TimerNotifications(context: Context) {
             is TimerState.Running -> {
                 val remaining = state.remainingMs(nowElapsedMs)
                 builder
-                    .setContentTitle(state.phase.title())
-                    .setContentText("Counting down")
+                    .setContentTitle(state.heading())
+                    .setContentText(state.activeLabel ?: "Counting down")
                     .setUsesChronometer(true)
                     .setChronometerCountDown(true)
                     .setWhen(System.currentTimeMillis() + remaining)
@@ -73,9 +73,16 @@ class TimerNotifications(context: Context) {
             }
 
             is TimerState.Paused -> builder
-                .setContentTitle(state.phase.title())
+                .setContentTitle(state.heading())
                 .setContentText("Paused with ${formatRemaining(state.remainingMs)} left")
                 .addAction(0, "Resume", actionIntent(TimerActionReceiver.ACTION_RESUME))
+
+            // Reps: nothing is counting, and the one thing the user has to do is say the set
+            // happened. That action belongs on the notification, not only on the screen.
+            is TimerState.AwaitingSet -> builder
+                .setContentTitle(state.heading())
+                .setContentText(state.activeLabel ?: "Tap when the set is done")
+                .addAction(0, "Set done", actionIntent(TimerActionReceiver.ACTION_SET_DONE))
 
             else -> builder.setContentTitle(state.phaseTitleOrDefault())
         }
@@ -83,9 +90,15 @@ class TimerNotifications(context: Context) {
         return builder.build()
     }
 
-    fun postFinished(phase: TimerPhase) {
+    fun postFinished(state: TimerState.Finished) {
         val notification = base(CHANNEL_ALERT)
-            .setContentTitle("${phase.title()} finished")
+            .setContentTitle(
+                if (state.program.sets > 1) {
+                    "${state.setsCompleted} sets done"
+                } else {
+                    "${state.phase.title()} finished"
+                }
+            )
             .setContentText("Nothing has been recorded — open the logger to confirm a set.")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
@@ -131,9 +144,25 @@ internal fun TimerPhase.title(): String = when (this) {
 private fun TimerState.phaseTitleOrDefault(): String = when (this) {
     is TimerState.Running -> phase.title()
     is TimerState.Paused -> phase.title()
+    is TimerState.AwaitingSet -> "Reps"
     is TimerState.Finished -> phase.title()
     is TimerState.Interrupted -> phase.title()
     TimerState.Idle -> "Timer"
+}
+
+/**
+ * What the notification calls this moment. A one-set program says only what it is doing; a
+ * multi-set one leads with where you are in it, because that is the thing you cannot see from the
+ * remaining time alone.
+ */
+internal fun TimerState.heading(): String {
+    val program = activeProgram ?: return phaseTitleOrDefault()
+    val what = when (this) {
+        is TimerState.AwaitingSet -> "Reps"
+        else -> phaseTitleOrDefault()
+    }
+    val set = currentSet ?: return what
+    return if (program.sets > 1) "$what · set $set of ${program.sets}" else what
 }
 
 internal fun formatRemaining(remainingMs: Long): String {

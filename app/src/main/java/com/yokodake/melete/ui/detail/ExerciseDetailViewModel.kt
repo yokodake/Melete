@@ -19,8 +19,11 @@ import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.PrescriptionPayload
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
+import com.yokodake.melete.data.timer.WorkKind
 import com.yokodake.melete.ui.ExerciseDetailDestination
+import com.yokodake.melete.ui.components.PrescriptionFormState
 import com.yokodake.melete.ui.week.PrescriptionSummary
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -33,19 +36,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-
-/** What "Start the timer" would do, worked out from the plan rather than asked for again. */
-data class TimerStartPlan(
-    val phase: TimerPhase,
-    val seconds: Int,
-    val label: String,
-) {
-    val buttonLabel: String
-        get() {
-            val what = if (phase == TimerPhase.WORK) "work" else "rest"
-            return "Start ${PrescriptionSummary.duration(seconds)} $what"
-        }
-}
+import kotlinx.coroutines.launch
 
 /** What is already counting, when the user asks for a new countdown. */
 data class RunningCountdown(val phase: TimerPhase, val label: String?)
@@ -70,17 +61,38 @@ data class ExerciseDetailUiState(
     val comment: String? = null,
     /** The library entry this copy came from is gone, so there is no explanation to show. */
     val definitionMissing: Boolean = false,
-    val timerPlan: TimerStartPlan? = null,
+    /** The whole timer this workout implies: sets, work, rest. */
+    val timerProgram: TimerProgram? = null,
+    /** Non-null while the plan is being edited in place. */
+    val prescriptionEditor: PrescriptionFormState? = null,
     /** Non-null while the user is being asked whether to call off a countdown already running. */
     val replacePrompt: RunningCountdown? = null,
-)
+) {
+    /** What the start button offers, spelled out so pressing it holds no surprise. */
+    val timerButtonLabel: String
+        get() {
+            val program = timerProgram ?: return "Start the timer"
+            return when {
+                program.work == WorkKind.NONE ->
+                    "Start ${PrescriptionSummary.duration(program.restSeconds)} rest"
+
+                program.sets == 1 && program.work == WorkKind.TIMED ->
+                    "Start ${PrescriptionSummary.duration(program.workSeconds)}"
+
+                program.work == WorkKind.REPS -> "Start ${program.sets} sets"
+
+                else ->
+                    "Start ${program.sets} × ${PrescriptionSummary.duration(program.workSeconds)}"
+            }
+        }
+}
 
 /**
  * Opening a workout shows what it is before it shows anything to fill in.
  *
  * The same screen serves a planned copy in the week and a library entry: the difference is what
- * you can do next, not what you are looking at. Editing the definition is a button you press,
- * never the screen you land on.
+ * you can do next, not what you are looking at. Editing is opt-in either way — the cog on the plan
+ * for its numbers, the overflow for what the exercise itself is.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ExerciseDetailViewModel(
@@ -91,7 +103,12 @@ class ExerciseDetailViewModel(
 
     private val destination = savedStateHandle.toRoute<ExerciseDetailDestination>()
 
-    private val prompt = MutableStateFlow<RunningCountdown?>(null)
+    private data class Transient(
+        val replacePrompt: RunningCountdown? = null,
+        val prescriptionEditor: PrescriptionFormState? = null,
+    )
+
+    private val transient = MutableStateFlow(Transient())
 
     private val source: Flow<Pair<OccurrenceDetail?, LibraryExercise?>> =
         when (val occurrenceId = destination.occurrenceId) {
@@ -110,8 +127,8 @@ class ExerciseDetailViewModel(
         }
 
     val uiState: StateFlow<ExerciseDetailUiState> =
-        combine(source, prompt) { (detail, library), replacePrompt ->
-            build(detail, library, replacePrompt)
+        combine(source, transient) { (detail, library), extras ->
+            build(detail, library, extras)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -121,7 +138,7 @@ class ExerciseDetailViewModel(
     private fun build(
         detail: OccurrenceDetail?,
         library: LibraryExercise?,
-        replacePrompt: RunningCountdown?,
+        extras: Transient,
     ): ExerciseDetailUiState {
         val occurrence = detail?.occurrence
         // Reaching here at all means the query has answered; `loading` belongs to the initial
@@ -167,70 +184,121 @@ class ExerciseDetailViewModel(
             occurrenceState = occurrence?.state,
             comment = occurrence?.comment,
             definitionMissing = library == null,
-            timerPlan = timerPlan(name, mode, prescription),
-            replacePrompt = replacePrompt,
+            timerProgram = timerProgram(name, mode, prescription),
+            prescriptionEditor = extras.prescriptionEditor,
+            replacePrompt = extras.replacePrompt,
         )
     }
 
     /**
-     * A timed exercise counts its own work interval; anything else counts the rest after a set.
-     * The duration comes from the plan, falling back to whatever was last used rather than to a
-     * number invented here.
+     * The whole timer the plan implies. A prescription already says how many sets, how long each
+     * one is and how much rest goes between them, which is exactly a program — there is nothing
+     * left to ask. A movement counted in repetitions gets a reps program, because the only honest
+     * length for a set of eights is "however long it takes".
      */
-    private fun timerPlan(
+    private fun timerProgram(
         name: String,
         mode: ExerciseMode,
         prescription: PrescriptionPayload?,
-    ): TimerStartPlan {
+    ): TimerProgram {
+        val sets = (prescription?.sets ?: 1).coerceIn(1, 99)
+        val rest = prescription?.restSeconds?.takeIf { it > 0 }
+            ?: timer.lastDurationSeconds(TimerPhase.REST)
         val timed = mode == ExerciseMode.DURATION || mode == ExerciseMode.ACTIVITY
-        val work = prescription?.targetDurationSeconds?.takeIf { timed && it > 0 }
-        return if (work != null) {
-            TimerStartPlan(TimerPhase.WORK, work, name)
-        } else {
-            TimerStartPlan(
-                phase = TimerPhase.REST,
-                seconds = prescription?.restSeconds?.takeIf { it > 0 }
-                    ?: timer.lastDurationSeconds(TimerPhase.REST),
+        val workSeconds = prescription?.targetDurationSeconds?.takeIf { timed && it > 0 }
+        return when {
+            workSeconds != null -> TimerProgram(
+                sets = sets,
+                work = WorkKind.TIMED,
+                workSeconds = workSeconds,
+                restSeconds = rest,
                 label = name,
             )
+
+            mode == ExerciseMode.REPETITIONS -> TimerProgram(
+                sets = sets,
+                work = WorkKind.REPS,
+                restSeconds = rest,
+                label = name,
+            )
+
+            // A timed exercise with no target: there is nothing to count but the rest.
+            else -> TimerProgram.rest(rest, name)
         }
     }
 
+    // ------------------------------------------------------------- timer
+
     /**
-     * Starting a countdown from a workout while another one is still counting would silently throw
-     * away a rest the user is in the middle of, so it asks first. There is one countdown at a
-     * time by design; replacing it is a decision, not a side effect of opening a screen.
+     * Starting a program from a workout while another one is still counting would silently throw
+     * away a rest the user is in the middle of, so it asks first. There is one timer at a time by
+     * design; replacing it is a decision, not a side effect of opening a screen.
      */
     fun requestStartTimer(onStarted: () -> Unit) {
         val active = when (val state = timer.state.value) {
-            is TimerState.Running -> RunningCountdown(state.phase, state.label)
-            is TimerState.Paused -> RunningCountdown(state.phase, state.label)
+            is TimerState.Running -> RunningCountdown(state.phase, state.activeLabel)
+            is TimerState.Paused -> RunningCountdown(state.phase, state.activeLabel)
+            is TimerState.AwaitingSet -> RunningCountdown(TimerPhase.WORK, state.activeLabel)
             else -> null
         }
         if (active == null) {
             startTimer(onStarted)
         } else {
-            prompt.value = active
+            transient.update { it.copy(replacePrompt = active) }
         }
     }
 
     fun confirmStartTimer(onStarted: () -> Unit) {
-        prompt.value = null
+        transient.update { it.copy(replacePrompt = null) }
         startTimer(onStarted)
     }
 
     fun dismissReplacePrompt() {
-        prompt.update { null }
+        transient.update { it.copy(replacePrompt = null) }
     }
 
     private fun startTimer(onStarted: () -> Unit) {
-        val plan = uiState.value.timerPlan ?: return
-        timer.start(
-            phase = plan.phase,
-            durationSeconds = plan.seconds,
-            label = plan.label,
-        )
+        val program = uiState.value.timerProgram ?: return
+        timer.start(program)
         onStarted()
+    }
+
+    // ------------------------------------------------------ prescription
+
+    /**
+     * Editing the plan is opt-in and lives on the plan itself. What it edits depends on what is
+     * being looked at: from the week it is this copy, which is the point of copying by value; from
+     * the library it is the default every future copy will be cut from.
+     */
+    fun openPrescriptionEditor() {
+        val state = uiState.value
+        if (state.occurrenceId == null && state.exerciseId == null) return
+        transient.update {
+            it.copy(prescriptionEditor = PrescriptionFormState.from(state.prescription))
+        }
+    }
+
+    fun updatePrescriptionEditor(form: PrescriptionFormState) {
+        transient.update { it.copy(prescriptionEditor = form) }
+    }
+
+    fun dismissPrescriptionEditor() {
+        transient.update { it.copy(prescriptionEditor = null) }
+    }
+
+    fun savePrescription() {
+        val state = uiState.value
+        val form = transient.value.prescriptionEditor ?: return
+        val payload = form.toPayload()
+        viewModelScope.launch {
+            val occurrenceId = state.occurrenceId
+            if (occurrenceId != null) {
+                repository.updateOccurrencePrescription(occurrenceId, payload)
+            } else {
+                state.exerciseId?.let { repository.updateDefaultPrescription(it, payload) }
+            }
+            transient.update { it.copy(prescriptionEditor = null) }
+        }
     }
 
     companion object {

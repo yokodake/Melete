@@ -97,6 +97,11 @@ class TimerStore(context: Context) {
         get() = preferences.getInt(KEY_LAST_WORK, DEFAULT_WORK_SECONDS)
         set(value) = preferences.edit().putInt(KEY_LAST_WORK, value).apply()
 
+    /** How many sets the last program had, so the create screen opens on a familiar number. */
+    var lastSets: Int
+        get() = preferences.getInt(KEY_LAST_SETS, DEFAULT_SETS)
+        set(value) = preferences.edit().putInt(KEY_LAST_SETS, value).apply()
+
     private companion object {
         const val KEY_SNAPSHOT = "snapshot"
         const val KEY_CUE_PREFIX = "cue:"
@@ -105,7 +110,9 @@ class TimerStore(context: Context) {
         const val KEY_QUARTER_CUES = "cue-quarters"
         const val KEY_LAST_REST = "last-rest-seconds"
         const val KEY_LAST_WORK = "last-work-seconds"
+        const val KEY_LAST_SETS = "last-sets"
         const val DEFAULT_REST_SECONDS = 180
         const val DEFAULT_WORK_SECONDS = 10
+        const val DEFAULT_SETS = 3
     }
 }
