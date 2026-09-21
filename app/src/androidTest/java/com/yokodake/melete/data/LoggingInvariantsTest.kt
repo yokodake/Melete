@@ -7,6 +7,7 @@ import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.EffortLevel
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
@@ -56,6 +57,8 @@ class LoggingInvariantsTest {
         measurementUnit = "kg",
         measurementMeaning = MeasurementMeaning.TOTAL_LOAD,
         notes = null,
+        description = "One hand and one knee on the bench, back flat.",
+        category = ExerciseCategory.CONDITIONING,
         defaultPrescription = PrescriptionPayload(
             sets = sets,
             targetReps = 8,
@@ -89,6 +92,8 @@ class LoggingInvariantsTest {
                 measurementUnit = null,
                 measurementMeaning = null,
                 notes = "Knee against the wall",
+                description = null,
+                category = ExerciseCategory.FLEXIBILITY,
                 defaultPrescription = PrescriptionPayload(sets = 2, targetDurationSeconds = 90),
             )
         )

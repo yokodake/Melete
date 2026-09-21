@@ -56,6 +56,36 @@ Last updated: 2026-09-20, end of phase 3.
 - Effort is a five-point verbal scale stored as its integer level; reps in reserve stays a
   planning field and is not asked for when logging.
 
+### First round of use feedback ✅
+
+Changes made after the app was used, from `src/feedback.md`. Schema 3.
+
+- **A workout opens as information, not a form.** Tapping an exercise — in the week or in the
+  library — lands on `ui/detail/ExerciseDetailScreen`: what it is, how to do it, what is planned,
+  and the facts that change how a set is performed. From a planned copy the bottom bar offers the
+  only two things worth doing next, *Log the workout* and *Start the timer*. Editing the definition
+  and its default prescription is a button on that screen, never the screen you land on.
+- **Exercises carry an explanation and a category.** `description` is reference material and is
+  read live from the library rather than snapshotted, so correcting how a movement is done corrects
+  it everywhere; `category` *is* snapshotted alongside mode and unilateral, so re-categorising a
+  library entry cannot recolour history. Three categories for now — open (orange), conditioning
+  (green), flexibility (yellow) — shown as a small coloured dot before the name.
+- **The default prescription no longer prescribes load.** A plan fixes the shape of the work: sets,
+  reps or duration, rest, target effort or RIR. The weight is what the day decides and what the
+  logger records. Older rows keep whatever load they were written with — prescription rows are
+  never mutated — but re-saving one drops it.
+- **Removing a planned workout costs intent.** The text button in the logger is gone. It is now a
+  long press on the week screen and a menu item, and it is still refused outright once sets have
+  been recorded against the occurrence.
+- **Done reads green.** A saturated green chip from `ui/theme/SemanticColors.kt` rather than a
+  scheme colour, so it means the same thing on every phone's wallpaper.
+- **The timer, first pass.** Work/rest no longer discards the duration you just typed; the duration
+  is typed as minutes and seconds instead of nudged in steps of 15 or 60; the cue families moved
+  into an overflow menu in the top right and can be switched **while a countdown is running**; the
+  whole screen goes green through a work interval and amber for the last five seconds of a rest; a
+  countdown carries the exercise it was started from; and starting one from a workout while another
+  is still counting asks before calling the first one off. More timer work is expected.
+
 Not implemented yet, by design: modules, duration capture, dashboard, export — and moving
 an occurrence that already has a date, which belongs to phase 4 because it needs the explicit
 distinction between moving remaining planned work and correcting a historical training date.
@@ -67,9 +97,9 @@ com.yokodake.melete
   MeleteApplication.kt      Application + AppContainer (manual DI, no framework)
   MainActivity.kt           single activity, Compose, edge-to-edge
   core/WeekMath.kt          Monday-based ISO week arithmetic and labels (pure, unit-tested)
-  ui/Navigation.kt          type-safe routes + NavHost (week, picker, editor, logger)
+  ui/Navigation.kt          type-safe routes + NavHost (week, detail, picker, editor, logger)
   data/
-    MeleteDatabase.kt       Room database v2, exportSchema = true, explicit migrations only
+    MeleteDatabase.kt       Room database v3, exportSchema = true, explicit migrations only
     MeleteConverters.kt     enum <-> String converters (stored names are part of the format)
     TrainingRepository.kt   week, library, scheduling and logging operations
     DevSampleData.kt        explicitly marked development data
@@ -78,8 +108,12 @@ com.yokodake.melete
                             TrainingSessionEntity, ActualSetEntity
     model/PrescriptionPayload.kt  versioned named-field prescription payload
     model/ActualSetPayload.kt     versioned named-field actual-set payload
-  ui/components/            PrescriptionFormState + the shared prescription fields
+    model/ExerciseCategory.kt     the closed set of training-purpose categories
+  ui/components/            PrescriptionFormState, the shared prescription fields, CategoryDot
+  ui/theme/SemanticColors.kt  colours that carry a meaning, kept out of the dynamic scheme
   ui/week/                  WeekScreen, WeekViewModel, WeekUiState, PrescriptionSummary
+  ui/detail/                ExerciseDetailScreen + view model: what a workout is, and what to
+                            do next with it
   ui/library/               LibraryPicker, ExerciseEditor (+ view models)
   ui/logger/                LoggerScreen, LoggerViewModel, SetDraft
   ui/timer/                 TimerScreen, TimerViewModel
@@ -303,6 +337,16 @@ Phase 3:
   with 47.4s measured from the quarter mark to the end against 47.25s planned. The user confirmed
   hearing the cues.
 
+First round of use feedback:
+
+- `./gradlew :app:testDebugUnitTest --rerun-tasks` — 59 tests passing, including four new timer
+  ones: a cue family switched on mid-run still sounds a moment that is ahead, one whose moment has
+  already gone by is written off rather than fired late, cues switched off while paused stay off
+  across the resume, and a countdown's exercise label surviving pause, resume, finish and the
+  process being killed.
+- **Not yet run:** the instrumented suite, which carries the new `migrate2To3…` test. No device
+  was attached when the work was done.
+
 ## Known limitations
 
 - No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
@@ -322,8 +366,16 @@ Phase 3:
 - An occurrence that already has a date cannot be moved to another day, and a recorded set cannot
   be re-dated. Both need phase 4's explicit distinction between rescheduling remaining work and
   correcting a historical date.
-- Target durations and rest are entered in seconds. Acceptable for a library form; worth revisiting
-  if it grates in use.
+- Target durations and rest are entered in seconds in the library form. The *timer* is typed as
+  minutes and seconds; the prescription form has not caught up.
+- Switching a cue family on part-way through a countdown writes off the moments that have already
+  gone by rather than firing them late. Switching one on in the last seconds of a rest therefore
+  does nothing, which is the intended answer rather than a missed cue.
+- A countdown's label is a snapshotted name, deliberately not a link to the occurrence: a timer
+  reaching zero must never be able to touch what was logged. Renaming an exercise mid-rest leaves
+  the old name on the running countdown.
+- The library detail screen has no *Start the timer* button; only a planned copy in a week does.
+  A free-standing countdown is started from the timer tab.
 - Superseded prescription rows are kept forever and never garbage collected. Harmless at this scale
   and safer than deleting a row an actual set may still reference.
 - Sample data is inserted into the week currently on screen; inserting twice creates duplicates by
@@ -335,6 +387,15 @@ Phase 3:
   in `en-US` and `Sept` in `en-GB`. Unit tests pin `Locale.US`.
 
 ## Next step
+
+**More timer work**, which the user has said they will come back to: the work/rest sequence of
+phase 7C is the obvious next piece, and the create-timer screen should be used in a real session
+before it is changed again.
+
+Then **phase 4**, for reordering within a day and for the explicit distinction between rescheduling
+remaining work and correcting a historical training date.
+
+### Superseded — kept for the record
 
 **Phase 3 — the timer.** Start from the phase 3 prompt in `training-app-coding-prompts.md`
 together with `docs/project-brief.md`. It needs a single countdown for work or rest started from an

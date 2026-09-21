@@ -101,6 +101,10 @@ interface LibraryDao {
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getExerciseWithDefault(id: String): ExerciseWithDefaultPrescription?
 
+    @Transaction
+    @Query("SELECT * FROM exercises WHERE id = :id")
+    fun observeExerciseWithDefault(id: String): Flow<ExerciseWithDefaultPrescription?>
+
     @Insert
     suspend fun insertExercise(exercise: ExerciseEntity)
 

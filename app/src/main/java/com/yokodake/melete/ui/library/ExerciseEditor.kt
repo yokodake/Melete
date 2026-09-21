@@ -30,8 +30,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
+import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.PrescriptionFields
 import com.yokodake.melete.ui.components.PrescriptionFormState
 
@@ -50,6 +52,8 @@ fun ExerciseEditorRoute(
         onUnitChange = viewModel::setUnit,
         onMeaningChange = viewModel::setMeaning,
         onNotesChange = viewModel::setNotes,
+        onDescriptionChange = viewModel::setDescription,
+        onCategoryChange = viewModel::setCategory,
         onPrescriptionChange = viewModel::setPrescription,
         onSave = { viewModel.save(onDone) },
         onBack = onBack,
@@ -66,6 +70,8 @@ fun ExerciseEditorScreen(
     onUnitChange: (String) -> Unit,
     onMeaningChange: (MeasurementMeaning) -> Unit,
     onNotesChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onCategoryChange: (ExerciseCategory?) -> Unit,
     onPrescriptionChange: (PrescriptionFormState) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
@@ -107,6 +113,23 @@ fun ExerciseEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            Text("Category", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExerciseCategory.entries.forEach { category ->
+                    CategoryChip(category, state.category, onCategoryChange)
+                }
+            }
+
+            OutlinedTextField(
+                value = state.description,
+                onValueChange = onDescriptionChange,
+                label = { Text("What it is, and how to do it") },
+                placeholder = { Text("The explanation you want to read before a set.") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            HorizontalDivider()
             Text("How is a set measured?", style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ModeChip("Repetitions", ExerciseMode.REPETITIONS, state.mode, onModeChange)
@@ -186,7 +209,6 @@ fun ExerciseEditorScreen(
                 onStateChange = onPrescriptionChange,
                 mode = state.mode,
                 unilateral = state.unilateral,
-                measurementUnit = state.unit.takeIf { it.isNotBlank() },
             )
 
             OutlinedTextField(
@@ -209,6 +231,21 @@ fun ExerciseEditorScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryChip(
+    category: ExerciseCategory,
+    selected: ExerciseCategory?,
+    onSelect: (ExerciseCategory?) -> Unit,
+) {
+    FilterChip(
+        selected = category == selected,
+        onClick = { onSelect(if (category == selected) null else category) },
+        leadingIcon = { CategoryDot(category) },
+        label = { Text(category.label) },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -32,6 +32,7 @@ class WeekUiStateTest {
         unilateral = unilateral,
         measurementUnit = "kg",
         measurementMeaning = MeasurementMeaning.TOTAL_LOAD,
+        category = null,
         trainingDate = date,
         weekStart = monday,
         prescriptionId = null,

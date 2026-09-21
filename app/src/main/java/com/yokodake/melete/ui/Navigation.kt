@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.R
 import com.yokodake.melete.data.timer.TimerState
+import com.yokodake.melete.ui.detail.ExerciseDetailRoute
 import com.yokodake.melete.ui.library.ExerciseEditorRoute
 import com.yokodake.melete.ui.library.LibraryPickerRoute
 import com.yokodake.melete.ui.library.LibraryRoute
@@ -57,6 +58,17 @@ data class LibraryPickerDestination(
 
 @Serializable
 data class ExerciseEditorDestination(val exerciseId: String? = null)
+
+/**
+ * What an exercise *is*, before anything is asked of the user. One destination serves both the
+ * planned copy in a week and the library entry behind it, because the page is the same page —
+ * only what you can do from it differs.
+ */
+@Serializable
+data class ExerciseDetailDestination(
+    val occurrenceId: String? = null,
+    val exerciseId: String? = null,
+)
 
 @Serializable
 data class LoggerDestination(val occurrenceId: String)
@@ -96,7 +108,9 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = WeekDestination) {
         composable<WeekDestination> {
             WeekRoute(
-                onOpenOccurrence = { navController.navigate(LoggerDestination(it)) },
+                onOpenOccurrence = {
+                    navController.navigate(ExerciseDetailDestination(occurrenceId = it))
+                },
                 onAddExercise = { weekStart, date ->
                     navController.navigate(
                         LibraryPickerDestination(
@@ -110,7 +124,9 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         }
         composable<LibraryDestination> {
             LibraryRoute(
-                onEditExercise = { navController.navigate(ExerciseEditorDestination(it)) },
+                onOpenExercise = {
+                    navController.navigate(ExerciseDetailDestination(exerciseId = it))
+                },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
                 bottomBar = bottomBar,
             )
@@ -122,13 +138,25 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
             LibraryPickerRoute(
                 onScheduled = { navController.popBackStack() },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
-                onEditExercise = { navController.navigate(ExerciseEditorDestination(it)) },
+                onOpenExercise = {
+                    navController.navigate(ExerciseDetailDestination(exerciseId = it))
+                },
                 onBack = { navController.popBackStack() },
             )
         }
         composable<ExerciseEditorDestination> {
             ExerciseEditorRoute(
                 onDone = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ExerciseDetailDestination> {
+            ExerciseDetailRoute(
+                onLog = { navController.navigate(LoggerDestination(it)) },
+                // Starting a countdown moves to the timer tab, which is where it lives for as
+                // long as it runs; the exercise stays behind it on the back stack.
+                onOpenTimer = { navController.switchTab(TimerDestination) },
+                onEditExercise = { navController.navigate(ExerciseEditorDestination(it)) },
                 onBack = { navController.popBackStack() },
             )
         }

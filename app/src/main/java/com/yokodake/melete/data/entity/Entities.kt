@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 
@@ -27,6 +28,14 @@ data class ExerciseEntity(
     val defaultPrescriptionId: String?,
     val createdAtEpochMs: Long,
     val isSampleData: Boolean = false,
+    /**
+     * What the movement is and how to do it. Reference material, not part of the training record:
+     * it is read live rather than snapshotted, so correcting an explanation corrects it
+     * everywhere instead of leaving old copies saying something the user no longer believes.
+     */
+    val description: String? = null,
+    /** Optional training-purpose grouping. Absent is a valid answer. */
+    val category: ExerciseCategory? = null,
 )
 
 /**
@@ -103,6 +112,11 @@ data class ExerciseOccurrenceEntity(
     val comment: String?,
     val createdAtEpochMs: Long,
     val isSampleData: Boolean = false,
+    /**
+     * The category as it stood when this copy was placed in the week. Snapshotted like the other
+     * identity fields, so re-categorising a library entry cannot silently recolour history.
+     */
+    val categorySnapshot: ExerciseCategory? = null,
 )
 
 /**

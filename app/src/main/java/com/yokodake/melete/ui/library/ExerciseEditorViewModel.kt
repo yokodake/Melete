@@ -11,6 +11,7 @@ import androidx.navigation.toRoute
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.data.ExerciseDraft
 import com.yokodake.melete.data.TrainingRepository
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.ui.ExerciseEditorDestination
@@ -29,6 +30,8 @@ data class ExerciseEditorUiState(
     val unit: String = "kg",
     val meaning: MeasurementMeaning = MeasurementMeaning.TOTAL_LOAD,
     val notes: String = "",
+    val description: String = "",
+    val category: ExerciseCategory? = null,
     val prescription: PrescriptionFormState = PrescriptionFormState(),
 ) {
     val isNew: Boolean get() = exerciseId == null
@@ -58,6 +61,8 @@ class ExerciseEditorViewModel(
                     unit = exercise.measurementUnit.orEmpty(),
                     meaning = exercise.measurementMeaning ?: MeasurementMeaning.TOTAL_LOAD,
                     notes = exercise.notes.orEmpty(),
+                    description = exercise.description.orEmpty(),
+                    category = exercise.category,
                     prescription = PrescriptionFormState.from(exercise.defaultPrescription),
                 )
             }
@@ -76,6 +81,11 @@ class ExerciseEditorViewModel(
 
     fun setNotes(value: String) = _uiState.update { it.copy(notes = value) }
 
+    fun setDescription(value: String) = _uiState.update { it.copy(description = value) }
+
+    /** Tapping the selected category clears it again: an exercise may simply have none. */
+    fun setCategory(value: ExerciseCategory?) = _uiState.update { it.copy(category = value) }
+
     fun setPrescription(value: PrescriptionFormState) = _uiState.update { it.copy(prescription = value) }
 
     fun save(onSaved: () -> Unit) {
@@ -89,7 +99,9 @@ class ExerciseEditorViewModel(
             measurementUnit = unit,
             measurementMeaning = unit?.let { state.meaning },
             notes = state.notes,
-            defaultPrescription = state.prescription.toPayload(unit, state.meaning),
+            description = state.description,
+            category = state.category,
+            defaultPrescription = state.prescription.toPayload(),
         )
         viewModelScope.launch {
             if (state.exerciseId == null) {

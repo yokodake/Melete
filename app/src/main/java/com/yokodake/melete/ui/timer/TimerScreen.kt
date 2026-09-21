@@ -5,31 +5,44 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -38,6 +51,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerState
+import com.yokodake.melete.ui.components.NumberField
+import com.yokodake.melete.ui.theme.aboutToStartColor
+import com.yokodake.melete.ui.theme.workingColor
+
+/** How long before the end of a rest the screen starts warning that work is about to begin. */
+private const val ABOUT_TO_START_MS = 5_000L
 
 @Composable
 fun TimerRoute(
@@ -71,15 +90,32 @@ fun TimerScreen(
         viewModel.start()
     }
 
+    val background by animateColorAsState(
+        targetValue = backgroundFor(state),
+        animationSpec = tween(durationMillis = 350),
+        label = "timer-background",
+    )
+
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
+        containerColor = background,
         bottomBar = bottomBar,
         topBar = {
             TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                title = { Text("Timer", style = MaterialTheme.typography.titleMedium) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                title = {
+                    Column {
+                        Text("Timer", style = MaterialTheme.typography.titleMedium)
+                        state.label?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                },
+                // The cues live behind the overflow because they are settings, not controls: they
+                // are tuned once in a while and then want to be out of the way of the clock.
+                actions = { CueMenu(state = state, onCues = viewModel::setCueSettings) },
             )
         },
     ) { padding ->
@@ -101,6 +137,7 @@ fun TimerScreen(
 
                 is TimerState.Finished -> FinishedCard(
                     phase = current.phase,
+                    label = current.label,
                     onDismiss = viewModel::dismiss,
                 )
 
@@ -112,13 +149,75 @@ fun TimerScreen(
                 TimerState.Idle -> IdleControls(
                     state = state,
                     onPhase = viewModel::setDraftPhase,
-                    onAdjust = viewModel::adjustDraftSeconds,
-                    onCues = viewModel::setCueSettings,
+                    onMinutes = viewModel::setDraftMinutes,
+                    onSeconds = viewModel::setDraftSeconds,
                     onStart = ::startWithNotifications,
                 )
             }
         }
     }
+}
+
+/**
+ * The colour of the whole screen, which is the part of the timer that can be read from across a
+ * room with a bar on your back: green while the work interval is running, plain while resting, and
+ * amber for the last few seconds of a rest so the next set is never a surprise.
+ *
+ * A paused countdown deliberately drops back to plain — nothing is happening, and a green screen
+ * that is not counting would be a lie.
+ */
+@Composable
+private fun backgroundFor(state: TimerUiState): Color {
+    val plain = MaterialTheme.colorScheme.surface
+    val running = state.state as? TimerState.Running ?: return plain
+    return when {
+        running.phase == TimerPhase.WORK -> workingColor()
+        state.remainingMs <= ABOUT_TO_START_MS -> aboutToStartColor()
+        else -> plain
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CueMenu(state: TimerUiState, onCues: (CueSettings) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(
+        onClick = { expanded = true },
+        modifier = Modifier.semantics { contentDescription = "Cues" },
+    ) {
+        Text("⋮", style = MaterialTheme.typography.titleLarge)
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        // The menu stays open across a toggle: these are three related switches, and a run that is
+        // already counting takes each change immediately, so closing after every tap would fight
+        // the one moment they are most likely to be used.
+        CueItem("30 s left", state.cues.thirtySecondWarning) {
+            onCues(state.cues.copy(thirtySecondWarning = it))
+        }
+        CueItem("3 – 2 – 1", state.cues.finalCountdown) {
+            onCues(state.cues.copy(finalCountdown = it))
+        }
+        CueItem("¼ ½ ¾ of a work set", state.cues.quarterCues) {
+            onCues(state.cues.copy(quarterCues = it))
+        }
+        Text(
+            text = cueExplanation(state),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .width(220.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun CueItem(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        trailingIcon = { Checkbox(checked = checked, onCheckedChange = onChange) },
+        onClick = { onChange(!checked) },
+    )
 }
 
 @Composable
@@ -129,7 +228,7 @@ private fun ActiveCountdown(
     onCancel: () -> Unit,
 ) {
     Text(
-        text = state.draftPhaseLabel(),
+        text = if (state.shownPhase == TimerPhase.WORK) "Work" else "Rest",
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -163,7 +262,7 @@ private fun ActiveCountdown(
 }
 
 @Composable
-private fun FinishedCard(phase: TimerPhase, onDismiss: () -> Unit) {
+private fun FinishedCard(phase: TimerPhase, label: String?, onDismiss: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -178,6 +277,9 @@ private fun FinishedCard(phase: TimerPhase, onDismiss: () -> Unit) {
                 text = if (phase == TimerPhase.WORK) "Work finished" else "Rest finished",
                 style = MaterialTheme.typography.headlineSmall,
             )
+            label?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
             Text(
                 text = "Nothing was recorded. Confirm a set in the logger if you did the work.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -220,8 +322,8 @@ private fun InterruptedCard(phase: TimerPhase, onDismiss: () -> Unit) {
 private fun IdleControls(
     state: TimerUiState,
     onPhase: (TimerPhase) -> Unit,
-    onAdjust: (Int) -> Unit,
-    onCues: (CueSettings) -> Unit,
+    onMinutes: (String) -> Unit,
+    onSeconds: (String) -> Unit,
     onStart: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -236,21 +338,43 @@ private fun IdleControls(
             label = { Text("Work") },
         )
     }
-    Text(
-        text = formatClock(state.draftSeconds * 1000L),
-        style = MaterialTheme.typography.displayMedium,
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(-60, -15, 15, 60).forEach { delta ->
-            OutlinedButton(onClick = { onAdjust(delta) }) {
-                Text(if (delta > 0) "+$delta" else "$delta")
-            }
-        }
+    // Typed, not nudged. Stepping to four and a half minutes fifteen seconds at a time is a
+    // worse way to say "4:30" than saying it.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NumberField(
+            label = "Minutes",
+            value = state.draftMinutes,
+            onValueChange = onMinutes,
+            modifier = Modifier.width(120.dp),
+        )
+        Text(":", style = MaterialTheme.typography.headlineMedium)
+        NumberField(
+            label = "Seconds",
+            value = state.draftSeconds,
+            onValueChange = onSeconds,
+            modifier = Modifier.width(120.dp),
+        )
     }
-    CueSettingsControls(state = state, onCues = onCues)
-    Button(onClick = onStart, modifier = Modifier.fillMaxWidth(0.7f)) {
+    Text(
+        text = formatClock(state.draftTotalSeconds * 1000L),
+        style = MaterialTheme.typography.displaySmall,
+    )
+    Button(
+        onClick = onStart,
+        enabled = state.canStart,
+        modifier = Modifier.fillMaxWidth(0.7f),
+    ) {
         Text("Start")
     }
+    Text(
+        text = cueExplanation(state),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
     Text(
         text = "The countdown keeps running with the screen off. It never records a set.",
         style = MaterialTheme.typography.bodySmall,
@@ -260,47 +384,9 @@ private fun IdleControls(
 }
 
 /**
- * The cue families, and what this particular countdown will actually sound. A setting that cannot
- * apply to the length you picked says so instead of quietly doing nothing.
+ * What this particular countdown will actually sound. A setting that cannot apply to the length
+ * picked says so instead of quietly doing nothing.
  */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CueSettingsControls(state: TimerUiState, onCues: (CueSettings) -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text("Cues", style = MaterialTheme.typography.bodyMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.cues.thirtySecondWarning,
-                onClick = {
-                    onCues(
-                        state.cues.copy(thirtySecondWarning = !state.cues.thirtySecondWarning)
-                    )
-                },
-                label = { Text("30s left") },
-            )
-            FilterChip(
-                selected = state.cues.finalCountdown,
-                onClick = { onCues(state.cues.copy(finalCountdown = !state.cues.finalCountdown)) },
-                label = { Text("3–2–1") },
-            )
-            FilterChip(
-                selected = state.cues.quarterCues,
-                onClick = { onCues(state.cues.copy(quarterCues = !state.cues.quarterCues)) },
-                label = { Text("¼ ½ ¾") },
-            )
-        }
-        Text(
-            text = cueExplanation(state),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
 private fun cueExplanation(state: TimerUiState): String {
     val notes = mutableListOf<String>()
     if (state.cues.thirtySecondWarning && !state.thirtySecondWarningApplies) {
@@ -321,12 +407,6 @@ private fun cueExplanation(state: TimerUiState): String {
 @Composable
 private fun Box(content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) =
     androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center, content = content)
-
-private fun TimerUiState.draftPhaseLabel(): String = when (state) {
-    is TimerState.Running -> if (state.phase == TimerPhase.WORK) "Work" else "Rest"
-    is TimerState.Paused -> if (state.phase == TimerPhase.WORK) "Work" else "Rest"
-    else -> ""
-}
 
 internal fun formatClock(millis: Long): String {
     val totalSeconds = (millis + 999) / 1000

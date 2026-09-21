@@ -27,16 +27,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.LibraryExercise
+import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
-/** The library as a tab: browse what exists and edit it. Nothing is scheduled from here. */
+/**
+ * The library as a tab: browse what exists. A tap opens the exercise, not a form — what it is
+ * comes first, and editing it is a button on that screen.
+ */
 @Composable
 fun LibraryRoute(
-    onEditExercise: (String) -> Unit,
+    onOpenExercise: (String) -> Unit,
     onNewExercise: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
@@ -48,7 +53,7 @@ fun LibraryRoute(
         exercises = exercises,
         emptyMessage = "No exercises yet. Everything here is yours to define — " +
             "nothing is built in.",
-        onRowClick = onEditExercise,
+        onRowClick = onOpenExercise,
         onNewExercise = onNewExercise,
         onBack = null,
         bottomBar = bottomBar,
@@ -60,7 +65,7 @@ fun LibraryRoute(
 fun LibraryPickerRoute(
     onScheduled: () -> Unit,
     onNewExercise: () -> Unit,
-    onEditExercise: (String) -> Unit,
+    onOpenExercise: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: LibraryPickerViewModel = viewModel(factory = LibraryPickerViewModel.Factory),
 ) {
@@ -72,7 +77,7 @@ fun LibraryPickerRoute(
         emptyMessage = "The library is empty. Create an exercise to get started — " +
             "nothing is built in.",
         onRowClick = { viewModel.schedule(it, onScheduled) },
-        onSecondaryAction = onEditExercise to "Edit",
+        onSecondaryAction = onOpenExercise to "Open",
         onNewExercise = onNewExercise,
         onBack = onBack,
     )
@@ -176,17 +181,27 @@ private fun LibraryRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(exercise.name, style = MaterialTheme.typography.titleSmall)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CategoryDot(exercise.category)
+                    Text(exercise.name, style = MaterialTheme.typography.titleSmall)
+                }
                 Text(
                     text = PrescriptionSummary.formatDefault(exercise),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                exercise.notes?.let {
+                // The first line of the explanation, so the list answers "which one is this?"
+                // without having to open anything.
+                (exercise.description ?: exercise.notes)?.let {
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
