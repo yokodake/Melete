@@ -27,8 +27,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -44,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.yokodake.melete.R
 import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
@@ -139,12 +144,16 @@ fun TimerScreen(
                     state = state,
                     onPause = viewModel::pause,
                     onResume = viewModel::resume,
+                    onPrevious = viewModel::previous,
+                    onNext = viewModel::next,
                     onCancel = viewModel::cancel,
                 )
 
                 is TimerState.AwaitingSet -> AwaitingSet(
                     state = state,
                     onSetDone = viewModel::completeSet,
+                    onPrevious = viewModel::previous,
+                    onNext = viewModel::next,
                     onCancel = viewModel::cancel,
                 )
 
@@ -189,6 +198,8 @@ private fun backgroundFor(state: TimerUiState): Color {
         is TimerState.AwaitingSet -> workingColor()
         is TimerState.Running -> when {
             current.phase == TimerPhase.WORK -> workingColor()
+            // A preparation is the same moment as the tail of a rest, so it looks the same.
+            current.phase == TimerPhase.PREPARE -> aboutToStartColor()
             state.remainingMs <= ABOUT_TO_START_MS -> aboutToStartColor()
             else -> plain
         }
@@ -265,9 +276,18 @@ private fun ActiveCountdown(
     state: TimerUiState,
     onPause: () -> Unit,
     onResume: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    SetHeading(state, if (state.shownPhase == TimerPhase.WORK) "Work" else "Rest")
+    SetHeading(
+        state,
+        when (state.shownPhase) {
+            TimerPhase.PREPARE -> "Get ready"
+            TimerPhase.WORK -> "Work"
+            TimerPhase.REST -> "Rest"
+        },
+    )
     Box {
         CircularProgressIndicator(
             progress = { state.progress },
@@ -287,13 +307,64 @@ private fun ActiveCountdown(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (state.isRunning) {
-            OutlinedButton(onClick = onPause) { Text("Pause") }
-        } else {
-            Button(onClick = onResume) { Text("Resume") }
+    Transport(
+        playing = state.isRunning,
+        onPrevious = onPrevious,
+        onPlayPause = if (state.isRunning) onPause else onResume,
+        onNext = onNext,
+    )
+    OutlinedButton(onClick = onCancel) { Text("Cancel") }
+}
+
+/**
+ * Previous, play/pause, next — the controls of something that plays a sequence, because that is
+ * what a program is. Cancel sits apart and below: it ends the whole thing, and it has no business
+ * being a mis-tap away from the button you press between every set.
+ */
+@Composable
+private fun Transport(
+    playing: Boolean,
+    onPrevious: () -> Unit,
+    onPlayPause: (() -> Unit)?,
+    onNext: () -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(
+            onClick = onPrevious,
+            modifier = Modifier
+                .size(56.dp)
+                .semantics { contentDescription = "Previous interval" },
+        ) {
+            Icon(painterResource(R.drawable.ic_timer_previous), contentDescription = null)
         }
-        OutlinedButton(onClick = onCancel) { Text("Cancel") }
+        if (onPlayPause != null) {
+            FilledIconButton(
+                onClick = onPlayPause,
+                modifier = Modifier
+                    .size(72.dp)
+                    .semantics { contentDescription = if (playing) "Pause" else "Resume" },
+                colors = IconButtonDefaults.filledIconButtonColors(),
+            ) {
+                Icon(
+                    painter = painterResource(
+                        if (playing) R.drawable.ic_timer_pause else R.drawable.ic_timer_play
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+        }
+        IconButton(
+            onClick = onNext,
+            modifier = Modifier
+                .size(56.dp)
+                .semantics { contentDescription = "Next interval" },
+        ) {
+            Icon(painterResource(R.drawable.ic_timer_next), contentDescription = null)
+        }
     }
 }
 
@@ -302,7 +373,13 @@ private fun ActiveCountdown(
  * screen's worth of target, because it is pressed with chalk on the hands and the lungs going.
  */
 @Composable
-private fun AwaitingSet(state: TimerUiState, onSetDone: () -> Unit, onCancel: () -> Unit) {
+private fun AwaitingSet(
+    state: TimerUiState,
+    onSetDone: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onCancel: () -> Unit,
+) {
     SetHeading(state, "Do your reps")
     Button(
         onClick = onSetDone,
@@ -324,6 +401,8 @@ private fun AwaitingSet(state: TimerUiState, onSetDone: () -> Unit, onCancel: ()
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
     )
+    // No play/pause: nothing is counting, so there is nothing to pause.
+    Transport(playing = false, onPrevious = onPrevious, onPlayPause = null, onNext = onNext)
     OutlinedButton(onClick = onCancel) { Text("Cancel") }
 }
 

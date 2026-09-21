@@ -72,6 +72,9 @@ class TimerProgramTest {
         )
         assertEquals(
             listOf(
+                // Only the first set is led into by a preparation. Every later one comes out of a
+                // three-minute rest, whose own last seconds are the getting-ready.
+                "prepare set1 5s",
                 "work set1 10s", "rest set1 180s",
                 "work set2 10s", "rest set2 180s",
                 "work set3 10s", "rest set3 180s",
@@ -81,6 +84,45 @@ class TimerProgramTest {
                 "finished 5",
             ),
             walk(program),
+        )
+    }
+
+    @Test
+    fun `with no rest between them, every set still gets its five seconds`() {
+        // Nothing precedes set two but the end of set one, so there is no rest to be ready during.
+        val program = TimerProgram(sets = 3, work = WorkKind.TIMED, workSeconds = 20, restSeconds = 0)
+        assertEquals(
+            listOf(
+                "prepare set1 5s", "work set1 20s",
+                "prepare set2 5s", "work set2 20s",
+                "prepare set3 5s", "work set3 20s",
+                "finished 3",
+            ),
+            walk(program),
+        )
+    }
+
+    @Test
+    fun `a rest too short to be a run-up is followed by a preparation anyway`() {
+        val program = TimerProgram(sets = 2, work = WorkKind.TIMED, workSeconds = 20, restSeconds = 3)
+        assertEquals(
+            listOf(
+                "prepare set1 5s", "work set1 20s",
+                "rest set1 3s",
+                "prepare set2 5s", "work set2 20s",
+                "finished 2",
+            ),
+            walk(program),
+        )
+    }
+
+    @Test
+    fun `a bare rest and a set of reps are never preceded by a preparation`() {
+        // Nothing is about to start on its own, so there is nothing to be ready for.
+        assertEquals(listOf("rest set1 180s", "finished 1"), walk(TimerProgram.rest(180)))
+        assertEquals(
+            listOf("reps set1", "rest set1 60s", "reps set2", "finished 2"),
+            walk(TimerProgram(sets = 2, work = WorkKind.REPS, restSeconds = 60)),
         )
     }
 
@@ -99,21 +141,10 @@ class TimerProgramTest {
     }
 
     @Test
-    fun `a bare rest is one interval and then it is over`() {
-        assertEquals(listOf("rest set1 180s", "finished 1"), walk(TimerProgram.rest(180)))
-    }
-
-    @Test
-    fun `a single timed set has nothing after it`() {
-        assertEquals(listOf("work set1 10s", "finished 1"), walk(TimerProgram.work(10)))
-    }
-
-    @Test
-    fun `sets with no rest configured run straight into each other`() {
-        val program = TimerProgram(sets = 3, work = WorkKind.TIMED, workSeconds = 20, restSeconds = 0)
+    fun `a single timed set is prepared for and then has nothing after it`() {
         assertEquals(
-            listOf("work set1 20s", "work set2 20s", "work set3 20s", "finished 3"),
-            walk(program),
+            listOf("prepare set1 5s", "work set1 10s", "finished 1"),
+            walk(TimerProgram.work(10)),
         )
     }
 
@@ -129,9 +160,9 @@ class TimerProgramTest {
             now = running.deadlineElapsedMs
             state = TimerTransitions.advance(running, settings, now, id())
         }
-        // Three work intervals and two rests: five runs, five distinct ids. Cue bookkeeping is
-        // keyed by run id, so sharing one would silence every set after the first.
-        assertEquals(5, ids.size)
+        // A preparation, three work intervals and two rests: six runs, six distinct ids. Cue
+        // bookkeeping is keyed by run id, so sharing one would silence every set after the first.
+        assertEquals(6, ids.size)
     }
 
     @Test
@@ -148,9 +179,11 @@ class TimerProgramTest {
         val program = TimerProgram(sets = 5, work = WorkKind.TIMED, workSeconds = 10, restSeconds = 180)
         var now = 1_000L
         var state: TimerState = TimerTransitions.startProgram(id(), program, settings, now)
-        // Through set 1 and into the rest after it.
-        now = (state as TimerState.Running).deadlineElapsedMs
-        state = TimerTransitions.advance(state, settings, now, id())
+        // Through the preparation, through set 1, and into the rest after it.
+        repeat(2) {
+            now = (state as TimerState.Running).deadlineElapsedMs
+            state = TimerTransitions.advance(state, settings, now, id())
+        }
 
         val snapshot = TimerRestore.snapshot(state, bootCount = 7)
         val restored = TimerRestore.restore(snapshot, currentBootCount = 7, nowElapsedMs = now + 1_000)
@@ -206,13 +239,138 @@ class TimerProgramTest {
     fun `a program cancelled part way through reports the sets it actually reached`() {
         val program = TimerProgram(sets = 5, work = WorkKind.TIMED, workSeconds = 10, restSeconds = 60)
         var state: TimerState = TimerTransitions.startProgram(id(), program, settings, 1_000)
-        // Finish set 1, rest, start set 2, then stop there.
-        repeat(2) {
+        // Preparation, set 1, its rest, then into set 2 -- and stop there.
+        repeat(3) {
             val running = state as TimerState.Running
             state = TimerTransitions.advance(running, settings, running.deadlineElapsedMs, id())
         }
         val stopped = TimerTransitions.finish(state)
         assertEquals(2, (stopped as TimerState.Finished).setsCompleted)
+    }
+
+    // ------------------------------------------------- skipping and resuming
+
+    private val fiveSets = TimerProgram(
+        sets = 5,
+        work = WorkKind.TIMED,
+        workSeconds = 10,
+        restSeconds = 180,
+    )
+
+    /** Describes an interval the way the walk helper does, for readable expectations. */
+    private fun describe(state: TimerState): String = when (state) {
+        is TimerState.Running ->
+            "${state.phase.name.lowercase()} set${state.setIndex + 1} ${state.totalMs / 1000}s"
+
+        is TimerState.AwaitingSet -> "reps set${state.setIndex + 1}"
+        is TimerState.Finished -> "finished ${state.setsCompleted}"
+        else -> state.toString()
+    }
+
+    private fun skip(state: TimerState, delta: Int, now: Long = 50_000) =
+        TimerTransitions.step(state, delta, settings, now, id())
+
+    @Test
+    fun `skipping forward out of a rest lands on the next set with its five seconds`() {
+        // Mid-rest after set one, and impatient.
+        var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        state = TimerTransitions.advance(state, settings, 6_000, id())   // prepare -> work
+        state = TimerTransitions.advance(state, settings, 16_000, id())  // work -> rest
+        assertEquals("rest set1 180s", describe(state))
+
+        // Skipping is a button press, so the rest is no longer the run-up: the preparation is.
+        val skipped = skip(state, 1)
+        assertEquals("prepare set2 5s", describe(skipped))
+        assertEquals("work set2 10s", describe(TimerTransitions.advance(skipped, settings, 55_000, id())))
+    }
+
+    @Test
+    fun `skipping back from a set lands on the rest before it`() {
+        var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        repeat(3) { state = TimerTransitions.advance(state, settings, 10_000L * (it + 1), id()) }
+        assertEquals("work set2 10s", describe(state))
+
+        assertEquals("rest set1 180s", describe(skip(state, -1)))
+    }
+
+    @Test
+    fun `skipping back from the first set restarts it rather than doing nothing`() {
+        val state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        assertEquals("prepare set1 5s", describe(state))
+        assertEquals("prepare set1 5s", describe(skip(state, -1)))
+    }
+
+    @Test
+    fun `skipping past the last interval ends the program`() {
+        val last = TimerTransitions.startProgram(id(), TimerProgram.work(10), settings, 1_000)
+        assertEquals("finished 1", describe(skip(last, 1)))
+    }
+
+    @Test
+    fun `skipping in a reps program moves between the sets and their rests`() {
+        val reps = TimerProgram(sets = 3, work = WorkKind.REPS, restSeconds = 60)
+        val state: TimerState = TimerTransitions.startProgram(id(), reps, settings, 1_000)
+        assertEquals("reps set1", describe(state))
+        val rest = skip(state, 1)
+        assertEquals("rest set1 60s", describe(rest))
+        // A set of reps never gets a preparation: it does not start without you.
+        assertEquals("reps set2", describe(skip(rest, 1)))
+    }
+
+    @Test
+    fun `resuming inside a set just carries on`() {
+        var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        state = TimerTransitions.advance(state, settings, 6_000, id())
+        assertEquals("work set1 10s", describe(state))
+
+        val paused = TimerTransitions.pause(state as TimerState.Running, 9_000)
+        assertEquals(7_000, paused.remainingMs)
+        val resumed = TimerTransitions.resume(paused, 100_000, settings, id())
+        // Same interval, same id, same seven seconds. Pausing changed nothing about the set.
+        assertEquals("work set1 10s", describe(resumed))
+        assertEquals(paused.runId, resumed.runId)
+        assertEquals(7_000, resumed.remainingMs(100_000))
+    }
+
+    @Test
+    fun `resuming a rest with plenty left just carries on`() {
+        var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        state = TimerTransitions.advance(state, settings, 6_000, id())
+        state = TimerTransitions.advance(state, settings, 16_000, id())
+
+        val paused = TimerTransitions.pause(state as TimerState.Running, 100_000)
+        val resumed = TimerTransitions.resume(paused, 500_000, settings, id())
+        assertEquals("rest set1 180s", describe(resumed))
+        assertEquals(paused.remainingMs, resumed.remainingMs(500_000))
+    }
+
+    @Test
+    fun `resuming a rest with only a moment left becomes a preparation for the next set`() {
+        var state: TimerState = TimerTransitions.startProgram(id(), fiveSets, settings, 1_000)
+        state = TimerTransitions.advance(state, settings, 6_000, id())
+        state = TimerTransitions.advance(state, settings, 16_000, id())
+
+        // Paused with two seconds of rest to go: unpausing straight into the set would give no
+        // time to get back to the bar.
+        val paused = TimerTransitions.pause(state as TimerState.Running, 194_000)
+        assertEquals(2_000, paused.remainingMs)
+
+        val resumed = TimerTransitions.resume(paused, 900_000, settings, id())
+        assertEquals("prepare set2 5s", describe(resumed))
+        assertEquals(5_000, resumed.remainingMs(900_000))
+        // A fresh interval, because the rest it replaced had already sounded some of its cues.
+        assertTrue(resumed.runId != paused.runId)
+    }
+
+    @Test
+    fun `a bare rest that is nearly over is just nearly over`() {
+        // Nothing follows it, so there is nothing to get ready for.
+        val state = TimerTransitions.startProgram(id(), TimerProgram.rest(180), settings, 1_000)
+        val paused = TimerTransitions.pause(state as TimerState.Running, 179_000)
+        assertEquals(2_000, paused.remainingMs)
+        val resumed = TimerTransitions.resume(paused, 900_000, settings, id())
+        assertEquals("rest set1 180s", describe(resumed))
+        assertEquals(2_000, resumed.remainingMs(900_000))
     }
 
     @Test

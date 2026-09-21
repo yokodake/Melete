@@ -110,8 +110,10 @@ class TimerController(
     val lastSets: Int get() = store.lastSets
 
     fun lastDurationSeconds(phase: TimerPhase): Int = when (phase) {
-        TimerPhase.WORK -> store.lastWorkSeconds
         TimerPhase.REST -> store.lastRestSeconds
+        // A preparation has a fixed length, so there is nothing remembered about it; asking
+        // yields the work length, which is what the caller is really after.
+        TimerPhase.WORK, TimerPhase.PREPARE -> store.lastWorkSeconds
     }
 
     /**
@@ -126,8 +128,8 @@ class TimerController(
     ) {
         val duration = durationSeconds.coerceAtLeast(1)
         val program = when (phase) {
-            TimerPhase.WORK -> TimerProgram.work(duration, label)
             TimerPhase.REST -> TimerProgram.rest(duration, label)
+            TimerPhase.WORK, TimerPhase.PREPARE -> TimerProgram.work(duration, label)
         }
         start(program, settings)
     }
@@ -214,12 +216,43 @@ class TimerController(
 
     fun resume() {
         val paused = _state.value as? TimerState.Paused ?: return
-        val running = TimerTransitions.resume(paused, now())
+        val running = TimerTransitions.resume(
+            state = paused,
+            nowElapsedMs = now(),
+            settings = store.cueSettings,
+            nextRunId = UUID.randomUUID().toString(),
+        )
+        // Resuming a nearly-over rest hands back a fresh preparation interval under a new id; the
+        // rest it replaced will never be asked about again.
+        if (running.runId != paused.runId) store.clearCues(paused.runId)
         _state.value = running
         persist()
-        alarms.schedule(running)
-        startCountdownLoop()
-        startService()
+        engage(running)
+    }
+
+    /** Skips to the next interval of the program. */
+    fun next() = step(delta = 1)
+
+    /** Goes back to the previous interval, or restarts the first one. */
+    fun previous() = step(delta = -1)
+
+    private fun step(delta: Int) {
+        val current = _state.value
+        if (!hasActiveProgram) return
+        val next = TimerTransitions.step(
+            state = current,
+            delta = delta,
+            settings = store.cueSettings,
+            nowElapsedMs = now(),
+            nextRunId = UUID.randomUUID().toString(),
+        )
+        if (next === current) return
+        alarms.cancelAll()
+        current.activeRunId?.takeIf { it != next.activeRunId }?.let(store::clearCues)
+        _state.value = next
+        persist()
+        if (next is TimerState.Finished) notifications.postFinished(next)
+        engage(next)
     }
 
     fun cancel() {
