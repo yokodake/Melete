@@ -31,10 +31,11 @@ enum class TimerPhase {
  * Which cues a run owes is fixed when it starts, and which it has already given travels with the
  * state, so pausing, resuming or rebuilding the UI can never sound the same cue twice.
  *
- * One **interval** — one work phase or one rest — is one [runId]. A [TimerProgram] of several sets
- * is therefore a succession of run ids rather than one long one, which is what keeps the
- * at-most-once cue bookkeeping honest: the second set's end is a different run from the first
- * set's, so it is allowed to sound.
+ * One **interval** — one work phase, one rest, one preparation — is one [runId], so a
+ * [TimerProgram] of several sets is a succession of them. That also means the `delivered` set
+ * empties by itself at every interval boundary, which is the whole of the at-most-once cue
+ * bookkeeping: the second set's end is a different state from the first set's, so it is free to
+ * sound.
  */
 sealed interface TimerState {
 

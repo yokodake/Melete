@@ -23,10 +23,9 @@ interface CuePlayer {
  *
  * The tone is generated rather than shipped as an asset so the exact [AudioAttributes] are under
  * our control. That matters on Android 17: an app in the background may only touch audio through a
- * while-in-use-capable foreground service, and the one waiver is for `USAGE_ALARM` streams from an
- * app holding exact-alarm permission — which is precisely the path taken when a cue has to sound
- * after the process was killed. Violations fail *silently*, so this class must not be the place
- * where a wrong usage hides.
+ * while-in-use-capable foreground service, which is what [TimerService] is for. `USAGE_ALARM` is
+ * what marks the beep as one the platform should let through on that path. Violations fail
+ * *silently*, so this class must not be the place where a wrong usage hides.
  *
  * Audio focus is requested as transient-may-duck: music the user is training to should dip for the
  * beep, not stop.

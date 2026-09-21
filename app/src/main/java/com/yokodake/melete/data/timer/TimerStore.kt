@@ -45,16 +45,6 @@ class TimerStore(context: Context) {
         }.apply()
     }
 
-    /** Cues already delivered, so the in-process path and the alarm path cannot both sound. */
-    fun markCueDelivered(runId: String, cue: TimerCue): Boolean {
-        val key = "$KEY_CUE_PREFIX$runId:${cue.name}"
-        synchronized(this) {
-            if (preferences.getBoolean(key, false)) return false
-            preferences.edit().putBoolean(key, true).commit()
-            return true
-        }
-    }
-
     /**
      * Test and development hook: the timer settings belong to the user, so anything that changes
      * them for its own purposes has to be able to put them back.
@@ -66,13 +56,6 @@ class TimerStore(context: Context) {
         cueSettings = saved.first
         lastRestSeconds = saved.second
         lastWorkSeconds = saved.third
-    }
-
-    /** Forgets the cue bookkeeping for finished or cancelled runs. */
-    fun clearCues(runId: String) {
-        val editor = preferences.edit()
-        TimerCue.entries.forEach { editor.remove("$KEY_CUE_PREFIX$runId:${it.name}") }
-        editor.apply()
     }
 
     var cueSettings: CueSettings
@@ -104,7 +87,6 @@ class TimerStore(context: Context) {
 
     private companion object {
         const val KEY_SNAPSHOT = "snapshot"
-        const val KEY_CUE_PREFIX = "cue:"
         const val KEY_THIRTY_SECONDS = "cue-thirty-seconds"
         const val KEY_FINAL_COUNTDOWN = "cue-final-countdown"
         const val KEY_QUARTER_CUES = "cue-quarters"

@@ -110,7 +110,16 @@ Changes made after the app was used, from `src/feedback.md`. Schema 3.
 - The library list no longer prints the explanation under every row: the list is for finding an
   exercise, and a paragraph under each one turns scanning into reading.
 
-### Third round: preparation, and transport controls ✅
+### Fourth round:
+
+- 81 unit tests still passing, unchanged: none of them knew about alarms, because the sequencing
+  they cover was always pure.
+- Four instrumented tests deleted (they existed only to arbitrate between the two delivery paths),
+  one rewritten without the fake alarm scheduler, and one added in their place: a three-set program
+  sounding the end of every preparation and every set, which is the property the run ids were
+  protecting. **Still not run on a device.**
+
+Third round: preparation, and transport controls ✅
 
 - **Five seconds before a set.** `TimerPhase.PREPARE` is a real countdown, not a flag, so its
   3-2-1-go falls out of the ordinary cue planner and the screen has something true to display.
@@ -128,6 +137,30 @@ Changes made after the app was used, from `src/feedback.md`. Schema 3.
   play-pause, since nothing is counting.
 - `TimerProgram.steps` flattens a program into its intervals, so sequencing, skipping forward and
   going back are all one operation on an index.
+
+### Fourth round: the alarm backstop is gone ✅
+
+The user was explicit about scope: the timer has to survive the phone being **locked** and other
+apps being in front, not being **killed** from the recents drawer. The foreground service provides
+the first. Exact alarms existed only for the second.
+
+Removing them removed everything they forced:
+
+- `TimerAlarms.kt` (the scheduler, the receiver) and the `USE_EXACT_ALARM` permission.
+- `TimerStore.markCueDelivered` / `clearCues` and the `cue:` keys — the durable at-most-once
+  bookkeeping, which existed because two independent paths could sound the same beep. With one
+  path it is just `TimerState.Running.delivered`, which empties on its own at each interval.
+- `TimerController.onAlarm`, the cue mutex, and the "is this cue owed" negotiation.
+- The countdown loop's generation counter. The loop now runs across a whole program instead of
+  cancelling and relaunching itself at every interval, so there is nothing to guard against.
+
+About 170 lines net out of the main sources, and the timer's hardest invariant — "exactly one of
+two racing deliverers wins, durably, across process death" — stopped existing rather than being
+maintained.
+
+What is kept: the *deadline* is still persisted. A killed process makes no sound, but reopening the
+app recomputes from the monotonic clock and either shows the true remaining time or says the
+countdown ended while the app was not running, rather than pretending it alerted.
 
 Not implemented yet, by design: modules, duration capture, dashboard, export — and moving
 an occurrence that already has a date, which belongs to phase 4 because it needs the explicit
@@ -418,6 +451,9 @@ Third round:
 
 - No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
   not created speculatively.
+- Surviving the app being **killed** is explicitly not a requirement, and as of the fourth round
+  nothing tries to: the countdown makes no sound while the process is dead, and reopening the app
+  recovers the true remaining time from the persisted deadline.
 - **Still owed:** behaviour while another app is playing audio (the user is checking this against
   Spotify); forced Doze; and end-to-end confirmation that the screen stays awake for a whole
   countdown. On the last one, the window flag was confirmed engaged —

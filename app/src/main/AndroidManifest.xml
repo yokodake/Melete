@@ -9,12 +9,11 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!--
-      USE_EXACT_ALARM rather than SCHEDULE_EXACT_ALARM: a countdown that warns you ten seconds
-      before a hang ends is an alarm-clock-like function, the permission cannot be revoked out
-      from under it, and on Android 17 holding it is what lets a USAGE_ALARM cue sound after the
-      process has been killed.
+      No exact-alarm permission. Exact alarms existed to sound a cue from a process that had been
+      killed, and surviving being killed is explicitly not a requirement: the foreground service
+      is what keeps a countdown alive while the phone is locked or another app is in front, and
+      that is the case the timer is for.
     -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:name=".MeleteApplication"
@@ -47,10 +46,6 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps a single user-started training countdown running and audible while the screen is off, for rest and work intervals during a workout." />
         </service>
-
-        <receiver
-            android:name=".data.timer.TimerAlarmReceiver"
-            android:exported="false" />
 
         <receiver
             android:name=".data.timer.TimerActionReceiver"

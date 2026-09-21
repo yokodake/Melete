@@ -2,7 +2,6 @@ package com.yokodake.melete.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.yokodake.melete.data.timer.AlarmScheduler
 import com.yokodake.melete.data.timer.CuePlayer
 import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerController
@@ -10,6 +9,7 @@ import com.yokodake.melete.data.timer.TimerCue
 import com.yokodake.melete.data.timer.TimerNotifications
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
+import com.yokodake.melete.data.timer.WorkKind
 import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.timer.TimerStore
 import kotlinx.coroutines.CoroutineScope
@@ -27,11 +27,11 @@ import org.junit.runner.RunWith
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Cue delivery on a real device, with real durable bookkeeping.
+ * Cue delivery on a real device.
  *
- * These cover the part that arithmetic tests cannot: two independent paths may try to sound the
- * same cue, and exactly one of them must win, including when the second path belongs to a process
- * that was created after the first one died.
+ * These cover the part the arithmetic tests cannot: real time actually passing, and the countdown
+ * loop sounding what the plan says, once each and in order, across a pause and across the handover
+ * from one interval of a program to the next.
  */
 @RunWith(AndroidJUnit4::class)
 class TimerControllerTest {
@@ -45,27 +45,9 @@ class TimerControllerTest {
         }
     }
 
-    /**
-     * Stands in for the real exact alarms. The backstop is exercised by calling `onAlarm`
-     * directly, which is what the receiver does, so the tests do not have to wait on the platform
-     * or race the app's own controller for the same durable bookkeeping.
-     */
-    private class FakeAlarms : AlarmScheduler {
-        var scheduled = 0
-        var cancelled = 0
-        override fun schedule(state: TimerState.Running) {
-            scheduled++
-        }
-
-        override fun cancelAll() {
-            cancelled++
-        }
-    }
-
     private lateinit var scope: CoroutineScope
     private lateinit var store: TimerStore
     private lateinit var cues: RecordingCuePlayer
-    private lateinit var alarms: FakeAlarms
     private lateinit var savedSettings: Triple<CueSettings, Int, Int>
 
     /** Only the end, so the tests are about delivery rather than about the cue plan. */
@@ -80,18 +62,15 @@ class TimerControllerTest {
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         store = TimerStore(context)
         cues = RecordingCuePlayer()
-        alarms = FakeAlarms()
         // These settings belong to the user; the tests borrow them and hand them back.
         savedSettings = store.snapshotSettings()
         // Leave no state from an earlier test or from the app itself.
-        store.readSnapshot()?.let { store.clearCues(it.runId) }
         store.writeSnapshot(null)
     }
 
     @After
     fun tearDown() {
         scope.cancel()
-        store.readSnapshot()?.let { store.clearCues(it.runId) }
         store.writeSnapshot(null)
         store.restoreSettings(savedSettings)
     }
@@ -100,7 +79,6 @@ class TimerControllerTest {
         context = context,
         store = store,
         cues = player,
-        alarms = alarms,
         notifications = TimerNotifications(context),
         scope = scope,
     )
@@ -118,18 +96,21 @@ class TimerControllerTest {
     }
 
     @Test
-    fun anAlarmForTheSameRunDoesNotSoundASecondTime() = runBlocking {
+    fun aProgramSoundsTheEndOfEverySetAndThenStops() = runBlocking {
         val controller = controller()
-        controller.start(TimerPhase.REST, durationSeconds = 1, settings = endOnly)
-        delay(2_500)
-        val runId = (controller.state.value as TimerState.Finished).runId
+        // Three one-second sets back to back, with a preparation before each: four ends in all.
+        controller.start(
+            TimerProgram(sets = 3, work = WorkKind.TIMED, workSeconds = 1, restSeconds = 0),
+            settings = endOnly,
+        )
 
-        // The backstop alarm arriving late, after the in-process countdown already cued.
-        controller.onAlarm(runId, TimerCue.FINISH)
-        delay(500)
+        delay(TimerProgram.PREPARE_SECONDS * 3_000L + 3_000L + 1_500L)
 
-        assertEquals(listOf(TimerCue.FINISH), cues.played.toList())
-        controller.cancel()
+        // One per preparation and one per set. A single run id for the whole program would have
+        // sounded the first of these and then nothing.
+        assertEquals(List(6) { TimerCue.FINISH }, cues.played.toList())
+        assertTrue(controller.state.value is TimerState.Finished)
+        controller.dismiss()
     }
 
     @Test
@@ -192,17 +173,14 @@ class TimerControllerTest {
     fun cancellingBeforeTheEndSoundsNothing() = runBlocking {
         val controller = controller()
         controller.start(TimerPhase.REST, durationSeconds = 2, settings = endOnly)
-        val runId = (controller.state.value as TimerState.Running).runId
         delay(300)
         controller.cancel()
 
-        // A cue that was already in flight when the run was called off must not arrive.
-        controller.onAlarm(runId, TimerCue.FINISH)
+        // Well past when it would have ended, had it not been called off.
         delay(2_500)
 
         assertTrue(cues.played.isEmpty())
         assertEquals(TimerState.Idle, controller.state.value)
-        assertTrue("cancelling must leave no alarm pending", alarms.cancelled > 0)
     }
 
     @Test
@@ -254,51 +232,4 @@ class TimerControllerTest {
         second.cancel()
     }
 
-    @Test
-    fun aCueIsNotOwedTwiceAcrossProcesses() = runBlocking {
-        val first = controller()
-        first.start(TimerPhase.REST, durationSeconds = 1, settings = endOnly)
-        delay(2_000)
-        val runId = (first.state.value as TimerState.Finished).runId
-
-        val laterPlayer = RecordingCuePlayer()
-        val later = controller(laterPlayer)
-        later.onAlarm(runId, TimerCue.FINISH)
-        delay(500)
-
-        assertTrue(laterPlayer.played.isEmpty())
-        later.cancel()
-    }
-
-    @Test
-    fun anAlarmDeliversTheCueWhenTheCountdownItselfNeverGotThere() = runBlocking {
-        // What a killed process looks like: the run is on disk, nothing is ticking, and the
-        // backstop alarm is the only thing left to ring.
-        val owner = controller()
-        owner.start(TimerPhase.REST, durationSeconds = 60, settings = endOnly)
-        val runId = (owner.state.value as TimerState.Running).runId
-
-        owner.onAlarm(runId, TimerCue.FINISH)
-        delay(500)
-
-        assertEquals(listOf(TimerCue.FINISH), cues.played.toList())
-        assertTrue(owner.state.value is TimerState.Finished)
-        owner.cancel()
-    }
-
-    @Test
-    fun aCueAlreadyRungByTheOtherPathStillEndsTheCountdown() = runBlocking {
-        val owner = controller()
-        owner.start(TimerPhase.REST, durationSeconds = 60, settings = endOnly)
-        val runId = (owner.state.value as TimerState.Running).runId
-
-        // Someone else claimed the cue first: the sound is not owed twice, but the run is over.
-        assertTrue(store.markCueDelivered(runId, TimerCue.FINISH))
-        owner.onAlarm(runId, TimerCue.FINISH)
-        delay(500)
-
-        assertTrue(cues.played.isEmpty())
-        assertTrue(owner.state.value is TimerState.Finished)
-        owner.cancel()
-    }
 }
