@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import com.yokodake.melete.data.MeleteDatabase
 import com.yokodake.melete.data.TrainingRepository
-import com.yokodake.melete.data.timer.TimerAlarms
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerCuePlayer
 import com.yokodake.melete.data.timer.TimerNotifications
@@ -28,15 +27,14 @@ class AppContainer(context: Context) {
 
     /**
      * Survives every screen, because the countdown belongs to the workout rather than to whatever
-     * page happens to be open. Lazy so that a process created only to deliver an alarm builds it,
-     * restores the run from disk, and can decide whether that cue is still owed.
+     * page happens to be open. Lazy so that it is built when something first asks for the timer,
+     * restoring whatever run was under way from disk at that point.
      */
     val timerController: TimerController by lazy {
         TimerController(
             context = applicationContext,
             store = TimerStore(applicationContext),
             cues = TimerCuePlayer(applicationContext),
-            alarms = TimerAlarms(applicationContext),
             notifications = timerNotifications,
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )

@@ -262,7 +262,7 @@ class TimerStateTest {
         assertEquals(runId, (finished as TimerState.Finished).runId)
         assertEquals(TimerPhase.REST, finished.phase)
         assertEquals(60_000, finished.totalMs)
-        // Finishing is idempotent, so a late alarm cannot turn it into anything else.
+        // Finishing is idempotent, so a late cue cannot turn it into anything else.
         assertEquals(finished, TimerTransitions.finish(finished))
     }
 }
