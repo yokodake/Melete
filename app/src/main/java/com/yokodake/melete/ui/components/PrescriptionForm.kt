@@ -159,13 +159,11 @@ fun EffortSelector(
         onExpandedChange = { expanded = it },
         modifier = modifier.fillMaxWidth(),
     ) {
-        OutlinedTextField(
+        CompactTextField(
             value = selected?.label ?: NOT_SET,
             onValueChange = {},
             readOnly = true,
-            singleLine = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth(),
@@ -201,15 +199,15 @@ fun NumberField(
     modifier: Modifier = Modifier,
     decimal: Boolean = false,
 ) {
-    OutlinedTextField(
+    CompactTextField(
         value = value,
         onValueChange = { typed ->
             val filtered = typed.filter { it.isDigit() || (decimal && (it == '.' || it == ',')) }
                 .replace(',', '.')
             onValueChange(filtered)
         },
-        label = { Text(label) },
-        singleLine = true,
+        label = label,
+        minHeight = 48,
         keyboardOptions = KeyboardOptions(
             keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
         ),

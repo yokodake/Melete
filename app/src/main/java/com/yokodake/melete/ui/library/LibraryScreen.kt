@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.OutlinedTextField
+import com.yokodake.melete.ui.components.CompactTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
@@ -207,11 +207,11 @@ fun LibraryScreen(
         ) {
             if (query != null) {
                 item {
-                    OutlinedTextField(
+                    CompactTextField(
                         value = query,
                         onValueChange = onQueryChange,
-                        label = { Text("Search") },
-                        singleLine = true,
+                        label = "Search",
+                        minHeight = 48,
                         trailingIcon = {
                             if (query.isNotEmpty()) {
                                 TextButton(onClick = { onQueryChange("") }) { Text("Clear") }
