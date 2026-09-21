@@ -137,6 +137,11 @@ class TimerController(
         if (program.work == WorkKind.TIMED) store.lastWorkSeconds = program.workSeconds
         if (program.restSeconds > 0) store.lastRestSeconds = program.restSeconds
         store.lastSets = program.sets
+        // The store is the one source of cue settings, because every interval after the first is
+        // planned when it begins and reads them from there. Planning the first from an argument
+        // and the rest from the store meant a program started with explicit settings quietly
+        // reverted after one set.
+        store.cueSettings = settings
         countdownJob?.cancel()
         notifications.cancelFinished()
         val started = TimerTransitions.startProgram(

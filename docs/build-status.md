@@ -119,6 +119,20 @@ Changes made after the app was used, from `src/feedback.md`. Schema 3.
   sounding the end of every preparation and every set, which is the property the run ids were
   protecting. **Still not run on a device.**
 
+Fifth round — all on the Pixel 9:
+
+- 33 instrumented tests passing, including the four rounds of timer work that had never run on a
+  device. One caught a real bug (below).
+- The three cue-delivery tests pass under genuine `HARDENING_THROW` with no violations. They now
+  assert on the platform's register of active players rather than on the audio-focus result, since
+  focus is no longer requested — and being granted focus never proved a sound came out anyway.
+- A 3 × 15 s program with 31 s rest was run with the phone **locked**, over Spotify. The user heard
+  every cue and the music kept playing.
+
+**Bug found by the device suite:** `start(program, settings)` planned the first interval from the
+settings passed in, while every later interval read `store.cueSettings` — so a program started with
+explicit settings quietly reverted after one set. The store is now the single source.
+
 Third round: preparation, and transport controls ✅
 
 - **Five seconds before a set.** `TimerPhase.PREPARE` is a real countdown, not a flag, so its
@@ -161,6 +175,25 @@ maintained.
 What is kept: the *deadline* is still persisted. A killed process makes no sound, but reopening the
 app recomputes from the monotonic clock and either shows the true remaining time or says the
 countdown ended while the app was not running, rather than pretending it alerted.
+
+### Fifth round: the cue stops interrupting the music ✅
+
+The cue was stopping Spotify dead for every tick. Two separate causes, and fixing only the first
+did nothing audible:
+
+1. **Audio focus.** It was requested as transient-may-duck, which is the polite form, but asking at
+   all hands the music app the decision of whether to duck or stop. Nothing is requested now.
+2. **`USAGE_ALARM`.** The platform fades media to zero *on its own* when an alarm-usage player
+   starts — no focus involved — which is heard as the music stopping. Alarm usage means "interrupt
+   the user", which a timer cue during a set is not.
+
+The cue now plays as `USAGE_MEDIA` and mixes into the music at the volume already set for it.
+Confirmed by ear on the Pixel 9: Spotify keeps playing, the beep is audible over it, **including
+with the phone locked**. `AS.FadeOutManager` no longer appears in logcat while a cue sounds.
+
+There is no ducking. Ducking is the other app's decision and cannot be forced (`setForceDucking`
+is honoured only for accessibility services), so "mixes over" is the achievable version of "does
+not interrupt".
 
 Not implemented yet, by design: modules, duration capture, dashboard, export — and moving
 an occurrence that already has a date, which belongs to phase 4 because it needs the explicit
@@ -434,8 +467,9 @@ Second round:
 - Two real bugs were found by those tests before the code ran on a phone: the no-argument
   `TimerProgram` was invalid and threw from every state that defaulted it, and a program with no
   rest configured stopped after its first set instead of running them back to back.
-- **Not yet run on a device:** the instrumented suite, against the new timer. The phone was
-  unplugged when this round was finished.
+- The Android command is `cmd audio set-hardening throw`, cleared with `cmd audio
+  clear-hardening`. An earlier note here said `set-enable-hardening`, which is not a command: it
+  fails silently, so a run "under hardening" that used it proved nothing.
 
 Third round:
 

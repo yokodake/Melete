@@ -2,9 +2,7 @@ package com.yokodake.melete.data.timer
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.VibrationEffect
 import android.os.VibratorManager
@@ -23,31 +21,27 @@ interface CuePlayer {
  *
  * The tone is generated rather than shipped as an asset so the exact [AudioAttributes] are under
  * our control. That matters on Android 17: an app in the background may only touch audio through a
- * while-in-use-capable foreground service, which is what [TimerService] is for. `USAGE_ALARM` is
- * what marks the beep as one the platform should let through on that path. Violations fail
+ * while-in-use-capable foreground service, which is what [TimerService] is for. Violations fail
  * *silently*, so this class must not be the place where a wrong usage hides.
  *
- * Audio focus is requested as transient-may-duck: music the user is training to should dip for the
- * beep, not stop.
+ * **The cue does not interrupt what the user is listening to.** Two things had to go for that:
+ *
+ * - *Audio focus.* Asking for it, even as transient-may-duck, told the music app it had lost focus,
+ *   and whether it ducks or stops is then its decision, not ours. Nothing is requested now.
+ * - *`USAGE_ALARM`.* Dropping the focus request alone was not enough — the platform fades media to
+ *   zero on its own when an alarm-usage player starts, which is heard as the music stopping. Alarm
+ *   usage says "interrupt the user", which a timer cue during a set is not.
+ *
+ * So the cue plays as `USAGE_MEDIA` and simply mixes into the music, at the media volume the user
+ * has already set for it. Verified by ear on a Pixel 9 against Spotify, and by the absence of any
+ * `AS.FadeOutManager` entry in logcat while a cue sounds.
  */
 class TimerCuePlayer(context: Context) : CuePlayer {
 
     private val appContext = context.applicationContext
 
-    private val audioManager =
-        appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-    /**
-     * The audio system's answer to the last focus request. Refusal is how the platform says it is
-     * blocking this process from making a sound, and it is the only signal available: playback
-     * itself fails silently.
-     */
-    @Volatile
-    var lastFocusResult: Int = AudioManager.AUDIOFOCUS_REQUEST_FAILED
-        private set
-
     private val attributes = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_ALARM)
+        .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
         .build()
 
@@ -76,16 +70,6 @@ class TimerCuePlayer(context: Context) : CuePlayer {
     }
 
     private fun playTone(pattern: Pattern) {
-        val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(attributes)
-            .build()
-        val granted = audioManager.requestAudioFocus(focusRequest)
-        lastFocusResult = granted
-        if (granted != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            // Refused focus means the platform is blocking background audio for this process.
-            // Say so in the log rather than leaving a silent beep looking like a delivered cue.
-            Log.w(TAG, "Audio focus refused ($granted); the cue may not be audible")
-        }
         val samples = generateSamples(pattern)
         val track = AudioTrack.Builder()
             .setAudioAttributes(attributes)
@@ -106,7 +90,6 @@ class TimerCuePlayer(context: Context) : CuePlayer {
                 object : AudioTrack.OnPlaybackPositionUpdateListener {
                     override fun onMarkerReached(playedTrack: AudioTrack?) {
                         runCatching { playedTrack?.release() }
-                        audioManager.abandonAudioFocusRequest(focusRequest)
                     }
 
                     override fun onPeriodicNotification(playedTrack: AudioTrack?) = Unit
@@ -116,7 +99,6 @@ class TimerCuePlayer(context: Context) : CuePlayer {
         }.onFailure { error ->
             Log.w(TAG, "Cue playback failed", error)
             runCatching { track.release() }
-            audioManager.abandonAudioFocusRequest(focusRequest)
         }
     }
 
