@@ -15,7 +15,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.yokodake.melete.ui.components.CompactTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -105,11 +105,11 @@ fun ExerciseEditorScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
+            CompactTextField(
                 value = state.name,
                 onValueChange = onNameChange,
-                label = { Text("Name") },
-                singleLine = true,
+                label = "Name",
+                minHeight = 48,
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -120,12 +120,14 @@ fun ExerciseEditorScreen(
                 }
             }
 
-            OutlinedTextField(
+            CompactTextField(
                 value = state.description,
                 onValueChange = onDescriptionChange,
-                label = { Text("What it is, and how to do it") },
-                placeholder = { Text("The explanation you want to read before a set.") },
+                label = "What it is, and how to do it",
+                placeholder = "The explanation you want to read before a set.",
+                singleLine = false,
                 minLines = 3,
+                minHeight = 48,
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -164,15 +166,13 @@ fun ExerciseEditorScreen(
 
             HorizontalDivider()
             Text("Measurement", style = MaterialTheme.typography.titleSmall)
-            OutlinedTextField(
+            CompactTextField(
                 value = state.unit,
                 onValueChange = onUnitChange,
-                label = { Text("Unit (empty for none)") },
-                placeholder = { Text("kg") },
-                singleLine = true,
-                supportingText = {
-                    Text("A stretch or a bodyweight movement needs no measurement.")
-                },
+                label = "Unit (empty for none)",
+                placeholder = "kg",
+                supportingText = "A stretch or a bodyweight movement needs no measurement.",
+                minHeight = 48,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (state.unit.isNotBlank()) {
@@ -211,12 +211,14 @@ fun ExerciseEditorScreen(
                 unilateral = state.unilateral,
             )
 
-            OutlinedTextField(
+            CompactTextField(
                 value = state.notes,
                 onValueChange = onNotesChange,
-                label = { Text("Variation notes (optional)") },
-                placeholder = { Text("Grip, board, tempo, shoes…") },
+                label = "Variation notes (optional)",
+                placeholder = "Grip, board, tempo, shoes…",
+                singleLine = false,
                 minLines = 2,
+                minHeight = 48,
                 modifier = Modifier.fillMaxWidth(),
             )
 

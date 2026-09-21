@@ -75,6 +75,7 @@ import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.EffortLevel
+import com.yokodake.melete.ui.components.CompactTextField
 import com.yokodake.melete.ui.components.EffortSelector
 import com.yokodake.melete.ui.components.NumberField
 import com.yokodake.melete.ui.components.PrescriptionFields
@@ -450,12 +451,13 @@ private fun PerformedSetRow(
  */
 @Composable
 private fun CommentBox(comment: String, onChange: (String) -> Unit) {
-    OutlinedTextField(
+    CompactTextField(
         value = comment,
         onValueChange = onChange,
-        label = { Text("Comment") },
-        placeholder = { Text("A note about this exercise today") },
-        minLines = 2,
+        label = "Comment",
+        placeholder = "A note about this exercise today",
+        singleLine = false,
+        minHeight = 64,
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -776,15 +778,14 @@ private fun LoadField(
     modifier: Modifier = Modifier,
     onValueChange: (String) -> Unit,
 ) {
-    OutlinedTextField(
+    CompactTextField(
         value = value,
         onValueChange = { typed ->
             onValueChange(typed.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.'))
         },
-        singleLine = true,
         textStyle = MaterialTheme.typography.bodyLarge,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = modifier.widthIn(min = 72.dp),
+        modifier = modifier.widthIn(min = 64.dp),
     )
 }
 
