@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    The artwork is full-bleed, so it is the background layer and the foreground is empty.
+
+    An adaptive icon draws a 108dp canvas of which only the central 72dp is guaranteed to survive
+    the launcher's mask; the outer 18dp on each side is cropped, and shifted for parallax. Artwork
+    placed in the foreground would be masked *over* the background, showing a ring of whatever
+    colour sat behind it. Putting it in the background instead means the mask simply trims the
+    edges of the picture, which is what a picture wants.
+
+    There is deliberately no <monochrome>: a themed icon has to read as a single-colour stencil,
+    and flattening this illustration into one would produce an unrecognisable blob. Without the
+    element, launchers fall back to the full-colour icon.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@drawable/ic_launcher_background" />
+    <background android:drawable="@mipmap/ic_launcher_bg" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
 </adaptive-icon>
