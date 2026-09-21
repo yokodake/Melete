@@ -2,6 +2,10 @@ package com.yokodake.melete.data.timer
 
 import kotlinx.serialization.Serializable
 
+/** One interval of a program: which set it belongs to, and whether it is the work or the rest. */
+@Serializable
+data class ProgramStep(val setIndex: Int, val phase: TimerPhase)
+
 /** How the working part of a set is counted. */
 enum class WorkKind {
     /** A countdown: a hang, a plank, a carry. */
@@ -59,6 +63,35 @@ data class TimerProgram(
 
     val isRepsMode: Boolean get() = work == WorkKind.REPS
 
+    /**
+     * The intervals this program is made of, in order, as a flat list.
+     *
+     * Sequencing, skipping forward and going back are then all the same operation on an index,
+     * which is far easier to reason about than a set of rules about what follows what. A
+     * preparation countdown is deliberately *not* a step: it is a lead-in to one, and skipping
+     * through the program should not stop twice per set.
+     */
+    val steps: List<ProgramStep>
+        get() = buildList {
+            for (setIndex in 0 until sets) {
+                if (work == WorkKind.NONE) {
+                    add(ProgramStep(setIndex, TimerPhase.REST))
+                } else {
+                    add(ProgramStep(setIndex, TimerPhase.WORK))
+                    if (restSeconds > 0 && !isLastSet(setIndex)) {
+                        add(ProgramStep(setIndex, TimerPhase.REST))
+                    }
+                }
+            }
+        }
+
+    /** Where the given interval sits in [steps], or -1 when it is not one of them. */
+    fun stepIndexOf(setIndex: Int, phase: TimerPhase): Int {
+        // A preparation countdown belongs to the work it precedes.
+        val target = if (phase == TimerPhase.PREPARE) TimerPhase.WORK else phase
+        return steps.indexOfFirst { it.setIndex == setIndex && it.phase == target }
+    }
+
     /** True when [setIndex] is the last set, and so is not followed by a rest. */
     fun isLastSet(setIndex: Int): Boolean = setIndex >= sets - 1
 
@@ -78,6 +111,15 @@ data class TimerProgram(
         }
 
     companion object {
+        /**
+         * How long you get to chalk up, find the edge and take the weight before a set starts.
+         *
+         * It exists because a set that begins the instant you press a button begins without you.
+         * It is not needed when a rest runs into the set on its own: the tail of the rest already
+         * *is* the preparation, which is why the screen turns amber for those last seconds.
+         */
+        const val PREPARE_SECONDS = 5
+
         /** One set, nothing claimed about it. The fallback for a state that predates programs. */
         val SINGLE = TimerProgram()
 

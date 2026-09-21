@@ -1,8 +1,21 @@
 package com.yokodake.melete.data.timer
 
-/** What a countdown is counting: the work interval itself, or the rest after it. */
+/** What a countdown is counting. */
 enum class TimerPhase {
+    /**
+     * The few seconds before a set: time to get to the bar and take the weight.
+     *
+     * A phase rather than a flag, because it is a real countdown — its 3-2-1 falls out of the
+     * ordinary cue planner with no special case — and because everything that asks "what is on
+     * screen" then gets a real answer instead of a work interval that is lying about having
+     * started.
+     */
+    PREPARE,
+
+    /** The work interval itself. */
     WORK,
+
+    /** The rest after it. */
     REST,
 }
 
@@ -151,15 +164,15 @@ sealed interface TimerState {
 object TimerTransitions {
 
     /**
-     * Begins [program]. The first thing that happens depends on what the first set is made of: a
-     * countdown for timed work, a wait for reps, or the rest itself when there is no work phase.
+     * Begins [program] at its first interval, with a preparation countdown if that interval is
+     * timed work — a set that starts the instant you press a button starts without you.
      */
     fun startProgram(
         runId: String,
         program: TimerProgram,
         settings: CueSettings,
         nowElapsedMs: Long,
-    ): TimerState = enterSet(runId, program, setIndex = 0, settings = settings, nowElapsedMs = nowElapsedMs)
+    ): TimerState = enterStep(runId, program, stepIndex = 0, settings, nowElapsedMs, prepare = true)
 
     /** The single-interval start, kept for a bare rest or one timed set. */
     fun start(
@@ -172,8 +185,8 @@ object TimerTransitions {
     ): TimerState.Running {
         val seconds = (durationMs / 1000).toInt().coerceAtLeast(1)
         val program = when (phase) {
-            TimerPhase.WORK -> TimerProgram.work(seconds, label)
             TimerPhase.REST -> TimerProgram.rest(seconds, label)
+            else -> TimerProgram.work(seconds, label)
         }
         return TimerState.Running(
             runId = runId,
@@ -186,23 +199,47 @@ object TimerTransitions {
         )
     }
 
-    /** Opens set [setIndex] of [program]: its work phase, or its rest when there is no work. */
-    private fun enterSet(
+    /**
+     * Opens one interval of the program.
+     *
+     * [prepare] asks for the lead-in countdown, and is honoured only where it means something:
+     * before timed work. A rest needs no preparing, and a set of reps does not start on its own,
+     * so there is nothing to be late for.
+     */
+    private fun enterStep(
         runId: String,
         program: TimerProgram,
-        setIndex: Int,
+        stepIndex: Int,
         settings: CueSettings,
         nowElapsedMs: Long,
-    ): TimerState = when (program.work) {
-        WorkKind.REPS -> TimerState.AwaitingSet(runId, program, setIndex)
-
-        WorkKind.NONE -> countdown(
-            runId, TimerPhase.REST, program.restSeconds, program, setIndex, settings, nowElapsedMs
+        prepare: Boolean,
+    ): TimerState {
+        val step = program.steps.getOrNull(stepIndex) ?: return TimerState.Finished(
+            runId = runId,
+            phase = TimerPhase.REST,
+            totalMs = 0,
+            program = program,
+            setsCompleted = program.sets,
         )
+        return when {
+            step.phase == TimerPhase.REST -> countdown(
+                runId, TimerPhase.REST, program.restSeconds,
+                program, step.setIndex, settings, nowElapsedMs,
+            )
 
-        WorkKind.TIMED -> countdown(
-            runId, TimerPhase.WORK, program.workSeconds, program, setIndex, settings, nowElapsedMs
-        )
+            program.work == WorkKind.REPS ->
+                TimerState.AwaitingSet(runId, program, step.setIndex)
+
+            prepare -> countdown(
+                runId, TimerPhase.PREPARE, TimerProgram.PREPARE_SECONDS,
+                program, step.setIndex, settings, nowElapsedMs,
+            )
+
+            else -> countdown(
+                runId, TimerPhase.WORK, program.workSeconds,
+                program, step.setIndex, settings, nowElapsedMs,
+            )
+        }
     }
 
     private fun countdown(
@@ -226,9 +263,30 @@ object TimerTransitions {
         )
     }
 
+    /** Which interval of the program a state is sitting on. */
+    private fun stepIndexOf(state: TimerState): Int = when (state) {
+        is TimerState.Running -> state.program.stepIndexOf(state.setIndex, state.phase)
+        is TimerState.Paused -> state.program.stepIndexOf(state.setIndex, state.phase)
+        is TimerState.AwaitingSet -> state.program.stepIndexOf(state.setIndex, TimerPhase.WORK)
+        else -> -1
+    }
+
     /**
-     * What happens once the interval on screen runs out: the rest that follows this set, the work
-     * of the next one, or the end of the program.
+     * Whether the interval at [stepIndex] needs a lead-in, given what ran before it.
+     *
+     * A rest that is long enough already serves as the preparation — its last seconds are the
+     * ones the screen turns amber for — so following it with five more would be five seconds of
+     * standing around. Anything else that lands on a set does need them.
+     */
+    private fun needsPreparation(program: TimerProgram, stepIndex: Int): Boolean {
+        val previous = program.steps.getOrNull(stepIndex - 1) ?: return true
+        return !(previous.phase == TimerPhase.REST &&
+            program.restSeconds >= TimerProgram.PREPARE_SECONDS)
+    }
+
+    /**
+     * What happens once the interval on screen runs out: the work a preparation was for, the rest
+     * that follows this set, the next set, or the end of the program.
      *
      * [nextRunId] becomes the identity of whatever comes next. Each interval is its own run, so
      * the cue bookkeeping that stops one beep being sounded twice does not also stop the next
@@ -240,45 +298,32 @@ object TimerTransitions {
         nowElapsedMs: Long,
         nextRunId: String,
     ): TimerState {
-        val (program, setIndex, phase, totalMs, runId) = when (state) {
-            is TimerState.Running ->
-                Interval(state.program, state.setIndex, state.phase, state.totalMs, state.runId)
+        val interval = intervalOf(state) ?: return state
+        val program = interval.program
 
-            is TimerState.Paused ->
-                Interval(state.program, state.setIndex, state.phase, state.totalMs, state.runId)
-
-            else -> return state
+        // A preparation countdown ends by handing over to the set it was preparing for.
+        if (interval.phase == TimerPhase.PREPARE) {
+            return countdown(
+                nextRunId, TimerPhase.WORK, program.workSeconds,
+                program, interval.setIndex, settings, nowElapsedMs,
+            )
         }
-        val finished = TimerState.Finished(
-            runId = runId,
-            phase = phase,
-            totalMs = totalMs,
-            program = program,
-            setsCompleted = program.sets,
+
+        val stepIndex = program.stepIndexOf(interval.setIndex, interval.phase)
+        val nextStep = stepIndex + 1
+        if (stepIndex < 0 || nextStep >= program.steps.size) {
+            return TimerState.Finished(
+                runId = interval.runId,
+                phase = interval.phase,
+                totalMs = interval.totalMs,
+                program = program,
+                setsCompleted = interval.setIndex + 1,
+            )
+        }
+        return enterStep(
+            nextRunId, program, nextStep, settings, nowElapsedMs,
+            prepare = needsPreparation(program, nextStep),
         )
-        return when (phase) {
-            // Work just ended. A rest follows only when another set is still to come; with no
-            // rest configured the next set starts immediately, which is still a next set.
-            TimerPhase.WORK -> when {
-                program.restFollows(setIndex) -> countdown(
-                    nextRunId, TimerPhase.REST, program.restSeconds,
-                    program, setIndex, settings, nowElapsedMs,
-                )
-
-                setIndex + 1 < program.sets ->
-                    enterSet(nextRunId, program, setIndex + 1, settings, nowElapsedMs)
-
-                else -> finished.copy(setsCompleted = setIndex + 1)
-            }
-
-            // Rest just ended. On to the next set, if there is one.
-            TimerPhase.REST ->
-                if (setIndex + 1 < program.sets) {
-                    enterSet(nextRunId, program, setIndex + 1, settings, nowElapsedMs)
-                } else {
-                    finished.copy(setsCompleted = program.sets)
-                }
-        }
     }
 
     /**
@@ -292,16 +337,10 @@ object TimerTransitions {
         nextRunId: String,
     ): TimerState {
         val program = state.program
-        return if (program.restFollows(state.setIndex)) {
-            countdown(
-                nextRunId, TimerPhase.REST, program.restSeconds,
-                program, state.setIndex, settings, nowElapsedMs,
-            )
-        } else if (state.setIndex + 1 < program.sets) {
-            // No rest configured: straight into the next set.
-            enterSet(nextRunId, program, state.setIndex + 1, settings, nowElapsedMs)
-        } else {
-            TimerState.Finished(
+        val stepIndex = program.stepIndexOf(state.setIndex, TimerPhase.WORK)
+        val nextStep = stepIndex + 1
+        if (stepIndex < 0 || nextStep >= program.steps.size) {
+            return TimerState.Finished(
                 runId = state.runId,
                 phase = TimerPhase.WORK,
                 totalMs = 0,
@@ -309,7 +348,64 @@ object TimerTransitions {
                 setsCompleted = program.sets,
             )
         }
+        return enterStep(
+            nextRunId, program, nextStep, settings, nowElapsedMs,
+            prepare = needsPreparation(program, nextStep),
+        )
     }
+
+    /**
+     * Skips to the next interval, or back to the previous one.
+     *
+     * Landing on a set this way always gets the preparation countdown, whichever direction you
+     * came from: you pressed a button, so the set is about to start on your say-so rather than
+     * flowing out of a rest that gave you time to get ready. Going back from a preparation
+     * countdown steps off the set entirely rather than restarting its lead-in, so that pressing
+     * back twice does not leave you where you began.
+     */
+    fun step(
+        state: TimerState,
+        delta: Int,
+        settings: CueSettings,
+        nowElapsedMs: Long,
+        nextRunId: String,
+    ): TimerState {
+        val interval = intervalOf(state) ?: return state
+        val program = interval.program
+        val current = program.stepIndexOf(interval.setIndex, interval.phase)
+        if (current < 0) return state
+        val target = current + delta
+        if (target < 0) {
+            // Already at the start: restart the first interval rather than doing nothing, which
+            // is the same thing a media player does and is what a mis-tap wants.
+            return enterStep(nextRunId, program, 0, settings, nowElapsedMs, prepare = true)
+        }
+        if (target >= program.steps.size) {
+            return TimerState.Finished(
+                runId = interval.runId,
+                phase = interval.phase,
+                totalMs = interval.totalMs,
+                program = program,
+                setsCompleted = program.sets,
+            )
+        }
+        return enterStep(nextRunId, program, target, settings, nowElapsedMs, prepare = true)
+    }
+
+    /** The interval a state is on, whatever kind of state it is. */
+    private fun intervalOf(state: TimerState): Interval? = when (state) {
+        is TimerState.Running ->
+            Interval(state.program, state.setIndex, state.phase, state.totalMs, state.runId)
+
+        is TimerState.Paused ->
+            Interval(state.program, state.setIndex, state.phase, state.totalMs, state.runId)
+
+        is TimerState.AwaitingSet ->
+            Interval(state.program, state.setIndex, TimerPhase.WORK, 0, state.runId)
+
+        else -> null
+    }
+
 
     fun pause(state: TimerState.Running, nowElapsedMs: Long): TimerState.Paused = TimerState.Paused(
         runId = state.runId,
@@ -323,16 +419,50 @@ object TimerTransitions {
         setIndex = state.setIndex,
     )
 
-    fun resume(state: TimerState.Paused, nowElapsedMs: Long): TimerState.Running = TimerState.Running(
-        runId = state.runId,
-        phase = state.phase,
-        totalMs = state.totalMs,
-        deadlineElapsedMs = nowElapsedMs + state.remainingMs,
-        plan = state.plan,
-        delivered = state.delivered,
-        program = state.program,
-        setIndex = state.setIndex,
-    )
+    /**
+     * Picks a paused countdown back up.
+     *
+     * Resuming inside a set, or a preparation, just carries on — nothing special, because nothing
+     * about the pause changed what you were doing. Resuming a rest with only a moment left is the
+     * exception: unpausing straight into a set would give you no time to get back to the bar, so
+     * a rest with less than the preparation left becomes a preparation instead. It is a fresh
+     * interval with its own id and its own plan, rather than the old rest stretched, because the
+     * old rest has already sounded some of its cues and stretching it would re-owe them.
+     */
+    fun resume(
+        state: TimerState.Paused,
+        nowElapsedMs: Long,
+        settings: CueSettings = CueSettings(),
+        nextRunId: String = state.runId,
+    ): TimerState.Running {
+        val program = state.program
+        val nearlyOver = state.phase == TimerPhase.REST &&
+            state.remainingMs < TimerProgram.PREPARE_SECONDS * 1000L
+        if (nearlyOver) {
+            val stepIndex = program.stepIndexOf(state.setIndex, TimerPhase.REST)
+            val nextStep = program.steps.getOrNull(stepIndex + 1)
+            // Only when a set actually follows. A bare rest that is nearly over is just nearly
+            // over; there is nothing to be ready for.
+            if (nextStep != null && nextStep.phase == TimerPhase.WORK &&
+                program.work == WorkKind.TIMED
+            ) {
+                return countdown(
+                    nextRunId, TimerPhase.PREPARE, TimerProgram.PREPARE_SECONDS,
+                    program, nextStep.setIndex, settings, nowElapsedMs,
+                )
+            }
+        }
+        return TimerState.Running(
+            runId = state.runId,
+            phase = state.phase,
+            totalMs = state.totalMs,
+            deadlineElapsedMs = nowElapsedMs + state.remainingMs,
+            plan = state.plan,
+            delivered = state.delivered,
+            program = program,
+            setIndex = state.setIndex,
+        )
+    }
 
     /** Ends the whole program here, whatever set it was on. */
     fun finish(state: TimerState): TimerState = when (state) {

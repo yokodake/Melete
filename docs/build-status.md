@@ -110,6 +110,25 @@ Changes made after the app was used, from `src/feedback.md`. Schema 3.
 - The library list no longer prints the explanation under every row: the list is for finding an
   exercise, and a paragraph under each one turns scanning into reading.
 
+### Third round: preparation, and transport controls ✅
+
+- **Five seconds before a set.** `TimerPhase.PREPARE` is a real countdown, not a flag, so its
+  3-2-1-go falls out of the ordinary cue planner and the screen has something true to display.
+  It runs before the first set, and before any set you arrive at by pressing next or previous.
+  It does **not** run when a rest flows into a set on its own — the tail of the rest is already
+  the getting-ready, which is what the amber is for — unless that rest is shorter than the
+  preparation itself.
+- **Resuming a nearly-finished rest becomes a preparation.** Unpausing with two seconds of rest
+  left would drop you straight into the set. Below five seconds it hands back a fresh five-second
+  preparation instead of stretching the rest, because the old rest has already sounded some of its
+  cues and stretching it would re-owe them.
+- **Transport controls.** Previous / play-pause / next, because a program is a sequence and that is
+  what a sequence's controls look like. Cancel sits apart and below: it ends the whole thing and
+  has no business being a mis-tap from the button pressed between every set. A reps set shows no
+  play-pause, since nothing is counting.
+- `TimerProgram.steps` flattens a program into its intervals, so sequencing, skipping forward and
+  going back are all one operation on an index.
+
 Not implemented yet, by design: modules, duration capture, dashboard, export — and moving
 an occurrence that already has a date, which belongs to phase 4 because it needs the explicit
 distinction between moving remaining planned work and correcting a historical training date.
@@ -385,6 +404,16 @@ Second round:
 - **Not yet run on a device:** the instrumented suite, against the new timer. The phone was
   unplugged when this round was finished.
 
+Third round:
+
+- 81 unit tests passing, 22 of them `TimerProgramTest`. The new ones pin every preparation rule:
+  only the first set of a rested program is led into, a program with no rest gives every set its
+  five seconds, a rest shorter than the preparation is still followed by one, a bare rest and a
+  set of reps never get one, skipping in either direction always does, and resuming mid-set
+  carries on untouched while resuming a nearly-over rest turns into a preparation under a new id.
+- Three instrumented tests were adjusted and two added, for the preparation that now leads a work
+  start. **Still not run on a device.**
+
 ## Known limitations
 
 - No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
@@ -404,6 +433,12 @@ Second round:
 - A program's set count comes from the prescription, and a prescription of four sets means four
   timer sets. Nothing reconciles that against what was actually logged; the timer still records
   nothing, by design.
+- Starting a one-off *work* timer from the logger now also leads with the five-second preparation.
+  That follows from "always five seconds before a set" but is a behaviour change to a path that
+  was not about programs.
+- Skipping with next/previous moves one interval, not one set: from a rest, next lands on the
+  following set; from a set, previous lands on the rest before it. Previous from the very first
+  interval restarts it rather than doing nothing.
 - A reps program waiting on `AwaitingSet` waits forever. There is no timeout, because there is no
   honest length for a set of repetitions — but it does mean a forgotten timer sits in the
   notification shade until it is cancelled.

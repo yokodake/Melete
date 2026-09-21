@@ -209,6 +209,10 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
 
     fun completeSet() = controller.completeSet()
 
+    fun previous() = controller.previous()
+
+    fun next() = controller.next()
+
     fun pause() = controller.pause()
 
     fun resume() = controller.resume()

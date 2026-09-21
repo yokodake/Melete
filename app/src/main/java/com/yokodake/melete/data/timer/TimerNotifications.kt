@@ -137,6 +137,7 @@ class TimerNotifications(context: Context) {
 }
 
 internal fun TimerPhase.title(): String = when (this) {
+    TimerPhase.PREPARE -> "Get ready"
     TimerPhase.WORK -> "Work"
     TimerPhase.REST -> "Rest"
 }

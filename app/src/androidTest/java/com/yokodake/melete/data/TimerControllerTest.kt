@@ -9,6 +9,7 @@ import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerCue
 import com.yokodake.melete.data.timer.TimerNotifications
 import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.timer.TimerStore
 import kotlinx.coroutines.CoroutineScope
@@ -134,8 +135,10 @@ class TimerControllerTest {
     @Test
     fun everyPlannedCueIsDeliveredOnceAndInOrder() = runBlocking {
         val controller = controller()
+        // A rest, so the countdown under test is the whole run: starting work leads with a
+        // preparation, which is covered on its own below.
         controller.start(
-            TimerPhase.WORK,
+            TimerPhase.REST,
             durationSeconds = 4,
             settings = CueSettings(
                 thirtySecondWarning = false,
@@ -150,6 +153,38 @@ class TimerControllerTest {
             listOf(TimerCue.COUNT_3, TimerCue.COUNT_2, TimerCue.COUNT_1, TimerCue.FINISH),
             cues.played.toList(),
         )
+        controller.cancel()
+    }
+
+    @Test
+    fun startingWorkLeadsWithAPreparationCountdown() = runBlocking {
+        val controller = controller()
+        controller.start(TimerPhase.WORK, durationSeconds = 30, settings = endOnly)
+
+        // A set that begins the instant the button is pressed begins without you.
+        val state = controller.state.value as TimerState.Running
+        assertEquals(TimerPhase.PREPARE, state.phase)
+        assertEquals(TimerProgram.PREPARE_SECONDS * 1000L, state.totalMs)
+
+        controller.cancel()
+    }
+
+    @Test
+    fun aPreparationHandsOverToTheSetItWasPreparingFor() = runBlocking {
+        val controller = controller()
+        controller.start(TimerPhase.WORK, durationSeconds = 30, settings = endOnly)
+        val prepareRunId = (controller.state.value as TimerState.Running).runId
+
+        // Five seconds of preparation, then the set itself under a new run id.
+        delay(TimerProgram.PREPARE_SECONDS * 1000L + 800)
+
+        val state = controller.state.value as TimerState.Running
+        assertEquals(TimerPhase.WORK, state.phase)
+        assertEquals(30_000L, state.totalMs)
+        assertTrue("each interval is its own run", state.runId != prepareRunId)
+        // The end of the preparation is the "go", so it sounds.
+        assertEquals(listOf(TimerCue.FINISH), cues.played.toList())
+
         controller.cancel()
     }
 
