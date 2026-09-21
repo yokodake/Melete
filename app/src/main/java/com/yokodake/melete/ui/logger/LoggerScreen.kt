@@ -129,9 +129,11 @@ fun LoggerScreen(
                 ),
                 title = {
                     Column {
+                        // Bigger than a top bar usually goes: the screen is a table of numbers,
+                        // and what those numbers are about should not be the smallest claim on it.
                         Text(
                             text = occurrence?.name ?: "",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleLarge,
                         )
                         Text(
                             text = occurrence?.trainingDate?.let(WeekMath::dayLabel)

@@ -1,6 +1,6 @@
 # Build status
 
-Last updated: 2026-09-20, end of phase 3.
+Last updated: 2026-09-21, after the sixth round of use feedback.
 
 ## Completed phases
 
@@ -271,6 +271,70 @@ gesture must not be the only route to an action.
 
 Not implemented yet, by design: modules, duration capture, dashboard, export.
 
+### Sixth round: logging becomes one act ✅
+
+Used on the phone, and most of it was wrong. Five changes, all of them the user's calls.
+
+**The tick was the write.** Ticking a row recorded a set and unticking deleted one, so the table
+was a live database view wearing a form's clothes and *Mark done* had nothing left to do. The
+table is a draft now: ticking, unticking and typing cost nothing, and **marking done writes the
+whole workout in one transaction, sets the occurrence completed and closes the screen**. Pressing
+it again on a logged workout *replaces* what was written rather than adding to it
+(`replaceSetsForOccurrence`), so correcting a log is the same gesture as making one — the button
+says *Save changes* to admit it. `SetRow.done` is a plain `Boolean` instead of a list of database
+ids, which is the whole change in one line.
+
+- Planned rows start ticked: the ordinary case is that you did what you planned, and unticking is
+  how you say otherwise.
+- A recorded load stays editable. The tick says the set happened, the load says what it weighed,
+  and correcting the second is not a statement about the first.
+- Nothing is loggable until every ticked set says what it weighed **or** a max load stands for all
+  of them. The button stays enabled and says which is missing rather than going dead and silent.
+- The max load is a fallback, never an override: a row that says something of its own keeps it.
+  It is also *deduced* from the rows — the heaviest set is the max load — so it cannot sit empty
+  above a table that plainly answers it.
+- Unilateral rows fall back per side, so "60 both" and "60 left, 50 right" both work.
+
+**One date per placement.** 4A shipped a planned date and a performed date allowed to disagree,
+reported as `Planned Mon · Logged Tue`. Cut, on the rule *keep the fact that I did it, never the
+fact that I planned it*. Moving a placement re-dates its sets with it; unlogged cards never move by
+themselves, which is what keeps the planner worth reading backwards. Trained work cannot be made
+unscheduled, because it happened on a day.
+
+**Deleting is as complete as the history allows.** Nothing refers to it → the row and its default
+prescription go. Planned but never trained → those planned copies go too, because a plan never
+carried out is a mistake as well. One logged set → tombstone, and it leaves the library only. The
+dialog says which of the three it is about to do; the count is re-taken inside the transaction, so
+a set logged between asking and confirming still protects itself.
+
+**Planning got smaller.** *Copy to…* became **Duplicate** — same week, unscheduled, at the top,
+no dialog. Adding from the library asks for **a week and nothing finer** (last week included, so a
+session trained but never written down can still go where it happened); the day is a later
+question, answered in the planner.
+
+**Density.** Material's `OutlinedTextField` enforces a 56dp minimum height and 16dp of padding on
+four sides — none of it reachable through parameters, and absurd for a grid of two-digit numbers.
+`ui/components/CompactField.kt` rebuilds the field from `BasicTextField` and Material's own
+decoration box, same container and colours, at 10dp × 6dp. Every text field in the app goes
+through it. The tick stopped being an `IconButton` (48dp enforced touch target, which was setting
+the height of every row) and the rows moved into one list item so their spacing is 4dp rather than
+the page's 8dp. A set row went from 68dp to 48dp, and effort and max load each went from a heading
+plus a full-width box to a single line: about 175dp, with no font made smaller.
+
+Also: the countdown left the logger entirely (the exercise screen owns that button), the note is
+written in place instead of behind a dialog, effort is a dropdown starting from what the plan
+asked for, skip moved into the top-bar menu, and a done card in the planner shows the heaviest set
+it took, in bold.
+
+### Release builds ✅
+
+`release` is signed with the **debug key**, deliberately. This app is sideloaded onto one phone and
+never distributed, and sharing the signature with the debug build is what lets a release install
+over it as an *update* instead of demanding an uninstall — which would take the training history
+with it. `optimization { enable = false }`, so R8 does not run and cannot strip Room or
+kotlinx.serialization reflection; turning minification on is the moment to re-test the database
+paths. A release build is not debuggable, so `adb run-as` cannot read the database from it.
+
 ## Architecture as built
 
 ```
@@ -291,6 +355,9 @@ com.yokodake.melete
     model/ActualSetPayload.kt     versioned named-field actual-set payload
     model/ExerciseCategory.kt     the closed set of training-purpose categories
   ui/components/            PrescriptionFormState, the shared prescription fields, CategoryDot
+                            CompactField.kt   every text field in the app, sized for its content
+                            Chip.kt           SAMPLE / Done / Skipped, shared by week and library
+                            PlanTargetDialog  week+day for a move, week-only for library adds
   ui/theme/SemanticColors.kt  colours that carry a meaning, kept out of the dynamic scheme
   ui/week/                  WeekScreen, WeekViewModel, WeekUiState, PrescriptionSummary
   ui/detail/                ExerciseDetailScreen + view model: what a workout is, and what to
@@ -440,11 +507,19 @@ foreground service types, background audio and exact alarms.
 | Instrumented tests, keeping app data | `scripts/device-tests.sh` |
 | Instrumented tests via Gradle (WIPES app data, see below) | `./gradlew :app:connectedDebugAndroidTest` |
 | Install on a connected device | `./gradlew :app:installDebug` |
+| Build a release APK | `./gradlew :app:assembleRelease` |
+| Install the release build (keeps data) | `./gradlew :app:installRelease` |
 | Install a built APK by hand | `adb install -r app/build/outputs/apk/debug/app-debug.apk` |
 | Launch | `adb shell am start -n com.yokodake.melete/.MainActivity` |
-| Make audio violations loud instead of silent | `adb shell cmd audio set-enable-hardening throw` |
+| Make audio violations loud instead of silent | `adb shell cmd audio set-hardening throw` |
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`.
+APKs: `app/build/outputs/apk/debug/app-debug.apk`,
+`app/build/outputs/apk/release/app-release.apk`.
+
+The release build is signed with the debug key, so it installs **over** a debug build as an update
+and the training record survives. It is not debuggable, so `adb run-as` — the only way to read the
+database off the phone without root — works against debug builds only. Put a debug build back on
+first if the data needs inspecting.
 
 **`./gradlew connectedDebugAndroidTest` uninstalls the app when it finishes**, and uninstalling
 deletes `/data/user/0/com.yokodake.melete` — the whole training record on that device. Use
@@ -453,6 +528,26 @@ and drives `am instrument` directly. Reach for the Gradle task only on a device 
 matter.
 
 ## Checks actually run
+
+Sixth round (logging as one act, density, release build):
+
+- **104 unit tests passing.** 10 of them a new `SetTableTest` covering the commit rules directly:
+  every set carrying its own load is enough; a max load stands for the sets that have none but
+  never overrides one that says something of its own; one missing load blocks the table; an
+  unticked set is neither required to say what it weighed nor written; nothing ticked means
+  nothing to log; an unmeasured exercise needs only a tick; a unilateral row falls back per side.
+  5 more in `ExerciseRemovalTest` on the three-way delete decision, including that one logged set
+  outranks forty planned copies.
+- `assembleDebug`, `assembleDebugAndroidTest`, `assembleRelease` all clean.
+- The **release build is installed and running on the Pixel 9**, confirmed non-debuggable
+  (`flags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP KILL_AFTER_RESTORE ]`, no `DEBUGGABLE`),
+  installed as an update over the debug build with the training record intact.
+- The unilateral write path was checked against the real database pulled off the phone: a
+  4-set unilateral workout stores 8 rows, `LEFT`/`RIGHT` correctly paired and ordered by
+  `orderIndex`.
+- **Not verified:** none of the logging changes have been driven end to end on the device by the
+  author of them. The screens have been looked at in screenshots; marking done, reopening a logged
+  workout and correcting it have not been exercised beyond the unit tests.
 
 Phase 1:
 
@@ -507,7 +602,7 @@ Phase 3:
   pause and resume not repeating the warning, a run surviving the controller that owned it, and an
   alarm delivering the cue when the countdown itself never got there.
 - The cue was played through the real `TimerCuePlayer` with
-  `adb shell cmd audio set-enable-hardening throw` in force: focus was granted and no
+  `adb shell cmd audio set-hardening throw` in force: focus was granted and no
   `AudioHardening` entries appeared in logcat, so the `USAGE_ALARM` attributes are accepted rather
   than silently dropped.
 - A crash found by these tests and fixed: starting the foreground service and then stopping it
@@ -560,7 +655,15 @@ Third round:
   out from under it. The choice presented is therefore "keep it" or "delete it and the sets".
   Accepted deliberately: the user's rule is to keep what was done, and a trained card *is* that
   record, so there is nothing to detach it from.
-- Reordering is move-up / move-down from the menu. Drag-and-drop was explicitly optional.
+- Reordering is move-up / move-down from the menu. Drag-and-drop was explicitly optional, and
+  gating reordering behind an explicit "update week" mode — with move-up at the top of a day
+  carrying into the previous day — is asked for and not yet built.
+- **The logger's draft is lost if you leave without marking done.** Ticks, loads and the note are
+  all held in memory until the one write. Consistent, and the same button accounts for everything
+  the screen has to say, but there is no autosave.
+- Logged loads no longer prefill from the previous session. They start empty so that the
+  "every set filled, or a max load" rule means something; previous results stay visible above as
+  the reference.
 - An exercise that has been kept rather than deleted cannot be un-kept from the UI;
   `restoreExercise` exists in the repository with nothing calling it yet.
 
@@ -618,10 +721,19 @@ Third round:
 - The month abbreviation in week labels comes from the device locale (JDK/CLDR data), e.g. `Sep`
   in `en-US` and `Sept` in `en-GB`. Unit tests pin `Locale.US`.
 
-## Next step — phase 4B
+## Next step
 
-Modules as reusable scheduling units on top of this. Before that, two things from 4A want a device:
-the migration test, and the acceptance scenarios above.
+**Phase 4B — modules as reusable scheduling units.** Deferred while the logger was made usable;
+the user has been training against the app in the meantime and the feedback has been worth more
+than the next phase.
+
+Owed before or alongside it:
+
+- **Gating the planner behind an edit mode**, so cards only move when you have said you are
+  reorganising, with move-up/down crossing day boundaries. Explicitly asked for, explicitly
+  deferred.
+- The 4A acceptance scenarios end to end. The instrumented suite (34 tests) passes on the Pixel 9
+  and covers the schema-4 migration, but it exercises the database, not the screens.
 
 ## Superseded next step
 
