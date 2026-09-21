@@ -73,12 +73,48 @@ data class SetDraft(
     )
 }
 
+/**
+ * One line of the set table: what the plan asks for, what you are about to record, and whether it
+ * has happened.
+ *
+ * A row exists before anything is logged — that is the point. The plan says four sets, so four
+ * lines appear, prefilled, and ticking one is what turns a suggestion into a record. An unticked
+ * row is not evidence of anything, which is why prefilling it is safe.
+ */
+data class SetRow(
+    val number: Int,
+    /** From the plan, shown but not edited here. */
+    val reps: Int?,
+    /** The load, or the left-hand load when the exercise is unilateral. */
+    val load: String = "",
+    val loadRight: String = "",
+    /** Ids of the actual sets this row wrote: one, or two for a unilateral row. */
+    val recordedIds: List<String> = emptyList(),
+) {
+    val done: Boolean get() = recordedIds.isNotEmpty()
+}
+
+/**
+ * The table as a whole.
+ *
+ * [maxLoad] is a filler and a headline, not a separate record: the heaviest set is the number that
+ * matters at a glance, and typing it once is usually the fastest way to fill a session where every
+ * set was the same.
+ */
+data class SetTable(
+    val rows: List<SetRow> = emptyList(),
+    val maxLoad: String = "",
+    val maxLoadRight: String = "",
+    val effort: EffortLevel? = null,
+)
+
 data class LoggerUiState(
     val loading: Boolean = true,
     val occurrence: PlannedOccurrence? = null,
     val sets: List<PerformedSet> = emptyList(),
     val previousResults: List<PreviousResult> = emptyList(),
     val draft: SetDraft = SetDraft(),
+    val table: SetTable = SetTable(),
     /** The training date the next confirmed set will be filed under. */
     val targetDate: LocalDate = LocalDate.now(),
     val today: LocalDate = LocalDate.now(),
@@ -158,8 +194,10 @@ class LoggerViewModel(
     private val occurrenceId: String = savedStateHandle.toRoute<LoggerDestination>().occurrenceId
 
     private val draft = MutableStateFlow(savedStateHandle.readDraft())
+    private val table = MutableStateFlow(SetTable())
     private val transient = MutableStateFlow(TransientState())
     private var prefilled = false
+    private var seeded = false
 
     private data class TransientState(
         val targetDate: LocalDate? = null,
@@ -176,8 +214,8 @@ class LoggerViewModel(
             val previous = occurrenceDetail
                 ?.let { repository.observePreviousResults(it.occurrence.exerciseId, occurrenceId) }
                 ?: flowOf(emptyList())
-            combine(previous, draft, transient) { previousResults, currentDraft, extras ->
-                build(occurrenceDetail, previousResults, currentDraft, extras)
+            combine(previous, draft, transient, table) { previousResults, currentDraft, extras, rows ->
+                build(occurrenceDetail, previousResults, currentDraft, extras, rows)
             }
         }
         .stateIn(
@@ -197,6 +235,7 @@ class LoggerViewModel(
                 .observePreviousResults(first.occurrence.exerciseId, occurrenceId).first()
             draft.value = initialDraft(first, previous)
             persistDraft()
+            seedTable(first, previous)
         }
     }
 
@@ -205,6 +244,7 @@ class LoggerViewModel(
         previousResults: List<PreviousResult>,
         currentDraft: SetDraft,
         extras: TransientState,
+        rows: SetTable,
     ): LoggerUiState {
         val today = LocalDate.now(clock)
         return LoggerUiState(
@@ -213,6 +253,7 @@ class LoggerViewModel(
             sets = occurrenceDetail?.sets.orEmpty(),
             previousResults = previousResults,
             draft = currentDraft,
+            table = rows,
             targetDate = extras.targetDate
                 ?: occurrenceDetail?.occurrence?.trainingDate
                 ?: today,
@@ -261,6 +302,161 @@ class LoggerViewModel(
     private fun nextSide(sets: List<PerformedSet>): BodySide {
         val last = sets.maxByOrNull { it.orderIndex } ?: return BodySide.LEFT
         return if (last.side == BodySide.LEFT) BodySide.RIGHT else BodySide.LEFT
+    }
+
+    // ------------------------------------------------------------- table
+
+    /**
+     * Builds the table once, from the plan and from whatever is already recorded.
+     *
+     * Seeded rather than derived on every emission because the user types into it: recomputing it
+     * from the database would throw away a half-entered load the moment anything else changed.
+     */
+    private fun seedTable(detail: OccurrenceDetail, previousResults: List<PreviousResult>) {
+        if (seeded) return
+        seeded = true
+        val occurrence = detail.occurrence
+        val planned = occurrence.prescription?.sets ?: 0
+        val recorded = detail.sets.sortedBy { it.orderIndex }
+        // A unilateral row wrote two sets, left then right, so they come back in pairs.
+        val grouped = if (occurrence.unilateral) recorded.chunked(2) else recorded.map { listOf(it) }
+
+        // Last time is the best guess at this time. It is only a suggestion: nothing is recorded
+        // until a row is ticked.
+        val lastTime = previousResults.firstOrNull()?.sets.orEmpty()
+        val suggestedLeft = lastTime.firstOrNull { it.side != BodySide.RIGHT }?.load().orEmpty()
+        val suggestedRight = lastTime.firstOrNull { it.side == BodySide.RIGHT }?.load().orEmpty()
+
+        val count = maxOf(planned, grouped.size).coerceAtLeast(1)
+        table.value = SetTable(
+            rows = (0 until count).map { index ->
+                val done = grouped.getOrNull(index)
+                SetRow(
+                    number = index + 1,
+                    reps = occurrence.prescription?.targetReps,
+                    load = done?.getOrNull(0)?.load() ?: suggestedLeft,
+                    loadRight = done?.getOrNull(1)?.load() ?: suggestedRight,
+                    recordedIds = done?.map { it.id }.orEmpty(),
+                )
+            },
+            maxLoad = suggestedLeft,
+            maxLoadRight = suggestedRight,
+        )
+    }
+
+    private fun PerformedSet.load(): String? = payload.measurement?.value?.let(::trimNumber)
+
+    /**
+     * Sets one row's load, and carries it down to every row below that has not been ticked yet.
+     *
+     * Usually one set is the odd one out and the rest follow it, so typing the change once and
+     * having the remainder agree is the whole ergonomic point. Rows already recorded are left
+     * alone: those are history, and history does not get rewritten by typing above it.
+     */
+    fun setRowLoad(number: Int, value: String, right: Boolean = false) {
+        table.update { current ->
+            current.copy(
+                rows = current.rows.map { row ->
+                    when {
+                        row.number < number -> row
+                        row.number > number && row.done -> row
+                        else -> row.withLoad(value, right)
+                    }
+                }
+            )
+        }
+    }
+
+    /** Fills every row that has not been ticked yet. */
+    fun setMaxLoad(value: String, right: Boolean = false) {
+        table.update { current ->
+            val rows = current.rows.map { if (it.done) it else it.withLoad(value, right) }
+            if (right) {
+                current.copy(maxLoadRight = value, rows = rows)
+            } else {
+                current.copy(maxLoad = value, rows = rows)
+            }
+        }
+    }
+
+    private fun SetRow.withLoad(value: String, right: Boolean) =
+        if (right) copy(loadRight = value) else copy(load = value)
+
+    fun setTableEffort(effort: EffortLevel?) {
+        table.update { it.copy(effort = effort) }
+    }
+
+    /**
+     * Records the row, or takes it back.
+     *
+     * A unilateral row writes two actual sets, one per side, because left and right are separately
+     * performed work even though they are one line on screen. Unticking deletes exactly what that
+     * row wrote and nothing else.
+     */
+    fun toggleRow(number: Int) {
+        val state = uiState.value
+        val occurrence = state.occurrence ?: return
+        val row = state.table.rows.firstOrNull { it.number == number } ?: return
+        viewModelScope.launch {
+            val ids = if (row.done) {
+                row.recordedIds.forEach { repository.deleteSet(it) }
+                emptyList()
+            } else if (occurrence.unilateral) {
+                listOf(
+                    record(occurrence, row, row.load, BodySide.LEFT, state.targetDate),
+                    record(occurrence, row, row.loadRight, BodySide.RIGHT, state.targetDate),
+                )
+            } else {
+                listOf(record(occurrence, row, row.load, null, state.targetDate))
+            }
+            table.update { current ->
+                current.copy(
+                    rows = current.rows.map {
+                        if (it.number == number) it.copy(recordedIds = ids) else it
+                    }
+                )
+            }
+        }
+    }
+
+    private suspend fun record(
+        occurrence: PlannedOccurrence,
+        row: SetRow,
+        load: String,
+        side: BodySide?,
+        trainingDate: LocalDate,
+    ): String = repository.logSet(
+        occurrenceId = occurrenceId,
+        payload = ActualSetPayload(
+            reps = row.reps,
+            measurement = load.toDoubleOrNull()?.let { value ->
+                occurrence.measurementUnit?.let { unit ->
+                    Measurement(
+                        value,
+                        unit,
+                        occurrence.measurementMeaning ?: MeasurementMeaning.TOTAL_LOAD,
+                    )
+                }
+            },
+            effort = uiState.value.table.effort,
+        ),
+        side = side,
+        trainingDate = trainingDate,
+    )
+
+    /** An extra set beyond the plan. Four planned and six performed is a perfectly good session. */
+    fun addRow() {
+        table.update { current ->
+            val last = current.rows.lastOrNull()
+            current.copy(
+                rows = current.rows + SetRow(
+                    number = (last?.number ?: 0) + 1,
+                    reps = last?.reps,
+                    load = last?.load.orEmpty(),
+                    loadRight = last?.loadRight.orEmpty(),
+                )
+            )
+        }
     }
 
     // ------------------------------------------------------------- draft

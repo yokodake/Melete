@@ -184,7 +184,7 @@ class ExerciseDetailViewModel(
             occurrenceState = occurrence?.state,
             comment = occurrence?.comment,
             definitionMissing = library == null,
-            timerProgram = timerProgram(name, mode, prescription),
+            timerProgram = timerProgram(name, mode, prescription, occurrence?.id),
             prescriptionEditor = extras.prescriptionEditor,
             replacePrompt = extras.replacePrompt,
         )
@@ -200,12 +200,14 @@ class ExerciseDetailViewModel(
         name: String,
         mode: ExerciseMode,
         prescription: PrescriptionPayload?,
+        occurrenceId: String? = null,
     ): TimerProgram {
         val sets = (prescription?.sets ?: 1).coerceIn(1, 99)
         val rest = prescription?.restSeconds?.takeIf { it > 0 }
             ?: timer.lastDurationSeconds(TimerPhase.REST)
         val timed = mode == ExerciseMode.DURATION || mode == ExerciseMode.ACTIVITY
         val workSeconds = prescription?.targetDurationSeconds?.takeIf { timed && it > 0 }
+        val workReps = prescription?.targetReps?.takeIf { mode == ExerciseMode.REPETITIONS }
         return when {
             workSeconds != null -> TimerProgram(
                 sets = sets,
@@ -213,17 +215,20 @@ class ExerciseDetailViewModel(
                 workSeconds = workSeconds,
                 restSeconds = rest,
                 label = name,
+                occurrenceId = occurrenceId,
             )
 
             mode == ExerciseMode.REPETITIONS -> TimerProgram(
                 sets = sets,
                 work = WorkKind.REPS,
+                workReps = workReps,
                 restSeconds = rest,
                 label = name,
+                occurrenceId = occurrenceId,
             )
 
             // A timed exercise with no target: there is nothing to count but the rest.
-            else -> TimerProgram.rest(rest, name)
+            else -> TimerProgram.rest(rest, name, occurrenceId)
         }
     }
 

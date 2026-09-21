@@ -9,6 +9,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +36,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -51,6 +53,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,6 +65,7 @@ import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.timer.WorkKind
 import com.yokodake.melete.ui.components.NumberField
+import com.yokodake.melete.ui.theme.MeleteTheme
 import com.yokodake.melete.ui.theme.aboutToStartColor
 import com.yokodake.melete.ui.theme.workingColor
 import com.yokodake.melete.ui.week.PrescriptionSummary
@@ -71,11 +75,12 @@ private const val ABOUT_TO_START_MS = 5_000L
 
 @Composable
 fun TimerRoute(
+    onLog: (String) -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     viewModel: TimerViewModel = viewModel(factory = TimerViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    TimerScreen(state = state, viewModel = viewModel, bottomBar = bottomBar)
+    TimerScreen(state = state, viewModel = viewModel, onLog = onLog, bottomBar = bottomBar)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,6 +88,7 @@ fun TimerRoute(
 fun TimerScreen(
     state: TimerUiState,
     viewModel: TimerViewModel,
+    onLog: (String) -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -116,14 +122,8 @@ fun TimerScreen(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                title = {
-                    Column {
-                        Text("Timer", style = MaterialTheme.typography.titleMedium)
-                        state.label?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                },
+                // The exercise name lives in the body, large, so the bar does not repeat it.
+                title = { Text("Timer", style = MaterialTheme.typography.titleMedium) },
                 // The cues live behind the overflow because they are settings, not controls: they
                 // are tuned once in a while and then want to be out of the way of the clock.
                 actions = { CueMenu(state = state, onCues = viewModel::setCueSettings) },
@@ -151,7 +151,6 @@ fun TimerScreen(
 
                 is TimerState.AwaitingSet -> AwaitingSet(
                     state = state,
-                    onSetDone = viewModel::completeSet,
                     onPrevious = viewModel::previous,
                     onNext = viewModel::next,
                     onCancel = viewModel::cancel,
@@ -160,6 +159,12 @@ fun TimerScreen(
                 is TimerState.Finished -> FinishedCard(
                     state = current,
                     onDismiss = viewModel::dismiss,
+                    onLog = { occurrenceId ->
+                        // Dismiss first: coming back to a timer still showing a run it has
+                        // already been thanked for is confusing.
+                        viewModel.dismiss()
+                        onLog(occurrenceId)
+                    },
                 )
 
                 is TimerState.Interrupted -> InterruptedCard(
@@ -251,8 +256,24 @@ private fun CueItem(label: String, checked: Boolean, onChange: (Boolean) -> Unit
     )
 }
 
+/**
+ * What you are doing, and where you are in it.
+ *
+ * The exercise name leads and is the most prominent thing on the screen, because it is what
+ * changes from set to set once circuits and supersets exist: it has to be the part you read first
+ * and the part that is easy to make say something else. A countdown built on this screen belongs
+ * to no exercise and shows nothing here.
+ */
 @Composable
-private fun SetHeading(state: TimerUiState, what: String) {
+private fun ProgramHeading(state: TimerUiState, phaseLabel: String? = null) {
+    state.label?.let {
+        Text(
+            text = it,
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+    }
     state.setProgress?.let {
         Text(
             text = it,
@@ -260,14 +281,31 @@ private fun SetHeading(state: TimerUiState, what: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    phaseLabel?.let {
+        Text(
+            text = it,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * One line that is always present, whatever the timer is doing.
+ *
+ * Paused and what-comes-next share the row on purpose: a line that appears and disappears shifts
+ * everything below it, and a clock you glance at mid-set should not rearrange itself under you.
+ */
+@Composable
+private fun StatusLine(state: TimerUiState) {
     Text(
-        text = what,
-        style = if (state.setProgress == null) {
-            MaterialTheme.typography.titleMedium
-        } else {
-            MaterialTheme.typography.bodyLarge
+        text = when {
+            state.isPaused -> "Paused"
+            else -> nextUp(state)?.let { "Next: $it" } ?: "Last one"
         },
+        style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
     )
 }
 
@@ -280,9 +318,9 @@ private fun ActiveCountdown(
     onNext: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    SetHeading(
-        state,
-        when (state.shownPhase) {
+    ProgramHeading(
+        state = state,
+        phaseLabel = when (state.shownPhase) {
             TimerPhase.PREPARE -> "Get ready"
             TimerPhase.WORK -> "Work"
             TimerPhase.REST -> "Rest"
@@ -300,32 +338,31 @@ private fun ActiveCountdown(
             modifier = Modifier.align(Alignment.Center),
         )
     }
-    if (state.isPaused) {
-        Text(
-            text = "Paused",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    StatusLine(state)
     Transport(
         playing = state.isRunning,
+        reps = false,
         onPrevious = onPrevious,
-        onPlayPause = if (state.isRunning) onPause else onResume,
+        onPrimary = if (state.isRunning) onPause else onResume,
         onNext = onNext,
     )
     OutlinedButton(onClick = onCancel) { Text("Cancel") }
 }
 
 /**
- * Previous, play/pause, next — the controls of something that plays a sequence, because that is
- * what a program is. Cancel sits apart and below: it ends the whole thing, and it has no business
- * being a mis-tap away from the button you press between every set.
+ * Previous, primary, next — the controls of something that plays a sequence, because that is what
+ * a program is. The primary slot is play/pause for a countdown and a tick for a set of reps, at
+ * the same size either way so that nothing moves when the program changes kind.
+ *
+ * Cancel sits apart and below: it ends the whole thing, and has no business being a mis-tap away
+ * from the button pressed between every set.
  */
 @Composable
 private fun Transport(
     playing: Boolean,
+    reps: Boolean,
     onPrevious: () -> Unit,
-    onPlayPause: (() -> Unit)?,
+    onPrimary: (() -> Unit)?,
     onNext: () -> Unit,
 ) {
     Row(
@@ -340,17 +377,27 @@ private fun Transport(
         ) {
             Icon(painterResource(R.drawable.ic_timer_previous), contentDescription = null)
         }
-        if (onPlayPause != null) {
+        if (onPrimary != null) {
             FilledIconButton(
-                onClick = onPlayPause,
+                onClick = onPrimary,
                 modifier = Modifier
                     .size(72.dp)
-                    .semantics { contentDescription = if (playing) "Pause" else "Resume" },
+                    .semantics {
+                        contentDescription = when {
+                            reps -> "Set done"
+                            playing -> "Pause"
+                            else -> "Resume"
+                        }
+                    },
                 colors = IconButtonDefaults.filledIconButtonColors(),
             ) {
                 Icon(
                     painter = painterResource(
-                        if (playing) R.drawable.ic_timer_pause else R.drawable.ic_timer_play
+                        when {
+                            reps -> R.drawable.ic_timer_done
+                            playing -> R.drawable.ic_timer_pause
+                            else -> R.drawable.ic_timer_play
+                        }
                     ),
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
@@ -369,45 +416,46 @@ private fun Transport(
 }
 
 /**
- * Reps cannot be counted by a clock, so the program stops here and waits. The button is the whole
- * screen's worth of target, because it is pressed with chalk on the hands and the lungs going.
+ * Reps cannot be counted by a clock, so the program stops here and waits.
+ *
+ * The tick is the primary control, in the same slot and at the same size as play/pause, so the row
+ * does not change shape between a timed set and a counted one. It calls the same thing as next,
+ * deliberately: from a waiting set those two land on exactly the same interval, and whether the
+ * set really happened is a question for the log, not for the timer, which records nothing either
+ * way.
  */
 @Composable
 private fun AwaitingSet(
     state: TimerUiState,
-    onSetDone: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    SetHeading(state, "Do your reps")
-    Button(
-        onClick = onSetDone,
-        modifier = Modifier
-            .fillMaxWidth()
-            .size(width = 280.dp, height = 140.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-        ),
-    ) {
-        Text("Set done", style = MaterialTheme.typography.headlineMedium)
-    }
+    ProgramHeading(state)
     Text(
-        text = state.state.activeProgram
-            ?.takeIf { it.restSeconds > 0 }
-            ?.let { "The ${PrescriptionSummary.duration(it.restSeconds)} rest starts when you tap." }
-            ?: "The next set starts when you tap.",
-        style = MaterialTheme.typography.bodyMedium,
+        text = state.state.activeProgram?.workLabel(unknownReps = "ALLEZ !").orEmpty(),
+        style = MaterialTheme.typography.displayLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
+        modifier = Modifier.padding(vertical = 72.dp),
     )
-    // No play/pause: nothing is counting, so there is nothing to pause.
-    Transport(playing = false, onPrevious = onPrevious, onPlayPause = null, onNext = onNext)
+    StatusLine(state)
+    Transport(
+        playing = false,
+        reps = true,
+        onPrevious = onPrevious,
+        onPrimary = onNext,
+        onNext = onNext,
+    )
     OutlinedButton(onClick = onCancel) { Text("Cancel") }
 }
 
 @Composable
-private fun FinishedCard(state: TimerState.Finished, onDismiss: () -> Unit) {
+private fun FinishedCard(
+    state: TimerState.Finished,
+    onDismiss: () -> Unit,
+    onLog: (String) -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -432,11 +480,18 @@ private fun FinishedCard(state: TimerState.Finished, onDismiss: () -> Unit) {
                 Text(it, style = MaterialTheme.typography.bodyMedium)
             }
             Text(
-                text = "Nothing was recorded. Confirm a set in the logger if you did the work.",
+                text = "Nothing was recorded here. Only you can say the work happened.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
-            Button(onClick = onDismiss) { Text("Done") }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onDismiss) { Text("OK") }
+                // Offered only when the countdown came from a planned exercise; a timer built on
+                // this screen has nothing to open.
+                state.program.occurrenceId?.let { occurrenceId ->
+                    Button(onClick = { onLog(occurrenceId) }) { Text("Log") }
+                }
+            }
         }
     }
 }
@@ -629,4 +684,202 @@ internal fun formatClock(millis: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "$minutes:${seconds.toString().padStart(2, '0')}"
+}
+
+/**
+ * One set of this program, in words.
+ *
+ * A `when` over [WorkKind] with no `else`: used as an expression it must be exhaustive, so the
+ * compiler refuses to build if a kind goes unhandled. That is the whole reason work is an enum
+ * rather than an `isTimed` boolean — add a fourth kind and every place that has to care becomes a
+ * compile error instead of a silently wrong string.
+ */
+private fun TimerProgram.workLabel(unknownReps: String = "a set"): String = when (work) {
+    // A rep count is optional even for a reps program: one built on this screen has no number.
+    WorkKind.REPS -> workReps?.let { "$it reps" } ?: unknownReps
+    WorkKind.TIMED -> PrescriptionSummary.duration(workSeconds)
+    WorkKind.NONE -> PrescriptionSummary.duration(restSeconds)
+}
+
+/** What follows the interval on screen, or null when this is the last one. */
+private fun nextUp(state: TimerUiState): String? {
+    val program = state.state.activeProgram ?: return null
+    val setIndex = (state.state.currentSet ?: return null) - 1
+    val next = program.stepAfter(setIndex, state.shownPhase) ?: return null
+    return when (next.phase) {
+        TimerPhase.REST -> "${PrescriptionSummary.duration(program.restSeconds)} rest"
+        TimerPhase.WORK, TimerPhase.PREPARE -> program.workLabel()
+    }
+}
+
+// ---------------------------------------------------------------- previews
+
+/**
+ * The screen's body, minus the scaffold, on the background the real screen would be wearing.
+ *
+ * The colour is the thing worth previewing: it is what the timer says from across a room, and
+ * otherwise you have to run a countdown to the right second to see it.
+ */
+@Composable
+private fun PreviewFrame(state: TimerUiState, content: @Composable ColumnScope.() -> Unit) {
+    MeleteTheme {
+        Surface(color = backgroundFor(state)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                content = content,
+            )
+        }
+    }
+}
+
+private val previewHangs = TimerProgram(
+    sets = 5,
+    work = WorkKind.TIMED,
+    workSeconds = 10,
+    restSeconds = 180,
+    label = "Max hangs 20 mm",
+)
+
+private fun previewRunning(
+    phase: TimerPhase,
+    totalMs: Long,
+    remainingMs: Long,
+    setIndex: Int = 1,
+    program: TimerProgram = previewHangs,
+) = TimerUiState(
+    state = TimerState.Running(
+        runId = "preview",
+        phase = phase,
+        totalMs = totalMs,
+        deadlineElapsedMs = 0,
+        plan = emptyList(),
+        program = program,
+        setIndex = setIndex,
+    ),
+    // Plain fields on the ui state, so a preview needs no clock ticking behind it.
+    remainingMs = remainingMs,
+    totalMs = totalMs,
+)
+
+@Preview(name = "1 · Get ready", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun PreparePreview() {
+    val state = previewRunning(TimerPhase.PREPARE, totalMs = 5_000, remainingMs = 3_000)
+    PreviewFrame(state) {
+        ActiveCountdown(state, onPause = {}, onResume = {}, onPrevious = {}, onNext = {}, onCancel = {})
+    }
+}
+
+@Preview(name = "2 · Work", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun WorkPreview() {
+    val state = previewRunning(TimerPhase.WORK, totalMs = 10_000, remainingMs = 6_000)
+    PreviewFrame(state) {
+        ActiveCountdown(state, onPause = {}, onResume = {}, onPrevious = {}, onNext = {}, onCancel = {})
+    }
+}
+
+@Preview(name = "3 · Rest", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun RestPreview() {
+    val state = previewRunning(TimerPhase.REST, totalMs = 180_000, remainingMs = 95_000)
+    PreviewFrame(state) {
+        ActiveCountdown(state, onPause = {}, onResume = {}, onPrevious = {}, onNext = {}, onCancel = {})
+    }
+}
+
+/** The last seconds of a rest: the set is about to start, and the screen says so. */
+@Preview(name = "4 · Rest, about to end", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun RestEndingPreview() {
+    val state = previewRunning(TimerPhase.REST, totalMs = 180_000, remainingMs = 3_000)
+    PreviewFrame(state) {
+        ActiveCountdown(state, onPause = {}, onResume = {}, onPrevious = {}, onNext = {}, onCancel = {})
+    }
+}
+
+/** Paused deliberately drops back to plain: a green screen that is not counting would be a lie. */
+@Preview(name = "5 · Paused", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun PausedPreview() {
+    val state = TimerUiState(
+        state = TimerState.Paused(
+            runId = "preview",
+            phase = TimerPhase.WORK,
+            totalMs = 10_000,
+            remainingMs = 4_000,
+            plan = emptyList(),
+            program = previewHangs,
+            setIndex = 1,
+        ),
+        remainingMs = 4_000,
+        totalMs = 10_000,
+    )
+    PreviewFrame(state) {
+        ActiveCountdown(state, onPause = {}, onResume = {}, onPrevious = {}, onNext = {}, onCancel = {})
+    }
+}
+/** Reps: counted */
+@Preview(name = "8 · Reps", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun MoreRepsPreview() {
+    val state = TimerUiState(
+        state = TimerState.AwaitingSet(
+            runId = "preview",
+            program = TimerProgram(
+                sets = 4,
+                work = WorkKind.REPS,
+                workReps = 8,
+                restSeconds = 60,
+                label = "Dumbbell row",
+            ),
+            setIndex = 1,
+        ),
+    )
+    PreviewFrame(state) {
+        AwaitingSet(state, onPrevious = {}, onNext = {}, onCancel = {})
+    }
+}
+
+
+@Preview(name = "6 · Finished", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun FinishedPreview() {
+    PreviewFrame(TimerUiState()) {
+        FinishedCard(
+            onLog = {},
+            state = TimerState.Finished(
+                runId = "preview",
+                phase = TimerPhase.WORK,
+                totalMs = 10_000,
+                program = previewHangs,
+                setsCompleted = 5,
+            ),
+            onDismiss = {},
+        )
+    }
+}
+/** Reps: nothing is counting, so there is no clock and no play button — just the set. */
+@Preview(name = "7 · Reps", showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+private fun AwaitingSetPreview() {
+    val state = TimerUiState(
+        state = TimerState.AwaitingSet(
+            runId = "preview",
+            program = TimerProgram(
+                sets = 4,
+                work = WorkKind.REPS,
+                restSeconds = 60,
+                label = "Dumbbell row",
+            ),
+            setIndex = 1,
+        ),
+    )
+    PreviewFrame(state) {
+        AwaitingSet(state, onPrevious = {}, onNext = {}, onCancel = {})
+    }
 }

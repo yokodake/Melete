@@ -1,0 +1,22 @@
+<!--
+    A checkmark: the set is done.
+
+    Drawn as a stroke rather than a filled outline, unlike the transport icons, because a tick is
+    a line — describing it as a polygon means recomputing eight points to change its weight, where
+    this needs one number. strokeWidth 3 matches the bars of ic_timer_pause, and the round cap and
+    join keep the corner from looking clipped at small sizes.
+
+    White, so that Icon() can tint it with whatever the surface needs.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4.5,12.8 L9.6,17.7 L19.5,6.6"
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
