@@ -43,12 +43,22 @@ data class TimerProgram(
      * programs existed.
      */
     val work: WorkKind = WorkKind.REPS,
+    /** Number of target reps of one work set. Meaningful only when [work] is [WorkKind.REPS] */
+    val workReps: Int? = null,
     /** Length of one work interval. Meaningful only when [work] is [WorkKind.TIMED]. */
     val workSeconds: Int = 0,
     /** Rest between sets. Zero runs them back to back. */
     val restSeconds: Int = 0,
     /** The exercise this was started from, when it was started from one. */
     val label: String? = null,
+    /**
+     * The planned copy this was started from, so the timer can *offer* the logger when it ends.
+     *
+     * Navigation only. The timer still records nothing and has no write path into the training
+     * record — reaching zero is a cue, not evidence that the work happened. Carrying an id to
+     * open a screen with is a different thing from being able to change what that screen shows.
+     */
+    val occurrenceId: String? = null,
 ) {
     init {
         require(sets >= 1) { "a program needs at least one set" }
@@ -93,6 +103,17 @@ data class TimerProgram(
     }
 
     /** True when [setIndex] is the last set, and so is not followed by a rest. */
+    /**
+     * The interval that follows the one at [setIndex] and [phase], or null when the program ends
+     * there. Structural, so it lives with the program; how to *say* it belongs to the screen.
+     */
+    fun stepAfter(setIndex: Int, phase: TimerPhase): ProgramStep? {
+        val current = stepIndexOf(setIndex, phase)
+        // stepIndexOf answers -1 for an interval that is not in this program; +1 would then
+        // silently mean "the first step", which is a wrong answer rather than no answer.
+        return if (current < 0) null else steps.getOrNull(current + 1)
+    }
+
     fun isLastSet(setIndex: Int): Boolean = setIndex >= sets - 1
 
     /** Whether a rest follows the work of [setIndex]. */
@@ -124,8 +145,14 @@ data class TimerProgram(
         val SINGLE = TimerProgram()
 
         /** A bare rest, the shape the logger starts between two sets. */
-        fun rest(seconds: Int, label: String? = null) =
-            TimerProgram(sets = 1, work = WorkKind.NONE, restSeconds = seconds, label = label)
+        fun rest(seconds: Int, label: String? = null, occurrenceId: String? = null) =
+            TimerProgram(
+                sets = 1,
+                work = WorkKind.NONE,
+                restSeconds = seconds,
+                label = label,
+                occurrenceId = occurrenceId,
+            )
 
         /** A single timed interval with nothing after it. */
         fun work(seconds: Int, label: String? = null) =

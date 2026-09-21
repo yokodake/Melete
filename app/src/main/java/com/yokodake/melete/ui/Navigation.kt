@@ -132,7 +132,10 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
             )
         }
         composable<TimerDestination> {
-            TimerRoute(bottomBar = bottomBar)
+            TimerRoute(
+                onLog = { navController.navigate(LoggerDestination(it)) },
+                bottomBar = bottomBar,
+            )
         }
         composable<LibraryPickerDestination> {
             LibraryPickerRoute(

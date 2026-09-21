@@ -1,6 +1,20 @@
 package com.yokodake.melete.ui.logger
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
+import com.yokodake.melete.R
+import com.yokodake.melete.ui.theme.doneColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -132,22 +146,7 @@ fun LoggerScreen(
                 },
             )
         },
-        bottomBar = {
-            if (occurrence != null) {
-                SetEntryBar(
-                    state = state,
-                    occurrence = occurrence,
-                    onDraftChange = viewModel::updateDraft,
-                    onSide = viewModel::setSide,
-                    onEffort = viewModel::setEffort,
-                    onToggleEffort = viewModel::toggleEffortFields,
-                    onConfirm = viewModel::confirmSet,
-                    onUndo = viewModel::undoLastSet,
-                    onCancelEdit = viewModel::cancelEdit,
-                    onStartRest = viewModel::startRest,
-                )
-            }
-        },
+
     ) { padding ->
         if (occurrence == null) return@Scaffold
         LazyColumn(
@@ -192,19 +191,45 @@ fun LoggerScreen(
                 }
             }
             item {
-                SectionLabel(
-                    if (state.sets.isEmpty()) "Nothing recorded yet" else "Recorded this time",
+                SectionLabel("How hard was this exercise?")
+                EffortSelector(
+                    selected = state.table.effort,
+                    onSelect = viewModel::setTableEffort,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            items(items = state.sets, key = { it.id }) { set ->
-                PerformedSetRow(
-                    set = set,
-                    number = displayNumber(state.sets, set, occurrence.unilateral),
+            if (occurrence.measurementUnit != null) {
+                item {
+                    MaxLoadRow(
+                        table = state.table,
+                        unit = occurrence.measurementUnit,
+                        unilateral = occurrence.unilateral,
+                        onMaxLoad = viewModel::setMaxLoad,
+                    )
+                }
+            }
+            item {
+                SetTableHeader(
                     unit = occurrence.measurementUnit,
-                    isEditing = state.draft.editingSetId == set.id,
-                    onEdit = { viewModel.editSet(set) },
-                    onDelete = { viewModel.deleteSet(set.id) },
+                    unilateral = occurrence.unilateral,
                 )
+            }
+            items(items = state.table.rows, key = { it.number }) { row ->
+                SetTableRow(
+                    row = row,
+                    unit = occurrence.measurementUnit,
+                    unilateral = occurrence.unilateral,
+                    onLoad = viewModel::setRowLoad,
+                    onToggle = { viewModel.toggleRow(row.number) },
+                )
+            }
+            item {
+                TextButton(
+                    onClick = viewModel::addRow,
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    Text("+  Add set")
+                }
             }
             item {
                 CommentRow(comment = occurrence.comment, onClick = viewModel::openCommentEditor)
@@ -668,6 +693,201 @@ private fun SetEntryBar(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * The heaviest set, which is the number worth seeing first, and the fastest way to fill a session
+ * where every set was the same. Typing here fills every row that has not been ticked yet.
+ */
+@Composable
+private fun MaxLoadRow(
+    table: SetTable,
+    unit: String,
+    unilateral: Boolean,
+    onMaxLoad: (String, Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Max load",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "($unit)",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 12.dp),
+        )
+        if (unilateral) {
+            SideLabel("L")
+            LoadField(table.maxLoad, enabled = true) { onMaxLoad(it, false) }
+            Spacer(Modifier.width(8.dp))
+            SideLabel("R")
+            LoadField(table.maxLoadRight, enabled = true) { onMaxLoad(it, true) }
+        } else {
+            LoadField(table.maxLoad, enabled = true) { onMaxLoad(it, false) }
+        }
+    }
+}
+
+@Composable
+private fun SetTableHeader(unit: String?, unilateral: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp, bottom = 4.dp, start = 12.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HeaderCell("Set", Modifier.width(40.dp))
+        HeaderCell("Reps", Modifier.width(56.dp))
+        if (unit != null) {
+            if (unilateral) {
+                HeaderCell("Left ($unit)", Modifier.weight(1f))
+                HeaderCell("Right ($unit)", Modifier.weight(1f))
+            } else {
+                HeaderCell("Load ($unit)", Modifier.weight(1f))
+            }
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+        HeaderCell("Done", Modifier.width(56.dp))
+    }
+}
+
+@Composable
+private fun HeaderCell(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
+/**
+ * One planned set, filled in and ticked off.
+ *
+ * There is no delete: a row is either recorded or it is not, and unticking takes back exactly what
+ * ticking wrote. Keeping the planned rows on screen either way is what will let a later screen say
+ * what was planned against what was actually done.
+ */
+@Composable
+private fun SetTableRow(
+    row: SetRow,
+    unit: String?,
+    unilateral: Boolean,
+    onLoad: (Int, String, Boolean) -> Unit,
+    onToggle: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${row.number}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(40.dp),
+            )
+            Text(
+                text = row.reps?.toString() ?: "—",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(56.dp),
+            )
+            if (unit != null) {
+                // A recorded row is not editable in place: untick it to change what it says, so
+                // that altering history is always a deliberate two-step.
+                LoadField(row.load, enabled = !row.done, modifier = Modifier.weight(1f)) {
+                    onLoad(row.number, it, false)
+                }
+                if (unilateral) {
+                    Spacer(Modifier.width(8.dp))
+                    LoadField(row.loadRight, enabled = !row.done, modifier = Modifier.weight(1f)) {
+                        onLoad(row.number, it, true)
+                    }
+                }
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            DoneCheck(done = row.done, onToggle = onToggle, modifier = Modifier.width(56.dp))
+        }
+    }
+}
+
+@Composable
+private fun SideLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(end = 4.dp),
+    )
+}
+
+@Composable
+private fun LoadField(
+    value: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onValueChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { typed ->
+            onValueChange(typed.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.'))
+        },
+        enabled = enabled,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyLarge,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier.widthIn(min = 72.dp),
+    )
+}
+
+/** The tick. Green and filled once the set has happened, an empty outline until then. */
+@Composable
+private fun DoneCheck(done: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val (container, content) = doneColors()
+    IconButton(
+        onClick = onToggle,
+        modifier = modifier.semantics {
+            contentDescription = if (done) "Recorded, tap to take it back" else "Record this set"
+        },
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(32.dp)
+                .background(
+                    color = if (done) container else Color.Transparent,
+                    shape = CircleShape,
+                )
+                .border(
+                    width = if (done) 0.dp else 1.5.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = CircleShape,
+                ),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_timer_done),
+                contentDescription = null,
+                tint = if (done) content else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
