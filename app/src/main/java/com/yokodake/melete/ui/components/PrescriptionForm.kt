@@ -118,6 +118,7 @@ fun PrescriptionFields(
         )
         Text("Target RPE", style = MaterialTheme.typography.bodyMedium)
         EffortSelector(
+            modifier = Modifier.fillMaxWidth(),
             selected = state.effort,
             onSelect = { onStateChange(state.copy(effort = it)) },
         )
@@ -157,16 +158,14 @@ fun EffortSelector(
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
     ) {
         CompactTextField(
             value = selected?.label ?: NOT_SET,
             onValueChange = {},
             readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
+            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(

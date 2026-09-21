@@ -27,6 +27,12 @@ android {
             optimization {
                 enable = false
             }
+            // Signed with the debug key on purpose. This app is sideloaded onto one phone and
+            // never distributed, and sharing the signature with the debug build is what lets a
+            // release install over it as an update instead of demanding an uninstall -- which
+            // would take the training history with it. A real distribution key can be swapped in
+            // here the day it is ever needed.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
