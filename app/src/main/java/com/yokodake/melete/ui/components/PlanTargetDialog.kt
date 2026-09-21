@@ -50,6 +50,14 @@ fun PlanTargetDialog(
     today: LocalDate,
     onConfirm: (PlanTarget) -> Unit,
     onDismiss: () -> Unit,
+    /**
+     * Whether "anytime this week" is one of the answers.
+     *
+     * It is not, for work that has already been trained: that happened on a particular day, and
+     * offering to file it under no day at all would be offering to make the record vaguer than
+     * the truth.
+     */
+    allowUnscheduled: Boolean = true,
 ) {
     var weekStart by remember { mutableStateOf(WeekMath.weekStartOf(initial.weekStart)) }
     var trainingDate by remember { mutableStateOf(initial.trainingDate) }
@@ -86,12 +94,14 @@ fun PlanTargetDialog(
                 }
                 HorizontalDivider()
                 Column(modifier = Modifier.heightIn(max = 320.dp)) {
-                    TargetRow(
-                        label = "Unscheduled",
-                        detail = "Anytime this week",
-                        selected = trainingDate == null,
-                        onSelect = { trainingDate = null },
-                    )
+                    if (allowUnscheduled) {
+                        TargetRow(
+                            label = "Unscheduled",
+                            detail = "Anytime this week",
+                            selected = trainingDate == null,
+                            onSelect = { trainingDate = null },
+                        )
+                    }
                     WeekMath.daysOf(weekStart).forEach { date ->
                         TargetRow(
                             label = WeekMath.dayLabel(date),
@@ -108,6 +118,51 @@ fun PlanTargetDialog(
                 Text(confirmLabel)
             }
         },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Chooses a week, and nothing finer.
+ *
+ * Adding something from the library is a decision about *what* you are going to train, not about
+ * which morning. The day is a later question, answered in the planner once the week has taken
+ * shape, so this asks only for the week and drops the exercise into its unscheduled area.
+ */
+@Composable
+fun WeekTargetDialog(
+    title: String,
+    today: LocalDate,
+    onConfirm: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+    weeksAhead: Int = 11,
+) {
+    val thisWeek = WeekMath.weekStartOf(today)
+    var selected by remember { mutableStateOf(thisWeek) }
+    // One week back, so a session you forgot to write down can still be put where it happened.
+    val weeks = (-1..weeksAhead).map { thisWeek.plusWeeks(it.toLong()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                weeks.forEach { week ->
+                    TargetRow(
+                        label = WeekMath.weekLabel(week),
+                        detail = when (week) {
+                            thisWeek -> "This week"
+                            thisWeek.plusWeeks(1) -> "Next week"
+                            thisWeek.minusWeeks(1) -> "Last week"
+                            else -> null
+                        },
+                        selected = selected == week,
+                        onSelect = { selected = week },
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(selected) }) { Text("Add") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

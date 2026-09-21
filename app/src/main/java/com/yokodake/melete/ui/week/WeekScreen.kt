@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -18,7 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
-import com.yokodake.melete.core.Planning
+import com.yokodake.melete.ui.components.Chip
 import com.yokodake.melete.ui.components.PlanTarget
 import com.yokodake.melete.ui.components.PlanTargetDialog
 import kotlinx.coroutines.launch
@@ -45,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -87,9 +87,8 @@ fun WeekRoute(
         onDeleteWithLog = viewModel::deleteOccurrenceAndLog,
         onLoggedSetCount = viewModel::loggedSetCount,
         onMoveOccurrence = viewModel::moveOccurrence,
-        onCopyOccurrence = viewModel::copyOccurrence,
+        onDuplicateOccurrence = viewModel::duplicateOccurrence,
         onReorderOccurrence = viewModel::reorderOccurrence,
-        onSetPerformedDate = viewModel::setPerformedDate,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
         onCurrentWeek = viewModel::showCurrentWeek,
@@ -112,9 +111,8 @@ fun WeekScreen(
     onDeleteWithLog: (String, Int) -> Unit = { _, _ -> },
     onLoggedSetCount: suspend (String) -> Int = { 0 },
     onMoveOccurrence: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
-    onCopyOccurrence: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
+    onDuplicateOccurrence: (String) -> Unit = {},
     onReorderOccurrence: (String, Int) -> Unit = { _, _ -> },
-    onSetPerformedDate: (String, LocalDate) -> Unit = { _, _ -> },
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onCurrentWeek: () -> Unit,
@@ -132,7 +130,6 @@ fun WeekScreen(
     var planning by remember { mutableStateOf<PlanAction?>(null) }
     var removing by remember { mutableStateOf<PlannedOccurrence?>(null) }
     var removingSets by remember { mutableIntStateOf(0) }
-    var redating by remember { mutableStateOf<PlannedOccurrence?>(null) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -229,10 +226,19 @@ fun WeekScreen(
                     is WeekRow.Occurrence -> OccurrenceCard(
                         occurrence = row.occurrence,
                         onClick = { onOpenOccurrence(row.occurrence.id) },
-                        onMove = { planning = PlanAction(row.occurrence, copy = false) },
-                        onCopy = { planning = PlanAction(row.occurrence, copy = true) },
+                        onMove = {
+                            // Moving carries the log with it, so the dialog has to know whether
+                            // there is one before it can word itself honestly.
+                            scope.launch {
+                                planning = PlanAction(
+                                    occurrence = row.occurrence,
+                                    loggedSets = onLoggedSetCount(row.occurrence.id),
+                                )
+                            }
+                        },
+                        // A duplicate is a fresh plan and never inherits what was logged.
+                        onDuplicate = { onDuplicateOccurrence(row.occurrence.id) },
                         onReorder = { onReorderOccurrence(row.occurrence.id, it) },
-                        onChangePerformedDate = { redating = row.occurrence },
                         onRemove = {
                             // Ask the record what a deletion would cost before offering one.
                             scope.launch {
@@ -251,37 +257,22 @@ fun WeekScreen(
     planning?.let { action ->
         val occurrence = action.occurrence
         PlanTargetDialog(
-            title = if (action.copy) "Copy ${occurrence.name} to" else "Move ${occurrence.name} to",
+            title = if (action.loggedSets > 0) {
+                "Move ${occurrence.name} and its ${action.loggedSets} logged " +
+                    "${if (action.loggedSets == 1) "set" else "sets"} to"
+            } else {
+                "Move ${occurrence.name} to"
+            },
             initial = PlanTarget(state.weekStart, occurrence.trainingDate),
-            confirmLabel = if (action.copy) "Copy" else "Move",
+            confirmLabel = "Move",
             today = state.today,
+            // Trained work belongs to a day, so "anytime this week" is not on offer for it.
+            allowUnscheduled = action.loggedSets == 0,
             onConfirm = { target ->
                 planning = null
-                if (action.copy) {
-                    onCopyOccurrence(occurrence.id, target.weekStart, target.trainingDate)
-                } else {
-                    onMoveOccurrence(occurrence.id, target.weekStart, target.trainingDate)
-                }
+                onMoveOccurrence(occurrence.id, target.weekStart, target.trainingDate)
             },
             onDismiss = { planning = null },
-        )
-    }
-
-    redating?.let { occurrence ->
-        PlanTargetDialog(
-            title = "When was ${occurrence.name} actually done?",
-            initial = PlanTarget(
-                weekStart = occurrence.performedDate?.let(WeekMath::weekStartOf) ?: state.weekStart,
-                trainingDate = occurrence.performedDate ?: occurrence.trainingDate,
-            ),
-            confirmLabel = "Log it there",
-            today = state.today,
-            onConfirm = { target ->
-                redating = null
-                // Only a real day can hold performed work; "unscheduled" is a planning idea.
-                target.trainingDate?.let { onSetPerformedDate(occurrence.id, it) }
-            },
-            onDismiss = { redating = null },
         )
     }
 
@@ -303,7 +294,15 @@ fun WeekScreen(
 }
 
 /** A move or a copy waiting for somewhere to go. */
-private data class PlanAction(val occurrence: PlannedOccurrence, val copy: Boolean)
+/**
+ * A move waiting on a destination.
+ *
+ * [loggedSets] is what it would carry with it, counted when the dialog opens.
+ */
+private data class PlanAction(
+    val occurrence: PlannedOccurrence,
+    val loggedSets: Int = 0,
+)
 
 @Composable
 private fun DeveloperMenu(
@@ -442,7 +441,7 @@ private fun DayHeading(row: WeekRow.DayHeading, onAdd: () -> Unit) {
             if (row.isToday) {
                 Chip("Today", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
             }
-            Surface(modifier = Modifier.weight(1f), color = Color.Transparent) {}
+            Spacer(modifier = Modifier.weight(1f))
             AddButton("Add an exercise to ${WeekMath.dayLabel(row.date)}", onAdd)
         }
         HorizontalDivider(
@@ -466,9 +465,8 @@ private fun OccurrenceCard(
     occurrence: PlannedOccurrence,
     onClick: () -> Unit,
     onMove: () -> Unit = {},
-    onCopy: () -> Unit = {},
+    onDuplicate: () -> Unit = {},
     onReorder: (Int) -> Unit = {},
-    onChangePerformedDate: () -> Unit = {},
     onRemove: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -495,12 +493,14 @@ private fun OccurrenceCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     CategoryDot(occurrence.category)
+                    // One weighted child only. Weights split the space left over after the
+                    // unweighted children, so a second one here capped the name at half the row
+                    // however little the chips actually needed.
                     Text(
                         text = occurrence.name,
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.weight(1f, fill = false),
+                        modifier = Modifier.weight(1f),
                     )
-                    Surface(modifier = Modifier.weight(1f), color = Color.Transparent) {}
                     if (occurrence.isSampleData) {
                         Chip(
                             text = "SAMPLE",
@@ -534,15 +534,6 @@ private fun OccurrenceCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                // The plan said one day and the work happened on another. Both are true, so both
-                // are shown rather than one being quietly corrected into the other.
-                Planning.dateMismatch(occurrence.trainingDate, occurrence.performedDate)?.let {
-                    Text(
-                        text = it.label(WeekMath::dayLabel),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
             }
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -551,8 +542,8 @@ private fun OccurrenceCard(
                 onClick = { menuExpanded = false; onMove() },
             )
             DropdownMenuItem(
-                text = { Text("Copy to…") },
-                onClick = { menuExpanded = false; onCopy() },
+                text = { Text("Duplicate") },
+                onClick = { menuExpanded = false; onDuplicate() },
             )
             DropdownMenuItem(
                 text = { Text("Move up") },
@@ -562,27 +553,12 @@ private fun OccurrenceCard(
                 text = { Text("Move down") },
                 onClick = { menuExpanded = false; onReorder(1) },
             )
-            DropdownMenuItem(
-                text = { Text("Change the day it was done…") },
-                onClick = { menuExpanded = false; onChangePerformedDate() },
-            )
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Remove workout") },
                 onClick = { menuExpanded = false; onRemove() },
             )
         }
-    }
-}
-
-@Composable
-private fun Chip(text: String, container: Color, content: Color) {
-    Surface(color = container, contentColor = content, shape = MaterialTheme.shapes.small) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
     }
 }
 
@@ -699,8 +675,8 @@ private fun WeekScreenPreview() {
     }
 }
 
-/** A week with real traffic in it, and one item whose work landed on another day. */
-@Preview(name = "Week · busy, with a date mismatch", showBackground = true, heightDp = 900)
+/** A week with real traffic in it: planned, trained, and not yet touched. */
+@Preview(name = "Week · busy", showBackground = true, heightDp = 900)
 @Composable
 private fun BusyWeekPreview() {
     val monday = LocalDate.of(2026, 9, 21)
@@ -711,7 +687,6 @@ private fun BusyWeekPreview() {
         category: ExerciseCategory?,
         order: Int = 0,
         state: OccurrenceState = OccurrenceState.PLANNED,
-        performed: LocalDate? = null,
     ) = PlannedOccurrence(
         id = "$name-$date-$order",
         exerciseId = name,
@@ -726,7 +701,6 @@ private fun BusyWeekPreview() {
         prescriptionId = null,
         prescription = PrescriptionPayload(sets = 4, targetReps = 6, restSeconds = 180),
         prescriptionUnreadable = false,
-        performedDate = performed,
         state = state,
         comment = null,
         orderIndex = order,
@@ -741,18 +715,18 @@ private fun BusyWeekPreview() {
                 occurrences = listOf(
                     item("Mobility flow", null, ExerciseCategory.OPEN),
                     item("Bouldering", null, ExerciseCategory.OPEN, order = 1),
-                    // Planned Monday, actually trained on Tuesday. Both stay true.
+                    // Trained: the card sits on the day the work actually happened, because
+                    // moving it moved its sets too.
                     item(
                         "Back squat",
-                        monday,
+                        monday.plusDays(1),
                         ExerciseCategory.CONDITIONING,
                         state = OccurrenceState.COMPLETED,
-                        performed = monday.plusDays(1),
                     ),
                     item("Max hangs 20 mm", monday, ExerciseCategory.CONDITIONING, order = 1),
                     item("Dumbbell row", monday.plusDays(2), ExerciseCategory.CONDITIONING),
                     item("Couch stretch", monday.plusDays(2), ExerciseCategory.FLEXIBILITY, order = 1),
-                    item("Deadlift", monday.plusDays(4), ExerciseCategory.CONDITIONING),
+                    item("very long name of thing Deadlift", monday.plusDays(4), ExerciseCategory.CONDITIONING, state= OccurrenceState.COMPLETED),
                 ),
                 sampleDataPresent = false,
             ),
@@ -782,10 +756,9 @@ private fun WeekMenuPreview() {
             Column {
                 listOf(
                     "Move to…",
-                    "Copy to…",
+                    "Duplicate",
                     "Move up",
                     "Move down",
-                    "Change the day it was done…",
                 ).forEach {
                     Text(
                         text = it,
@@ -825,7 +798,6 @@ private fun RemoveLoggedPreview() {
                 prescriptionId = null,
                 prescription = PrescriptionPayload(sets = 4, targetReps = 5),
                 prescriptionUnreadable = false,
-                performedDate = monday,
                 state = OccurrenceState.COMPLETED,
                 comment = null,
                 orderIndex = 0,

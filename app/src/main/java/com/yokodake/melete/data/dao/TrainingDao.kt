@@ -21,12 +21,6 @@ data class OccurrenceWithPrescription(
     val prescription: PrescriptionEntity?,
 )
 
-/** Which performed date an occurrence's work is filed under. */
-data class PerformedDateRow(
-    val occurrenceId: String,
-    val trainingDateEpochDay: Long,
-)
-
 /** A library exercise together with its current default prescription. */
 data class ExerciseWithDefaultPrescription(
     @Embedded val exercise: ExerciseEntity,
@@ -64,6 +58,22 @@ interface TrainingDao {
         """
     )
     suspend fun nextOrderIndex(weekStartEpochDay: Long, trainingDateEpochDay: Long?): Int
+
+    /**
+     * An index that sorts before everything currently in the slot.
+     *
+     * Negative values are fine: the list is ordered by this column, never counted by it, so there
+     * is no need to renumber the rest of the slot to make room at the front.
+     */
+    @Query(
+        """
+        SELECT COALESCE(MIN(orderIndex), 0) - 1 FROM exercise_occurrences
+        WHERE weekStartEpochDay = :weekStartEpochDay
+          AND ((:trainingDateEpochDay IS NULL AND trainingDateEpochDay IS NULL)
+               OR trainingDateEpochDay = :trainingDateEpochDay)
+        """
+    )
+    suspend fun firstOrderIndex(weekStartEpochDay: Long, trainingDateEpochDay: Long?): Int
 
     @Query("SELECT COUNT(*) FROM exercise_occurrences WHERE isSampleData = 1")
     fun observeSampleOccurrenceCount(): Flow<Int>
@@ -161,6 +171,52 @@ interface LibraryDao {
 
     @Query("UPDATE exercises SET deletedAtEpochMs = NULL WHERE id = :id")
     suspend fun restoreExercise(id: String)
+
+    // ------------------------------------------------- what refers to an exercise
+
+    /**
+     * How many planned copies point at this exercise, retired ones included.
+     *
+     * [ExerciseOccurrenceEntity.exerciseId] is a lineage reference rather than a foreign key, so
+     * nothing in the schema stops the row going; this is the check that decides whether it should.
+     */
+    @Query("SELECT COUNT(*) FROM exercise_occurrences WHERE exerciseId = :exerciseId")
+    suspend fun countOccurrencesOf(exerciseId: String): Int
+
+    /** How many sets were ever logged against it, under any planned copy. */
+    @Query("SELECT COUNT(*) FROM actual_sets WHERE exerciseId = :exerciseId")
+    suspend fun countSetsOf(exerciseId: String): Int
+
+    @Query(
+        """
+        SELECT prescriptionId FROM exercise_occurrences
+        WHERE exerciseId = :exerciseId AND prescriptionId IS NOT NULL
+        """
+    )
+    suspend fun occurrencePrescriptionIdsOf(exerciseId: String): List<String>
+
+    @Query("DELETE FROM exercise_occurrences WHERE exerciseId = :exerciseId")
+    suspend fun deleteOccurrencesOf(exerciseId: String)
+
+    @Query("DELETE FROM exercises WHERE id = :id")
+    suspend fun deleteExercise(id: String)
+
+    /**
+     * Drops a prescription row only once nothing points at it.
+     *
+     * Prescriptions are copied by value and shared by nobody, but the guard makes the delete
+     * order-independent and impossible to get wrong: if anything still refers to it, it stays.
+     */
+    @Query(
+        """
+        DELETE FROM prescriptions
+        WHERE id = :id
+          AND NOT EXISTS (SELECT 1 FROM exercises WHERE defaultPrescriptionId = :id)
+          AND NOT EXISTS (SELECT 1 FROM exercise_occurrences WHERE prescriptionId = :id)
+          AND NOT EXISTS (SELECT 1 FROM actual_sets WHERE prescriptionId = :id)
+        """
+    )
+    suspend fun deletePrescriptionIfUnused(id: String)
 }
 
 @Dao
@@ -213,28 +269,12 @@ interface LoggingDao {
     @Query("DELETE FROM actual_sets WHERE occurrenceId = :occurrenceId")
     suspend fun deleteSetsForOccurrence(occurrenceId: String)
 
-    /** The distinct dates the work of one occurrence is filed under. Usually one, or none. */
-    @Query(
-        """
-        SELECT DISTINCT trainingDateEpochDay FROM actual_sets
-        WHERE occurrenceId = :occurrenceId
-        ORDER BY trainingDateEpochDay
-        """
-    )
-    fun observePerformedDates(occurrenceId: String): Flow<List<Long>>
-
-    /** Every performed date in one week, so the planner can mark the ones that moved. */
-    @Query(
-        """
-        SELECT DISTINCT a.occurrenceId AS occurrenceId,
-                        a.trainingDateEpochDay AS trainingDateEpochDay
-        FROM actual_sets a
-        JOIN exercise_occurrences o ON a.occurrenceId = o.id
-        WHERE o.weekStartEpochDay = :weekStartEpochDay
-        """
-    )
-    fun observePerformedDatesInWeek(weekStartEpochDay: Long): Flow<List<PerformedDateRow>>
-
+    /**
+     * Re-dates every set of one occurrence together, and re-homes them into that day's session.
+     *
+     * Sets move with the placement they belong to, so the two can never disagree about when the
+     * work happened.
+     */
     @Query("UPDATE actual_sets SET trainingDateEpochDay = :date, sessionId = :sessionId WHERE occurrenceId = :occurrenceId")
     suspend fun repointSets(occurrenceId: String, date: Long, sessionId: String)
 }
