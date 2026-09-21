@@ -119,18 +119,21 @@ Changes made after the app was used, from `src/feedback.md`. Schema 3.
   sounding the end of every preparation and every set, which is the property the run ids were
   protecting. **Still not run on a device.**
 
-Phase 4A — **no device was available**, so this phase was verified by compilation and unit tests
-only:
+Phase 4A — written without a device, then the instrumented suite was run on the Pixel 9 by the
+user:
 
 - 93 unit tests passing, 9 of them a new `PlanningTest` covering the two decisions that are
   arithmetic rather than SQL: where an item lands when nudged (clamped at both ends, unchanged for
   an item not in the list) and what to say when a planned and a performed date differ.
 - `assembleDebug`, `assembleDebugAndroidTest` and the schema-4 export all clean.
-- A `migrate3To4…` instrumented test was written and **has not been run**; neither has the rest of
-  the instrumented suite against these changes.
-- The acceptance scenarios in the phase prompt — scheduling three weeks out, moving between weeks,
-  surviving a library deletion, the planned/performed mismatch — are **unverified end to end**.
-  They need a phone.
+- **34 instrumented tests, all passing**, which is the whole suite. That includes
+  `migrate3To4RetiresNothingAndKeepsEverything` — a schema-3 database carrying an exercise upgrades
+  to 4 with its description and category intact and nothing retired — and the check that the
+  production builder carries all three migrations. The schema-4 upgrade is verified on hardware.
+- Still **unverified end to end**: the acceptance scenarios in the phase prompt — scheduling three
+  weeks out, moving between weeks, surviving a library deletion, the planned/performed mismatch.
+  The instrumented suite exercises the database, not the screens, so these are being checked by
+  hand.
 
 Fifth round — all on the Pixel 9:
 
@@ -212,25 +215,51 @@ not interrupt".
 
 Schema 4. One nullable column: `exercises.deletedAtEpochMs`.
 
-**Deletion is a tombstone.** Retiring an exercise removes it from the *library*, which is a
-statement about what you plan to do next, not about what you did. The row stays, because it
-anchors scheduled copies, logged sets and the stable identity that makes "previous results" work.
-`LibraryDao.observeExercises` filters on `deletedAtEpochMs IS NULL`; everything else reads the row
-regardless.
+**Deletion is as complete as the history allows.** Removing an exercise counts what refers to it
+first, and says which of three things it is about to do:
 
-**Planned and performed dates were already separate, so no column was added.** The occurrence
-carries the planned placement (`trainingDateEpochDay`); every `ActualSetEntity` carries the date
-its work is filed under. Re-dating an occurrence rewrites its sets together and re-homes them into
-the session for the new day; the placement does not move. The two are allowed to disagree and the
-planner says so — `Planned Mon · Logged Tue` — rather than reconciling them.
+| What exists | What happens |
+| --- | --- |
+| Nothing | The row is deleted, with its default prescription. |
+| Planned copies, never logged | The row and those copies are deleted. A plan never carried out is a mistake too. |
+| At least one logged set | The row is kept as a tombstone and leaves the library. |
 
-- Planner reads planned dates, history reads performed dates, previous-results still groups by the
-  stable `exerciseId`.
-- Moving or copying a placement never touches what was logged against it.
+The rule is the user's: *keep the fact that I did it, never the fact that I planned it.* A single
+logged set is the whole difference, because the row anchors that set's lineage and the stable
+identity that makes "previous results" group. `LibraryDao.observeExercises` filters on
+`deletedAtEpochMs IS NULL`; everything else reads the row regardless.
+
+`exercise_occurrences.exerciseId` and `actual_sets.exerciseId` are lineage references rather than
+foreign keys, so nothing in the schema stops a delete — the count is what decides. It is re-taken
+inside the transaction rather than trusted from the dialog, so a set logged between asking and
+confirming still protects itself.
+
+**One date, and the log follows it.** 4A first shipped a planned date and a performed date that
+were allowed to disagree, with the planner reporting the difference as `Planned Mon · Logged Tue`.
+That was cut on the user's call: *keep the fact that I did it, never the fact that I planned it.*
+
+A placement now carries one date and its sets are filed under that same date. Moving a placement
+re-dates its sets with it and re-homes them into the new day's session, so the two cannot drift
+apart. A card that has been trained says when the work happened; a card that has not says when you
+intend it to.
+
+- **Unlogged cards never move by themselves**, which is what makes the planner still worth reading
+  backwards: what is left sitting on a past day is exactly what you did not do.
+- **Trained work cannot be made unscheduled.** It happened on a day, and "anytime this week" would
+  make the record vaguer than the truth. The dialog omits the option and `moveOccurrence` returns
+  false if asked anyway.
+- Logging an unscheduled card already planted it on the day it was done (`assignOccurrenceDate`);
+  this is the same rule applied to scheduled ones.
+
+Deleted with it: `PlannedOccurrence.performedDate`, `observePerformedDatesInWeek`,
+`PerformedDateRow`, `Planning.dateMismatch`, the `DateMismatch` label and the *Change the day it was
+done…* menu item. `observeWeek` is a plain `map` again rather than a `combine` reconciling two
+sources.
 
 **Organising.** Move to any week (day or unscheduled), copy, nudge up and down within a slot, edit
 the local prescription, and remove. Scheduling from the library reaches any week through the same
-week/day dialog. Copying duplicates the prescription into its own row, so the copies diverge.
+week/day dialog. Copying duplicates the prescription into its own row, so the copies diverge — and
+a copy is a fresh plan, so it never inherits what was logged against the original.
 
 **Removing something that has been trained.** A placement with no log removes with an ordinary
 confirmation. One with a log gets a dialog naming how many sets it would destroy, and the only
@@ -528,13 +557,12 @@ Third round:
 
 - **Removing a placement while keeping its log is not offered.** `actual_sets.occurrenceId` is a
   RESTRICT foreign key, so the occurrence is what the evidence hangs from and cannot be deleted
-  out from under it. The choice presented is therefore "keep it" or "delete it and the sets",
-  which is honest but narrower than phase 4A's wording. Detaching a log from its placement needs a
-  nullable occurrence or a separate detached-log concept, and that is a schema change worth making
-  deliberately rather than in passing.
+  out from under it. The choice presented is therefore "keep it" or "delete it and the sets".
+  Accepted deliberately: the user's rule is to keep what was done, and a trained card *is* that
+  record, so there is nothing to detach it from.
 - Reordering is move-up / move-down from the menu. Drag-and-drop was explicitly optional.
-- An exercise can be retired but not un-retired from the UI; `restoreExercise` exists in the
-  repository with nothing calling it yet.
+- An exercise that has been kept rather than deleted cannot be un-kept from the UI;
+  `restoreExercise` exists in the repository with nothing calling it yet.
 
 - No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
   not created speculatively.

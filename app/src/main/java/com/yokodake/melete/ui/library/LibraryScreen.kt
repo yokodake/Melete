@@ -24,8 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.yokodake.melete.core.WeekMath
-import com.yokodake.melete.ui.components.PlanTarget
-import com.yokodake.melete.ui.components.PlanTargetDialog
+import com.yokodake.melete.ui.components.WeekTargetDialog
 import java.time.LocalDate
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,8 +55,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.yokodake.melete.data.ExerciseRemoval
 import com.yokodake.melete.data.LibraryExercise
 import com.yokodake.melete.ui.components.CategoryDot
+import com.yokodake.melete.ui.components.Chip
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
 /**
@@ -88,7 +89,10 @@ fun LibraryRoute(
         today = state.today,
         defaultWeekStart = viewModel.currentWeekStart,
         onSchedule = viewModel::schedule,
-        onRetire = viewModel::retire,
+        removal = state.removal,
+        onAskRemove = viewModel::askToRemove,
+        onConfirmRemove = viewModel::confirmRemoval,
+        onCancelRemove = viewModel::cancelRemoval,
         onRowClick = onOpenExercise,
         onNewExercise = onNewExercise,
         onBack = null,
@@ -137,12 +141,15 @@ fun LibraryScreen(
     today: LocalDate = LocalDate.now(),
     defaultWeekStart: LocalDate = WeekMath.weekStartOf(today),
     onSchedule: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
-    onRetire: (LibraryExercise) -> Unit = {},
+    /** What removing the exercise under consideration would cost; null when nothing is pending. */
+    removal: ExerciseRemoval? = null,
+    onAskRemove: (LibraryExercise) -> Unit = {},
+    onConfirmRemove: () -> Unit = {},
+    onCancelRemove: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var scheduling by remember { mutableStateOf<LibraryExercise?>(null) }
-    var retiring by remember { mutableStateOf<LibraryExercise?>(null) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -229,48 +236,87 @@ fun LibraryScreen(
                     onClick = { onRowClick(exercise.id) },
                     secondaryAction = onSecondaryAction,
                     onAddToPlan = { scheduling = exercise },
-                    onRetire = { retiring = exercise },
+                    onRetire = { onAskRemove(exercise) },
                 )
             }
         }
     }
 
     scheduling?.let { exercise ->
-        PlanTargetDialog(
+        WeekTargetDialog(
             title = "Add ${exercise.name} to",
-            initial = PlanTarget(defaultWeekStart, null),
-            confirmLabel = "Add",
             today = today,
-            onConfirm = { target ->
+            onConfirm = { week ->
                 scheduling = null
-                onSchedule(exercise.id, target.weekStart, target.trainingDate)
+                // Unscheduled: the week is the decision, the day is the planner's job.
+                onSchedule(exercise.id, week, null)
             },
             onDismiss = { scheduling = null },
         )
     }
 
-    retiring?.let { exercise ->
-        AlertDialog(
-            onDismissRequest = { retiring = null },
-            title = { Text("Remove ${exercise.name}?") },
-            text = {
+    removal?.let { RemovalDialog(it, onConfirmRemove, onCancelRemove) }
+}
+
+/**
+ * Removing an exercise, worded as whichever of the three things it is about to do.
+ *
+ * A mistake should leave nothing behind, so an exercise nothing has been done with is deleted
+ * outright — along with planned copies that were never trained, which are mistakes too. The moment
+ * one set exists the row stops being disposable, because it is what that set's history hangs from,
+ * and the only honest offer left is to stop being shown it.
+ */
+@Composable
+private fun RemovalDialog(
+    removal: ExerciseRemoval,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val name = removal.exercise.name
+    val copies = removal.plannedCopies
+    val sets = removal.loggedSets
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                when (removal.kind) {
+                    ExerciseRemoval.Kind.UNUSED,
+                    ExerciseRemoval.Kind.PLANNED_NEVER_LOGGED -> "Delete $name?"
+                    ExerciseRemoval.Kind.LOGGED -> "Remove $name?"
+                }
+            )
+        },
+        text = {
+            Text(
+                when (removal.kind) {
+                    ExerciseRemoval.Kind.UNUSED ->
+                        "You have never planned or logged it, so it goes completely — " +
+                            "nothing refers to it."
+                    ExerciseRemoval.Kind.PLANNED_NEVER_LOGGED ->
+                        "You have never logged it. It goes completely, and so do the " +
+                            "$copies planned ${if (copies == 1) "copy" else "copies"} " +
+                            "still sitting in your weeks."
+                    ExerciseRemoval.Kind.LOGGED ->
+                        "You have logged $sets ${if (sets == 1) "set" else "sets"} of this, " +
+                            "so it is kept. It stops being offered when you plan, and " +
+                            "everything already scheduled or logged stays exactly as it is — " +
+                            "including in previous results."
+                }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
                 Text(
-                    "It stops being offered when you plan. Anything already scheduled keeps " +
-                        "working, and everything you have logged against it stays exactly where " +
-                        "it is — including in previous results."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        retiring = null
-                        onRetire(exercise)
+                    when (removal.kind) {
+                        ExerciseRemoval.Kind.UNUSED -> "Delete"
+                        ExerciseRemoval.Kind.PLANNED_NEVER_LOGGED -> "Delete it and the plans"
+                        ExerciseRemoval.Kind.LOGGED -> "Remove from library"
                     }
-                ) { Text("Remove from library") }
-            },
-            dismissButton = { TextButton(onClick = { retiring = null }) { Text("Keep") } },
-        )
-    }
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep") } },
+    )
 }
 
 /**
@@ -317,7 +363,20 @@ private fun LibraryRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     CategoryDot(exercise.category)
-                    Text(exercise.name, style = MaterialTheme.typography.titleSmall)
+                    // fill = false: a short name takes only what it needs, so the chip sits
+                    // beside it rather than being pushed to the far edge of the row.
+                    Text(
+                        text = exercise.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (exercise.isSampleData) {
+                        Chip(
+                            text = "SAMPLE",
+                            container = MaterialTheme.colorScheme.tertiaryContainer,
+                            content = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                    }
                 }
                 Text(
                     text = PrescriptionSummary.formatDefault(exercise),
@@ -377,6 +436,7 @@ private fun previewExercise(
     seconds: Int? = null,
     unit: String? = "kg",
     retired: Boolean = false,
+    sample: Boolean = false,
 ) = LibraryExercise(
     id = name,
     name = name,
@@ -393,7 +453,7 @@ private fun previewExercise(
         targetDurationSeconds = seconds,
         restSeconds = 180,
     ),
-    isSampleData = false,
+    isSampleData = sample,
     deletedAtEpochMs = if (retired) 1_700_000_000_000 else null,
 )
 
@@ -403,6 +463,7 @@ private val previewLibrary = listOf(
     previewExercise("Couch stretch", ExerciseCategory.FLEXIBILITY, sets = 2, reps = null, seconds = 90, unit = null),
     previewExercise("Dumbbell row", ExerciseCategory.CONDITIONING),
     previewExercise("Max hangs 20 mm", ExerciseCategory.CONDITIONING, sets = 5, reps = null, seconds = 10),
+    previewExercise("Pullups", ExerciseCategory.CONDITIONING, sets = 4, reps = 4, unit= "kg", sample=true),
 )
 
 @Preview(name = "Library · populated", showBackground = true, heightDp = 760)
@@ -462,16 +523,19 @@ private fun LibraryRetiredPreview() {
     }
 }
 
-@Preview(name = "Library · choose a week and day", showBackground = true, heightDp = 700)
+/**
+ * Adding from the library asks for a week and nothing finer.
+ *
+ * Last week is offered too, so a session that was trained but never written down can still be put
+ * where it happened.
+ */
+@Preview(name = "Library · choose a week", showBackground = true, heightDp = 700)
 @Composable
-private fun PlanTargetPreview() {
-    val monday = LocalDate.of(2026, 9, 21)
+private fun WeekTargetPreview() {
     MeleteTheme {
-        PlanTargetDialog(
+        WeekTargetDialog(
             title = "Add Max hangs 20 mm to",
-            initial = PlanTarget(monday, null),
-            confirmLabel = "Add",
-            today = monday.plusDays(2),
+            today = LocalDate.of(2026, 9, 23),
             onConfirm = {},
             onDismiss = {},
         )
@@ -499,5 +563,59 @@ private fun LibraryMenuPreview() {
                 }
             }
         }
+    }
+}
+
+/**
+ * The three removals, side by side.
+ *
+ * They are one menu item and three different promises, which is exactly why each states its own
+ * consequence and its button says what it does rather than "OK".
+ */
+@Preview(name = "Library · delete an unused exercise", showBackground = true, heightDp = 320)
+@Composable
+private fun RemoveUnusedPreview() {
+    MeleteTheme {
+        RemovalDialog(
+            removal = ExerciseRemoval(
+                exercise = previewExercise("Sissy squat", ExerciseCategory.CONDITIONING),
+                plannedCopies = 0,
+                loggedSets = 0,
+            ),
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+@Preview(name = "Library · delete, plans and all", showBackground = true, heightDp = 320)
+@Composable
+private fun RemovePlannedPreview() {
+    MeleteTheme {
+        RemovalDialog(
+            removal = ExerciseRemoval(
+                exercise = previewExercise("Sissy squat", ExerciseCategory.CONDITIONING),
+                plannedCopies = 3,
+                loggedSets = 0,
+            ),
+            onConfirm = {},
+            onDismiss = {},
+        )
+    }
+}
+
+@Preview(name = "Library · remove something trained", showBackground = true, heightDp = 360)
+@Composable
+private fun RemoveLoggedPreview() {
+    MeleteTheme {
+        RemovalDialog(
+            removal = ExerciseRemoval(
+                exercise = previewExercise("Back squat", ExerciseCategory.CONDITIONING, reps = 5),
+                plannedCopies = 6,
+                loggedSets = 24,
+            ),
+            onConfirm = {},
+            onDismiss = {},
+        )
     }
 }

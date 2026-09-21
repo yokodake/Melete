@@ -111,34 +111,34 @@ class WeekViewModel(
         }
     }
 
-    /** Moves a placement to any week, on a day or into that week's unscheduled area. */
+    /**
+     * Moves a placement to any week, on a day or into that week's unscheduled area.
+     *
+     * Anything logged against it moves too: once it has been trained the card is a record, and a
+     * record's date is the day the work happened. The one thing that cannot be done is making
+     * trained work unscheduled, which the repository refuses.
+     */
     fun moveOccurrence(occurrenceId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
         viewModelScope.launch {
-            repository.moveOccurrence(occurrenceId, weekStart, trainingDate)
-            _message.value = "Moved to ${trainingDate?.let(WeekMath::dayLabel) ?: "unscheduled"}"
+            val moved = repository.moveOccurrence(occurrenceId, weekStart, trainingDate)
+            _message.value = when {
+                !moved -> "That has been trained, so it needs a day"
+                trainingDate == null -> "Moved to unscheduled"
+                else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
+            }
         }
     }
 
-    fun copyOccurrence(occurrenceId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
+    /** Makes another copy of a placement, waiting in this week's unscheduled area. */
+    fun duplicateOccurrence(occurrenceId: String) {
         viewModelScope.launch {
-            repository.copyOccurrence(occurrenceId, weekStart, trainingDate)
-            _message.value = "Copied to ${trainingDate?.let(WeekMath::dayLabel) ?: "unscheduled"}"
+            repository.duplicateOccurrence(occurrenceId)
+            _message.value = "Duplicated into unscheduled"
         }
     }
 
     fun reorderOccurrence(occurrenceId: String, delta: Int) {
         viewModelScope.launch { repository.reorderOccurrence(occurrenceId, delta) }
-    }
-
-    /**
-     * Re-dates the work, not the plan. The placement stays where it was planned, so the planner
-     * keeps telling the truth about the intention and history keeps telling it about the day.
-     */
-    fun setPerformedDate(occurrenceId: String, performedDate: LocalDate) {
-        viewModelScope.launch {
-            repository.setPerformedDate(occurrenceId, performedDate)
-            _message.value = "Logged under ${WeekMath.dayLabel(performedDate)}"
-        }
     }
 
     /** The week the planner is currently showing, for defaulting a move or a copy. */

@@ -51,7 +51,6 @@ data class PlannedOccurrence(
      * The date the work was actually filed under, when any has been logged. Deliberately separate
      * from [trainingDate], which is where the *plan* put it: the two are allowed to disagree.
      */
-    val performedDate: LocalDate? = null,
     val state: OccurrenceState,
     val comment: String?,
     val orderIndex: Int,
@@ -74,6 +73,44 @@ data class LibraryExercise(
     /** Retired from the library, but still the anchor for everything that refers to it. */
     val deletedAtEpochMs: Long? = null,
 )
+
+/**
+ * What removing an exercise from the library would actually do.
+ *
+ * The three cases are genuinely different promises, so the screen must say which one it is making
+ * rather than offer a single "remove" that means whichever of them happens to apply.
+ */
+data class ExerciseRemoval(
+    val exercise: LibraryExercise,
+    /** Planned copies pointing at it, trained or not. */
+    val plannedCopies: Int,
+    /** Sets ever logged against it, under any copy. */
+    val loggedSets: Int,
+) {
+    enum class Kind {
+        /** Nothing refers to it: created by mistake, never used. */
+        UNUSED,
+
+        /** Planned, never performed. The plans are garbage too, and go with it. */
+        PLANNED_NEVER_LOGGED,
+
+        /** Trained at least once, so the row stays as the anchor for that history. */
+        LOGGED,
+    }
+
+    val kind: Kind
+        get() = when {
+            loggedSets > 0 -> Kind.LOGGED
+            plannedCopies > 0 -> Kind.PLANNED_NEVER_LOGGED
+            else -> Kind.UNUSED
+        }
+
+    /** What actually happened, reported back after the fact. */
+    enum class Outcome { DELETED, DELETED_WITH_PLANS, RETIRED }
+}
+
+/** One set about to be written: what it says, and which side it was done on. */
+data class SetWrite(val payload: ActualSetPayload, val side: BodySide?)
 
 /** Everything the exercise editor writes. Identity and default prescription travel together. */
 data class ExerciseDraft(
@@ -122,23 +159,14 @@ class TrainingRepository(private val database: MeleteDatabase) {
     // ---------------------------------------------------------------- week
 
     /**
-     * The planner's view of a week: placements by *planned* date, each annotated with where its
-     * work was actually logged when that differs.
-     */
-    fun observeWeek(weekStart: LocalDate): Flow<List<PlannedOccurrence>> = combine(
-        dao.observeWeek(weekStart.toEpochDay()),
-        logging.observePerformedDatesInWeek(weekStart.toEpochDay()),
-    ) { rows, performed ->
-        val byOccurrence = performed.groupBy { it.occurrenceId }
-        rows.map { row ->
-            // Several performed dates for one occurrence is possible if sets were logged across
-            // midnight; the earliest is the honest answer for a single marker.
-            val date = byOccurrence[row.occurrence.id]
-                ?.minOfOrNull { it.trainingDateEpochDay }
-                ?.let(LocalDate::ofEpochDay)
-            row.toPlanned(performedDate = date)
-        }
-    }
+      * The planner's view of a week.
+      *
+      * A placement carries one date, and its logged sets are filed under that same date. The two
+      * cannot drift apart, because moving the placement moves the sets with it — see
+      * [moveOccurrence]. What a card says is therefore what happened, once anything has happened.
+      */
+    fun observeWeek(weekStart: LocalDate): Flow<List<PlannedOccurrence>> =
+        dao.observeWeek(weekStart.toEpochDay()).map { rows -> rows.map { it.toPlanned() } }
 
     /** Every placement of one exercise, including those whose definition has been retired. */
     fun observeOccurrencesOf(exerciseId: String): Flow<List<PlannedOccurrence>> =
@@ -250,15 +278,56 @@ class TrainingRepository(private val database: MeleteDatabase) {
     }
 
     /**
-     * Retires an exercise from the library.
+     * What removing this exercise would cost, counted before anything is asked.
      *
-     * A tombstone, never a delete. The row anchors scheduled copies, logged sets and the grouping
-     * that makes "previous results" work; removing it would take history with it. What the user
-     * is asking for is "stop offering me this", which is exactly what this does.
+     * Returns null for an id the library does not know, which is the only case where there is
+     * nothing to offer.
      */
-    suspend fun retireExercise(exerciseId: String) {
-        library.markExerciseDeleted(exerciseId, System.currentTimeMillis())
-    }
+    suspend fun removalImpactOf(exerciseId: String): ExerciseRemoval? =
+        database.withTransaction {
+            val exercise = library.getExerciseWithDefault(exerciseId)?.toLibraryExercise()
+                ?: return@withTransaction null
+            ExerciseRemoval(
+                exercise = exercise,
+                plannedCopies = library.countOccurrencesOf(exerciseId),
+                loggedSets = library.countSetsOf(exerciseId),
+            )
+        }
+
+    /**
+     * Removes an exercise, as completely as its history allows.
+     *
+     * A row that nothing refers to is deleted outright, along with the planned copies that were
+     * never trained: a mistake should leave nothing behind. Once a single set has been logged
+     * against it the row becomes a tombstone instead, because it anchors that set's lineage and
+     * the grouping that makes "previous results" work. The rule is the user's: keep the fact that
+     * it was done, never the fact that it was merely planned.
+     *
+     * Re-counted inside the transaction rather than trusting the [ExerciseRemoval] the dialog was
+     * drawn from, so a set logged between asking and confirming still protects itself.
+     */
+    suspend fun removeExercise(exerciseId: String): ExerciseRemoval.Outcome =
+        database.withTransaction {
+            if (library.countSetsOf(exerciseId) > 0) {
+                library.markExerciseDeleted(exerciseId, System.currentTimeMillis())
+                return@withTransaction ExerciseRemoval.Outcome.RETIRED
+            }
+            val plannedCopies = library.countOccurrencesOf(exerciseId)
+            val prescriptions = buildList {
+                addAll(library.occurrencePrescriptionIdsOf(exerciseId))
+                library.getExerciseWithDefault(exerciseId)?.exercise?.defaultPrescriptionId
+                    ?.let { add(it) }
+            }
+            // Occurrences first: their prescription copies are held by a RESTRICT foreign key.
+            library.deleteOccurrencesOf(exerciseId)
+            library.deleteExercise(exerciseId)
+            prescriptions.distinct().forEach { library.deletePrescriptionIfUnused(it) }
+            if (plannedCopies > 0) {
+                ExerciseRemoval.Outcome.DELETED_WITH_PLANS
+            } else {
+                ExerciseRemoval.Outcome.DELETED
+            }
+        }
 
     suspend fun restoreExercise(exerciseId: String) = library.restoreExercise(exerciseId)
 
@@ -348,24 +417,40 @@ class TrainingRepository(private val database: MeleteDatabase) {
      * logged on, because moving a plan is a statement about the future and re-dating evidence is
      * a different decision the user has to make on purpose.
      */
+    /**
+     * Moves a placement, and whatever was logged against it, to another day.
+     *
+     * Once a set exists, the placement is no longer a plan — it is the record of a thing that was
+     * done, and its date is the day it was done on. So the sets are re-dated with it and re-homed
+     * into that day's session, rather than being left behind on the day it was once planned for.
+     *
+     * Returns false without changing anything when asked to unschedule a placement that has been
+     * trained: work that happened happened on a day, and "anytime this week" cannot describe it.
+     * The dialog does not offer the option, so this is the guard rather than the message.
+     */
     suspend fun moveOccurrence(
         occurrenceId: String,
         weekStart: LocalDate,
         trainingDate: LocalDate?,
-    ) {
-        database.withTransaction {
-            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
-            dao.updateOccurrence(
-                occurrence.copy(
-                    weekStartEpochDay = weekStart.toEpochDay(),
-                    trainingDateEpochDay = trainingDate?.toEpochDay(),
-                    orderIndex = dao.nextOrderIndex(
-                        weekStart.toEpochDay(),
-                        trainingDate?.toEpochDay(),
-                    ),
-                )
+    ): Boolean = database.withTransaction {
+        val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction false
+        val loggedSets = logging.countSetsForOccurrence(occurrenceId)
+        if (trainingDate == null && loggedSets > 0) return@withTransaction false
+        dao.updateOccurrence(
+            occurrence.copy(
+                weekStartEpochDay = weekStart.toEpochDay(),
+                trainingDateEpochDay = trainingDate?.toEpochDay(),
+                orderIndex = dao.nextOrderIndex(
+                    weekStart.toEpochDay(),
+                    trainingDate?.toEpochDay(),
+                ),
             )
+        )
+        if (trainingDate != null && loggedSets > 0) {
+            val session = ensureSession(trainingDate)
+            logging.repointSets(occurrenceId, trainingDate.toEpochDay(), session.id)
         }
+        true
     }
 
     /**
@@ -375,10 +460,28 @@ class TrainingRepository(private val database: MeleteDatabase) {
      * does, so editing one copy never reaches the other. Nothing logged is copied: the new copy is
      * a plan, and has not happened yet.
      */
+    /**
+     * Duplicates a placement into its own week's unscheduled area, at the top.
+     *
+     * Duplicating is for "I want this again", and the answer to *when* is almost always "not yet".
+     * Unscheduled is where that belongs, and the top is where a thing you just asked for should
+     * appear — a copy that lands at the bottom of a long list looks like nothing happened.
+     */
+    suspend fun duplicateOccurrence(occurrenceId: String): String? = database.withTransaction {
+        val source = dao.getOccurrence(occurrenceId) ?: return@withTransaction null
+        copyOccurrence(
+            occurrenceId = occurrenceId,
+            weekStart = LocalDate.ofEpochDay(source.weekStartEpochDay),
+            trainingDate = null,
+            atTop = true,
+        )
+    }
+
     suspend fun copyOccurrence(
         occurrenceId: String,
         weekStart: LocalDate,
         trainingDate: LocalDate?,
+        atTop: Boolean = false,
     ): String? = database.withTransaction {
         val source = dao.getOccurrence(occurrenceId) ?: return@withTransaction null
         val now = System.currentTimeMillis()
@@ -399,7 +502,11 @@ class TrainingRepository(private val database: MeleteDatabase) {
             weekStartEpochDay = weekStart.toEpochDay(),
             trainingDateEpochDay = trainingDate?.toEpochDay(),
             prescriptionId = prescriptionCopy?.id,
-            orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
+            orderIndex = if (atTop) {
+                dao.firstOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+            } else {
+                dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+            },
             state = OccurrenceState.PLANNED,
             comment = null,
             createdAtEpochMs = now,
@@ -433,13 +540,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
      * untouched: an exercise can stay planned on Monday while its work is recorded on Tuesday, and
      * the planner and the history are both then telling the truth.
      */
-    suspend fun setPerformedDate(occurrenceId: String, performedDate: LocalDate) {
-        database.withTransaction {
-            val session = ensureSession(performedDate)
-            logging.repointSets(occurrenceId, performedDate.toEpochDay(), session.id)
-        }
-    }
-
     /**
      * Deletes a placement *and* the work logged against it.
      *
@@ -521,6 +621,50 @@ class TrainingRepository(private val database: MeleteDatabase) {
         set.id
     }
 
+    /**
+     * Writes a whole workout at once, replacing anything previously written for it.
+     *
+     * Logging is a single act: the table is a draft until the workout is marked done, and then it
+     * becomes the record in one transaction. Replacing rather than appending is what makes marking
+     * done a second time a correction instead of a duplication — the user edits the same table and
+     * presses the same button, and the record ends up saying what the table says.
+     *
+     * The occurrence is planted on [trainingDate] if it had no date, exactly as logging a single
+     * set used to do: work that happened belongs to the day it happened on.
+     */
+    suspend fun replaceSetsForOccurrence(
+        occurrenceId: String,
+        trainingDate: LocalDate,
+        sets: List<SetWrite>,
+    ) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            if (occurrence.trainingDateEpochDay == null) {
+                assignOccurrenceDate(occurrenceId, trainingDate)
+            }
+            val session = ensureSession(trainingDate)
+            logging.deleteSetsForOccurrence(occurrenceId)
+            val now = System.currentTimeMillis()
+            sets.forEachIndexed { index, write ->
+                logging.insertSet(
+                    ActualSetEntity(
+                        id = UUID.randomUUID().toString(),
+                        occurrenceId = occurrenceId,
+                        sessionId = session.id,
+                        exerciseId = occurrence.exerciseId,
+                        trainingDateEpochDay = trainingDate.toEpochDay(),
+                        prescriptionId = occurrence.prescriptionId,
+                        orderIndex = index,
+                        side = write.side,
+                        payloadVersion = ACTUAL_SET_PAYLOAD_VERSION,
+                        payloadJson = ActualSetJson.encode(write.payload),
+                        recordedAtEpochMs = now,
+                    )
+                )
+            }
+        }
+    }
+
     /** Corrects an already recorded set. History is editable; snapshots are not. */
     suspend fun updateSet(setId: String, payload: ActualSetPayload, side: BodySide?) {
         database.withTransaction {
@@ -588,7 +732,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
 }
 
 private fun OccurrenceWithPrescription.toPlanned(
-    performedDate: LocalDate? = null,
 ): PlannedOccurrence {
     val payload: PrescriptionPayload? = prescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
@@ -607,7 +750,6 @@ private fun OccurrenceWithPrescription.toPlanned(
         prescriptionId = occurrence.prescriptionId,
         prescription = payload,
         prescriptionUnreadable = prescription != null && payload == null,
-        performedDate = performedDate,
         state = occurrence.state,
         comment = occurrence.comment,
         orderIndex = occurrence.orderIndex,
