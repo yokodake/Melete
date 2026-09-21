@@ -21,6 +21,12 @@ data class OccurrenceWithPrescription(
     val prescription: PrescriptionEntity?,
 )
 
+/** One logged set, reduced to what the planner needs to summarise it. */
+data class SetPayloadRow(
+    val occurrenceId: String,
+    val payloadJson: String,
+)
+
 /** A library exercise together with its current default prescription. */
 data class ExerciseWithDefaultPrescription(
     @Embedded val exercise: ExerciseEntity,
@@ -268,6 +274,23 @@ interface LoggingDao {
 
     @Query("DELETE FROM actual_sets WHERE occurrenceId = :occurrenceId")
     suspend fun deleteSetsForOccurrence(occurrenceId: String)
+
+    /**
+     * Every logged set in one week, as its occurrence and its raw payload.
+     *
+     * The load lives inside the JSON payload rather than in a column, so the heaviest set cannot
+     * be found with MAX() and is worked out after decoding. Cheap enough: a week holds a few dozen
+     * sets, and this only feeds a label.
+     */
+    @Query(
+        """
+        SELECT a.occurrenceId AS occurrenceId, a.payloadJson AS payloadJson
+        FROM actual_sets a
+        JOIN exercise_occurrences o ON a.occurrenceId = o.id
+        WHERE o.weekStartEpochDay = :weekStartEpochDay
+        """
+    )
+    fun observeSetPayloadsInWeek(weekStartEpochDay: Long): Flow<List<SetPayloadRow>>
 
     /**
      * Re-dates every set of one occurrence together, and re-homes them into that day's session.

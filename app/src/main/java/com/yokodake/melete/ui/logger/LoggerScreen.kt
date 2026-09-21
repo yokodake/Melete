@@ -233,7 +233,7 @@ fun LoggerScreen(
                 }
             }
             item {
-                CommentRow(comment = occurrence.comment, onClick = viewModel::openCommentEditor)
+                CommentBox(comment = state.comment, onChange = viewModel::updateComment)
             }
             item {
                 DoneRow(
@@ -274,33 +274,6 @@ fun LoggerScreen(
         )
     }
 
-    state.commentEditor?.let { comment ->
-        AlertDialog(
-            onDismissRequest = viewModel::dismissCommentEditor,
-            title = { Text("Comment") },
-            text = {
-                Column {
-                    Text(
-                        text = "Belongs to this exercise on this day, not to a single set.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    OutlinedTextField(
-                        value = comment,
-                        onValueChange = viewModel::updateCommentEditor,
-                        minLines = 3,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                    )
-                }
-            },
-            confirmButton = { TextButton(onClick = viewModel::saveComment) { Text("Save") } },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissCommentEditor) { Text("Cancel") }
-            },
-        )
-    }
 
     if (showDatePicker) {
         val pickerState = rememberDatePickerState(
@@ -468,27 +441,23 @@ private fun PerformedSetRow(
     }
 }
 
+/**
+ * The note, written where it is read.
+ *
+ * It used to be a row that opened a dialog to type into, which is two taps and a context switch
+ * to write one line. The note belongs to this exercise on this day, so it sits with it and is
+ * saved with it when the workout is marked done.
+ */
 @Composable
-private fun CommentRow(comment: String?, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.medium,
+private fun CommentBox(comment: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = comment,
+        onValueChange = onChange,
+        label = { Text("Comment") },
+        placeholder = { Text("A note about this exercise today") },
+        minLines = 2,
         modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("Comment", style = MaterialTheme.typography.labelMedium)
-            Text(
-                text = comment ?: "Add a note about this exercise today",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (comment == null) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-            )
-        }
-    }
+    )
 }
 
 /**
@@ -667,31 +636,35 @@ private fun MaxLoadRow(
     unilateral: Boolean,
     onMaxLoad: (String, Boolean) -> Unit,
 ) {
-    Row(
+    // The heading sits above the fields rather than beside them. An OutlinedTextField asks for
+    // 280dp by default, so two of them on one line leave a label nothing to render into and it
+    // wraps to a letter per row.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Max load",
+            text = "Max load ($unit)",
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f),
         )
-        Text(
-            text = "($unit)",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(end = 12.dp),
-        )
-        if (unilateral) {
-            SideLabel("L")
-            LoadField(table.maxLoad) { onMaxLoad(it, false) }
-            Spacer(Modifier.width(8.dp))
-            SideLabel("R")
-            LoadField(table.maxLoadRight) { onMaxLoad(it, true) }
-        } else {
-            LoadField(table.maxLoad) { onMaxLoad(it, false) }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (unilateral) {
+                SideLabel("L")
+                LoadField(table.maxLoad, modifier = Modifier.weight(1f)) { onMaxLoad(it, false) }
+                Spacer(Modifier.width(8.dp))
+                SideLabel("R")
+                LoadField(table.maxLoadRight, modifier = Modifier.weight(1f)) {
+                    onMaxLoad(it, true)
+                }
+            } else {
+                LoadField(table.maxLoad, modifier = Modifier.weight(1f)) { onMaxLoad(it, false) }
+            }
         }
     }
 }

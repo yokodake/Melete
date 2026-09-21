@@ -51,6 +51,8 @@ data class PlannedOccurrence(
      * The date the work was actually filed under, when any has been logged. Deliberately separate
      * from [trainingDate], which is where the *plan* put it: the two are allowed to disagree.
      */
+    /** The heaviest set logged against this placement, when anything was. */
+    val maxLoad: Double? = null,
     val state: OccurrenceState,
     val comment: String?,
     val orderIndex: Int,
@@ -165,8 +167,24 @@ class TrainingRepository(private val database: MeleteDatabase) {
       * cannot drift apart, because moving the placement moves the sets with it — see
       * [moveOccurrence]. What a card says is therefore what happened, once anything has happened.
       */
-    fun observeWeek(weekStart: LocalDate): Flow<List<PlannedOccurrence>> =
-        dao.observeWeek(weekStart.toEpochDay()).map { rows -> rows.map { it.toPlanned() } }
+    fun observeWeek(weekStart: LocalDate): Flow<List<PlannedOccurrence>> = combine(
+        dao.observeWeek(weekStart.toEpochDay()),
+        logging.observeSetPayloadsInWeek(weekStart.toEpochDay()),
+    ) { rows, payloads ->
+        // The heaviest set of each workout, so a card that says it is done can say what it took.
+        val heaviest: Map<String, Double> = payloads
+            .mapNotNull { row ->
+                val value = runCatching { ActualSetJson.decode(row.payloadJson) }
+                    .getOrNull()
+                    ?.measurement
+                    ?.value
+                value?.let { row.occurrenceId to it }
+            }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, values) -> values.max() }
+
+        rows.map { it.toPlanned(maxLoad = heaviest[it.occurrence.id]) }
+    }
 
     /** Every placement of one exercise, including those whose definition has been retired. */
     fun observeOccurrencesOf(exerciseId: String): Flow<List<PlannedOccurrence>> =
@@ -732,6 +750,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
 }
 
 private fun OccurrenceWithPrescription.toPlanned(
+    maxLoad: Double? = null,
 ): PlannedOccurrence {
     val payload: PrescriptionPayload? = prescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
@@ -750,6 +769,7 @@ private fun OccurrenceWithPrescription.toPlanned(
         prescriptionId = occurrence.prescriptionId,
         prescription = payload,
         prescriptionUnreadable = prescription != null && payload == null,
+        maxLoad = maxLoad,
         state = occurrence.state,
         comment = occurrence.comment,
         orderIndex = occurrence.orderIndex,

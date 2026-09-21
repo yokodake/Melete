@@ -20,6 +20,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import com.yokodake.melete.ui.components.Chip
+import com.yokodake.melete.ui.components.trimNumber
 import com.yokodake.melete.ui.components.PlanTarget
 import com.yokodake.melete.ui.components.PlanTargetDialog
 import kotlinx.coroutines.launch
@@ -527,6 +528,18 @@ private fun OccurrenceCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // What it actually took. The number worth seeing at a glance when looking back
+                // over a week, so it is the one thing on the card set in bold.
+                if (occurrence.state == OccurrenceState.COMPLETED && occurrence.maxLoad != null) {
+                    Text(
+                        text = buildString {
+                            append(trimNumber(occurrence.maxLoad))
+                            occurrence.measurementUnit?.let { append(" ").append(it) }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
                 occurrence.comment?.let {
                     Text(
                         text = it,
