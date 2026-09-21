@@ -4,10 +4,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -131,9 +137,14 @@ fun PrescriptionFields(
 }
 
 /**
- * The five-point effort scale. Tapping the selected level clears it again, because an effort
- * rating is always optional and must stay genuinely unset rather than defaulting to a middle
- * value nobody chose.
+ * The five-point effort scale, as a dropdown.
+ *
+ * Five chips across the width of a phone wrapped onto two lines and took a whole band of the
+ * screen to say something optional. A closed dropdown states the answer in one line and costs one
+ * tap to change, which is the right weight for a field that is usually left alone.
+ *
+ * "Not set" is a real entry rather than a gesture, because clearing a rating must be as findable
+ * as setting one.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,20 +153,45 @@ fun EffortSelector(
     onSelect: (EffortLevel?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    FlowRow(
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        EffortLevel.entries.forEach { level ->
-            FilterChip(
-                selected = selected == level,
-                onClick = { onSelect(if (selected == level) null else level) },
-                label = { Text(level.label) },
+        OutlinedTextField(
+            value = selected?.label ?: NOT_SET,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(NOT_SET) },
+                onClick = {
+                    expanded = false
+                    onSelect(null)
+                },
             )
+            EffortLevel.entries.forEach { level ->
+                DropdownMenuItem(
+                    text = { Text(level.label) },
+                    onClick = {
+                        expanded = false
+                        onSelect(level)
+                    },
+                )
+            }
         }
     }
 }
+
+private const val NOT_SET = "Not set"
 
 @Composable
 fun NumberField(

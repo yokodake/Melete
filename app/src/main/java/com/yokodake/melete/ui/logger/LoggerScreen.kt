@@ -47,6 +47,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -72,8 +74,6 @@ import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
-import com.yokodake.melete.data.timer.TimerPhase
-import com.yokodake.melete.ui.timer.formatClock
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.ui.components.EffortSelector
 import com.yokodake.melete.ui.components.NumberField
@@ -90,15 +90,18 @@ fun LoggerRoute(
     viewModel: LoggerViewModel = viewModel(factory = LoggerViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val timer by viewModel.timerState.collectAsStateWithLifecycle()
-    LoggerScreen(state = state, timer = timer, viewModel = viewModel, onBack = onBack)
+    // Marking done ends the screen: the workout is written, and there is nothing further to say
+    // about it here.
+    LaunchedEffect(Unit) {
+        viewModel.finished.collect { onBack() }
+    }
+    LoggerScreen(state = state, viewModel = viewModel, onBack = onBack)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoggerScreen(
     state: LoggerUiState,
-    timer: LoggerTimerState,
     viewModel: LoggerViewModel,
     onBack: () -> Unit,
 ) {
@@ -144,6 +147,14 @@ fun LoggerScreen(
                         Text("‹", style = MaterialTheme.typography.headlineMedium)
                     }
                 },
+                actions = {
+                    if (occurrence != null) {
+                        LoggerMenu(
+                            state = occurrence.state,
+                            onMark = viewModel::markState,
+                        )
+                    }
+                },
             )
         },
 
@@ -165,16 +176,6 @@ fun LoggerScreen(
                     onEdit = viewModel::openPrescriptionEditor,
                 )
             }
-            item {
-                TimerRow(
-                    timer = timer,
-                    canStartWork = occurrence.mode.isTimed &&
-                        occurrence.prescription?.targetDurationSeconds != null,
-                    restSeconds = occurrence.prescription?.restSeconds,
-                    onStartWork = viewModel::startWork,
-                    onStartRest = viewModel::startRest,
-                )
-            }
             if (occurrence.trainingDate == null) {
                 item {
                     UnscheduledCard(
@@ -191,7 +192,7 @@ fun LoggerScreen(
                 }
             }
             item {
-                SectionLabel("How hard was this exercise?")
+                SectionLabel("Effort")
                 EffortSelector(
                     selected = state.table.effort,
                     onSelect = viewModel::setTableEffort,
@@ -235,9 +236,10 @@ fun LoggerScreen(
                 CommentRow(comment = occurrence.comment, onClick = viewModel::openCommentEditor)
             }
             item {
-                StateRow(
-                    state = occurrence.state,
-                    onMark = viewModel::markState,
+                DoneRow(
+                    table = state.table,
+                    measured = occurrence.measurementUnit != null,
+                    onDone = viewModel::markDone,
                 )
             }
             // Taking an exercise back out of the week lives on the week screen, behind a long
@@ -348,69 +350,6 @@ private fun SectionLabel(text: String) {
     }
 }
 
-/**
- * The countdown, reachable from the exercise being logged. Starting one is always a deliberate
- * tap, and a running one shows its remaining time here so there is no need to leave the logger.
- */
-@Composable
-private fun TimerRow(
-    timer: LoggerTimerState,
-    canStartWork: Boolean,
-    restSeconds: Int?,
-    onStartWork: () -> Unit,
-    onStartRest: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (timer.active) {
-                MaterialTheme.colorScheme.tertiaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = if (timer.active) {
-                        val phase = if (timer.phase == TimerPhase.WORK) "Work" else "Rest"
-                        if (timer.paused) "$phase paused" else phase
-                    } else {
-                        "Timer"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Text(
-                    text = if (timer.active) {
-                        formatClock(timer.remainingMs)
-                    } else {
-                        "Not running"
-                    },
-                    style = if (timer.active) {
-                        MaterialTheme.typography.headlineSmall
-                    } else {
-                        MaterialTheme.typography.bodyMedium
-                    },
-                    color = if (timer.active) {
-                        MaterialTheme.colorScheme.onTertiaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            if (canStartWork) {
-                TextButton(onClick = onStartWork) { Text("Work") }
-            }
-            TextButton(onClick = onStartRest) {
-                Text(restSeconds?.let { "Rest ${PrescriptionSummary.duration(it)}" } ?: "Rest")
-            }
-        }
-    }
-}
 
 @Composable
 private fun PlannedCard(occurrence: PlannedOccurrence, onEdit: () -> Unit) {
@@ -552,41 +491,61 @@ private fun CommentRow(comment: String?, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Finishing the workout, which is the one thing this screen is for.
+ *
+ * A filled button rather than an outlined one: this is the action the screen exists to take, and
+ * it commits — everything above it is a draft until it is pressed. It stays enabled even when the
+ * table is short of what it needs, and says what is missing instead, because a dead button that
+ * will not explain itself is the worst of both.
+ */
 @Composable
-private fun StateRow(state: OccurrenceState, onMark: (OccurrenceState) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        OutlinedButton(
-            onClick = {
-                onMark(
-                    if (state == OccurrenceState.COMPLETED) {
-                        OccurrenceState.PLANNED
-                    } else {
-                        OccurrenceState.COMPLETED
-                    }
-                )
-            },
-            modifier = Modifier.weight(1f),
+private fun DoneRow(table: SetTable, measured: Boolean, onDone: () -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Button(
+            onClick = onDone,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (state == OccurrenceState.COMPLETED) "Done ✓" else "Mark done")
+            Text(if (table.committed) "Save changes" else "Mark done")
         }
-        OutlinedButton(
-            onClick = {
-                onMark(
-                    if (state == OccurrenceState.SKIPPED) {
-                        OccurrenceState.PLANNED
-                    } else {
-                        OccurrenceState.SKIPPED
-                    }
-                )
-            },
-            modifier = Modifier.weight(1f),
+        table.blocker(measured)?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+/** The things you do to a workout now and again, kept out of the way of the things you always do. */
+@Composable
+private fun LoggerMenu(state: OccurrenceState, onMark: (OccurrenceState) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.semantics { contentDescription = "Workout actions" },
         ) {
-            Text(if (state == OccurrenceState.SKIPPED) "Skipped" else "Skip")
+            Text("⋮", style = MaterialTheme.typography.titleLarge)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = {
+                    Text(if (state == OccurrenceState.SKIPPED) "Not skipped after all" else "Skip")
+                },
+                onClick = {
+                    expanded = false
+                    onMark(
+                        if (state == OccurrenceState.SKIPPED) {
+                            OccurrenceState.PLANNED
+                        } else {
+                            OccurrenceState.SKIPPED
+                        }
+                    )
+                },
+            )
         }
     }
 }
@@ -727,12 +686,12 @@ private fun MaxLoadRow(
         )
         if (unilateral) {
             SideLabel("L")
-            LoadField(table.maxLoad, enabled = true) { onMaxLoad(it, false) }
+            LoadField(table.maxLoad) { onMaxLoad(it, false) }
             Spacer(Modifier.width(8.dp))
             SideLabel("R")
-            LoadField(table.maxLoadRight, enabled = true) { onMaxLoad(it, true) }
+            LoadField(table.maxLoadRight) { onMaxLoad(it, true) }
         } else {
-            LoadField(table.maxLoad, enabled = true) { onMaxLoad(it, false) }
+            LoadField(table.maxLoad) { onMaxLoad(it, false) }
         }
     }
 }
@@ -809,14 +768,14 @@ private fun SetTableRow(
                 modifier = Modifier.width(56.dp),
             )
             if (unit != null) {
-                // A recorded row is not editable in place: untick it to change what it says, so
-                // that altering history is always a deliberate two-step.
-                LoadField(row.load, enabled = !row.done, modifier = Modifier.weight(1f)) {
+                // A recorded row stays editable. The tick says the set happened; the load says
+                // what it weighed, and correcting the second is not a statement about the first.
+                LoadField(row.load, modifier = Modifier.weight(1f)) {
                     onLoad(row.number, it, false)
                 }
                 if (unilateral) {
                     Spacer(Modifier.width(8.dp))
-                    LoadField(row.loadRight, enabled = !row.done, modifier = Modifier.weight(1f)) {
+                    LoadField(row.loadRight, modifier = Modifier.weight(1f)) {
                         onLoad(row.number, it, true)
                     }
                 }
@@ -841,7 +800,6 @@ private fun SideLabel(text: String) {
 @Composable
 private fun LoadField(
     value: String,
-    enabled: Boolean,
     modifier: Modifier = Modifier,
     onValueChange: (String) -> Unit,
 ) {
@@ -850,7 +808,6 @@ private fun LoadField(
         onValueChange = { typed ->
             onValueChange(typed.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.'))
         },
-        enabled = enabled,
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyLarge,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

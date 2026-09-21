@@ -106,7 +106,7 @@ fun ExerciseDetailScreen(
                         CategoryDot(state.category)
                         Column {
                             Text(state.name, style = MaterialTheme.typography.titleMedium)
-                            Text(state.subtitle, style = MaterialTheme.typography.bodySmall)
+                            Text(state.category?.label ?: "", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 },
@@ -148,7 +148,7 @@ fun ExerciseDetailScreen(
                 return@Column
             }
 
-            Section("What it is")
+            Section("Description")
             Text(
                 text = state.description
                     ?: if (state.definitionMissing) {
@@ -321,7 +321,7 @@ private fun ActionBar(
                 Text(state.timerButtonLabel)
             }
             Button(onClick = onLog, modifier = Modifier.weight(1f)) {
-                Text("Log the workout")
+                Text(state.logButtonLabel)
             }
         }
     }
