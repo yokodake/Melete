@@ -12,7 +12,9 @@ import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.PlannedCue
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
+import com.yokodake.melete.data.timer.WorkKind
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,49 +24,97 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** A minutes-and-seconds pair, kept as typed text so a half-typed field is not silently a zero. */
+data class DurationDraft(val minutes: String = "0", val seconds: String = "00") {
+    val totalSeconds: Int
+        get() = ((minutes.toIntOrNull() ?: 0) * 60 + (seconds.toIntOrNull() ?: 0))
+            .coerceIn(0, MAX_SECONDS)
+
+    companion object {
+        const val MAX_SECONDS = 60 * 60
+
+        fun of(seconds: Int) = DurationDraft(
+            minutes = (seconds / 60).toString(),
+            seconds = (seconds % 60).toString().padStart(2, '0'),
+        )
+    }
+}
+
 data class TimerUiState(
     val state: TimerState = TimerState.Idle,
     val remainingMs: Long = 0,
     val totalMs: Long = 0,
-    /** Typed minutes and seconds, kept as text so a half-typed field is not silently a zero. */
-    val draftMinutes: String = "3",
-    val draftSeconds: String = "00",
-    val draftPhase: TimerPhase = TimerPhase.REST,
+    val mode: WorkKind = WorkKind.TIMED,
+    val work: DurationDraft = DurationDraft.of(30),
+    val rest: DurationDraft = DurationDraft.of(180),
+    val setsText: String = "3",
     val cues: CueSettings = CueSettings(),
 ) {
     val isRunning: Boolean get() = state is TimerState.Running
     val isPaused: Boolean get() = state is TimerState.Paused
     val isIdle: Boolean get() = state is TimerState.Idle
+    val isAwaitingSet: Boolean get() = state is TimerState.AwaitingSet
 
-    /** The countdown the typed fields add up to. Clamped only where it is actually started. */
-    val draftTotalSeconds: Int
-        get() = (draftMinutes.toIntOrNull() ?: 0) * 60 + (draftSeconds.toIntOrNull() ?: 0)
+    val sets: Int get() = (setsText.toIntOrNull() ?: 0).coerceIn(0, 99)
 
-    val canStart: Boolean get() = draftTotalSeconds > 0
+    /** The program the fields add up to, or null when they do not yet describe a valid one. */
+    val draftProgram: TimerProgram?
+        get() {
+            if (sets < 1) return null
+            if (mode == WorkKind.TIMED && work.totalSeconds < 1) return null
+            return TimerProgram(
+                sets = sets,
+                work = mode,
+                workSeconds = work.totalSeconds,
+                restSeconds = rest.totalSeconds,
+            )
+        }
 
-    /** What this countdown will actually sound, given its length. */
+    val canStart: Boolean get() = draftProgram != null
+
+    /** The phase whose length the cue preview should describe: the work, or the rest alone. */
+    private val previewPhase: TimerPhase
+        get() = if (mode == WorkKind.TIMED) TimerPhase.WORK else TimerPhase.REST
+
+    private val previewMs: Long
+        get() = if (mode == WorkKind.TIMED) {
+            work.totalSeconds * 1000L
+        } else {
+            rest.totalSeconds * 1000L
+        }
+
+    /** What one interval of this program will sound, given its length. */
     val plannedCues: List<PlannedCue>
-        get() = CuePlanner.plan(draftPhase, draftTotalSeconds * 1000L, cues)
+        get() = CuePlanner.plan(previewPhase, previewMs, cues)
 
     val quarterCuesApply: Boolean
         get() = cues.quarterCues &&
-            draftPhase == TimerPhase.WORK &&
-            draftTotalSeconds * 1000L >= CuePlanner.QUARTER_CUE_MIN_MS
+            previewPhase == TimerPhase.WORK &&
+            previewMs >= CuePlanner.QUARTER_CUE_MIN_MS
 
     val thirtySecondWarningApplies: Boolean
-        get() = cues.thirtySecondWarning && draftTotalSeconds > 30
+        get() = cues.thirtySecondWarning && previewMs > 30_000
 
-    /** The phase of whatever is on screen: the live run, or the one about to be started. */
+    /** The phase of whatever is on screen: the live interval, or the one about to start. */
     val shownPhase: TimerPhase
         get() = when (state) {
             is TimerState.Running -> state.phase
             is TimerState.Paused -> state.phase
+            is TimerState.AwaitingSet -> TimerPhase.WORK
             is TimerState.Finished -> state.phase
             is TimerState.Interrupted -> state.phase
-            TimerState.Idle -> draftPhase
+            TimerState.Idle -> previewPhase
         }
 
     val label: String? get() = state.activeLabel
+
+    /** "set 2 of 5", or null when there is only one set or nothing running. */
+    val setProgress: String?
+        get() {
+            val program = state.activeProgram ?: return null
+            val current = state.currentSet ?: return null
+            return if (program.sets > 1) "Set $current of ${program.sets}" else null
+        }
 
     val progress: Float
         get() = if (totalMs <= 0) 0f else (1f - remainingMs.toFloat() / totalMs).coerceIn(0f, 1f)
@@ -74,8 +124,10 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
 
     private val draft = MutableStateFlow(
         Draft(
-            phase = TimerPhase.REST,
-            seconds = controller.lastDurationSeconds(TimerPhase.REST),
+            mode = WorkKind.TIMED,
+            work = DurationDraft.of(controller.lastDurationSeconds(TimerPhase.WORK)),
+            rest = DurationDraft.of(controller.lastDurationSeconds(TimerPhase.REST)),
+            sets = controller.lastSets.toString(),
             cues = controller.cueSettings,
         )
     )
@@ -96,11 +148,13 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
                     is TimerState.Paused -> state.totalMs
                     is TimerState.Finished -> state.totalMs
                     is TimerState.Interrupted -> state.totalMs
-                    TimerState.Idle -> currentDraft.totalSeconds * 1000L
+                    is TimerState.AwaitingSet -> 0
+                    TimerState.Idle -> currentDraft.work.totalSeconds * 1000L
                 },
-                draftMinutes = currentDraft.minutes,
-                draftSeconds = currentDraft.seconds,
-                draftPhase = currentDraft.phase,
+                mode = currentDraft.mode,
+                work = currentDraft.work,
+                rest = currentDraft.rest,
+                setsText = currentDraft.sets,
                 cues = currentDraft.cues,
             )
         }.stateIn(
@@ -121,21 +175,25 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
     }
 
     /**
-     * Switching between work and rest changes only which kind of countdown is about to start.
-     * It deliberately does not reload the last-used duration: a number you have just typed is the
-     * thing you care about, and having it replaced the moment you classify it is maddening.
+     * Timed sets or reps. Switching deliberately keeps every number already typed: the rest and
+     * the set count mean the same thing either way, and having them replaced the moment you
+     * classify the work is maddening.
      */
-    fun setDraftPhase(phase: TimerPhase) {
-        draft.update { it.copy(phase = phase) }
-    }
+    fun setMode(mode: WorkKind) = draft.update { it.copy(mode = mode) }
 
-    fun setDraftMinutes(value: String) {
-        draft.update { it.copy(minutes = value.take(3)) }
-    }
+    fun setWorkMinutes(value: String) =
+        draft.update { it.copy(work = it.work.copy(minutes = value.take(3))) }
 
-    fun setDraftSeconds(value: String) {
-        draft.update { it.copy(seconds = value.take(2)) }
-    }
+    fun setWorkSeconds(value: String) =
+        draft.update { it.copy(work = it.work.copy(seconds = value.take(2))) }
+
+    fun setRestMinutes(value: String) =
+        draft.update { it.copy(rest = it.rest.copy(minutes = value.take(3))) }
+
+    fun setRestSeconds(value: String) =
+        draft.update { it.copy(rest = it.rest.copy(seconds = value.take(2))) }
+
+    fun setSets(value: String) = draft.update { it.copy(sets = value.take(2)) }
 
     fun setCueSettings(settings: CueSettings) {
         // Goes through the controller first: a running countdown is replanned there, so a cue
@@ -145,11 +203,11 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
     }
 
     fun start() {
-        val current = draft.value
-        val seconds = current.totalSeconds
-        if (seconds <= 0) return
-        controller.start(current.phase, seconds, current.cues)
+        val program = uiState.value.draftProgram ?: return
+        controller.start(program, draft.value.cues)
     }
+
+    fun completeSet() = controller.completeSet()
 
     fun pause() = controller.pause()
 
@@ -160,26 +218,14 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
     fun dismiss() = controller.dismiss()
 
     private data class Draft(
-        val phase: TimerPhase,
-        val minutes: String,
-        val seconds: String,
+        val mode: WorkKind,
+        val work: DurationDraft,
+        val rest: DurationDraft,
+        val sets: String,
         val cues: CueSettings,
-    ) {
-        constructor(phase: TimerPhase, seconds: Int, cues: CueSettings) : this(
-            phase = phase,
-            minutes = (seconds / 60).toString(),
-            seconds = (seconds % 60).toString().padStart(2, '0'),
-            cues = cues,
-        )
-
-        val totalSeconds: Int
-            get() = ((minutes.toIntOrNull() ?: 0) * 60 + (seconds.toIntOrNull() ?: 0))
-                .coerceIn(0, MAX_SECONDS)
-    }
+    )
 
     companion object {
-        private const val MAX_SECONDS = 60 * 60
-
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]

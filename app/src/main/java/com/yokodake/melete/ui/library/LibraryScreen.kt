@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -193,17 +192,9 @@ private fun LibraryRow(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                // The first line of the explanation, so the list answers "which one is this?"
-                // without having to open anything.
-                (exercise.description ?: exercise.notes)?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                // No explanation here on purpose: the list is for finding an exercise, and a
+                // paragraph under every row turns scanning it into reading it. The description
+                // belongs on the exercise, which is one tap away.
             }
             if (secondaryAction != null) {
                 val (action, label) = secondaryAction

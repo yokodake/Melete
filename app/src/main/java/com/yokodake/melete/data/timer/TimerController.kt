@@ -44,17 +44,25 @@ class TimerController(
     private val cueMutex = Mutex()
     private var countdownJob: Job? = null
 
+    /**
+     * Which countdown loop is the live one.
+     *
+     * A program advances from *inside* the loop — the interval ends, and the next one is armed
+     * from the same coroutine that was waiting for it — so cancelling the old loop there cannot
+     * take effect until it next suspends. Without a generation to check against, the outgoing
+     * loop would keep driving the incoming run alongside its replacement: harmless, because every
+     * cue is deduplicated, but two coroutines waking the CPU for the same deadline is exactly the
+     * waste this timer is careful about elsewhere.
+     */
+    private var loopGeneration = 0
+
     init {
         notifications.ensureChannels()
         val restored = TimerRestore.restore(store.readSnapshot(), store.bootCount, now())
         _state.value = restored
         when (restored) {
-            is TimerState.Running -> {
-                // The app came back while a countdown is still live: re-arm both paths.
-                alarms.schedule(restored)
-                startCountdownLoop()
-                startService()
-            }
+            // The app came back while a countdown, or a program waiting on a set, is still live.
+            is TimerState.Running, is TimerState.AwaitingSet -> engage(restored)
 
             is TimerState.Interrupted -> {
                 alarms.cancelAll()
@@ -98,6 +106,9 @@ class TimerController(
         }
     }
 
+    /** How many sets the last program had, so the create screen opens on a familiar number. */
+    val lastSets: Int get() = store.lastSets
+
     fun lastDurationSeconds(phase: TimerPhase): Int = when (phase) {
         TimerPhase.WORK -> store.lastWorkSeconds
         TimerPhase.REST -> store.lastRestSeconds
@@ -114,26 +125,82 @@ class TimerController(
         label: String? = null,
     ) {
         val duration = durationSeconds.coerceAtLeast(1)
-        when (phase) {
-            TimerPhase.WORK -> store.lastWorkSeconds = duration
-            TimerPhase.REST -> store.lastRestSeconds = duration
+        val program = when (phase) {
+            TimerPhase.WORK -> TimerProgram.work(duration, label)
+            TimerPhase.REST -> TimerProgram.rest(duration, label)
         }
+        start(program, settings)
+    }
+
+    /**
+     * Starts a whole program: so many sets, this long each, that much rest between them.
+     *
+     * Only the first interval is set up here. What follows is decided when this one runs out, in
+     * [deliver], because that is the moment the clock actually reaches — deciding it up front
+     * would mean holding a schedule of deadlines that a pause or a cancel would invalidate.
+     */
+    fun start(program: TimerProgram, settings: CueSettings = store.cueSettings) {
+        if (program.work == WorkKind.TIMED) store.lastWorkSeconds = program.workSeconds
+        if (program.restSeconds > 0) store.lastRestSeconds = program.restSeconds
+        store.lastSets = program.sets
         clearRun(cancelAlarms = true)
         notifications.cancelFinished()
-        val running = TimerTransitions.start(
+        val started = TimerTransitions.startProgram(
             runId = UUID.randomUUID().toString(),
-            phase = phase,
-            durationMs = duration * 1000L,
+            program = program,
             settings = settings,
             nowElapsedMs = now(),
-            label = label,
         )
-        _state.value = running
+        _state.value = started
         persist()
-        alarms.schedule(running)
-        startCountdownLoop()
-        startService()
+        engage(started)
     }
+
+    /**
+     * The athlete says a set of reps is done, which starts its rest. This is the only manual step
+     * in a program; everything after it happens on the clock.
+     */
+    fun completeSet() {
+        val awaiting = _state.value as? TimerState.AwaitingSet ?: return
+        val next = TimerTransitions.completeSet(
+            state = awaiting,
+            settings = store.cueSettings,
+            nowElapsedMs = now(),
+            nextRunId = UUID.randomUUID().toString(),
+        )
+        store.clearCues(awaiting.runId)
+        _state.value = next
+        persist()
+        if (next is TimerState.Finished) {
+            notifications.postFinished(next)
+        }
+        engage(next)
+    }
+
+    /** Arms whatever the new state needs: the countdown loop, the alarms, the service. */
+    private fun engage(state: TimerState) {
+        countdownJob?.cancel()
+        countdownJob = null
+        when (state) {
+            is TimerState.Running -> {
+                alarms.schedule(state)
+                startCountdownLoop()
+                startService()
+            }
+
+            // Nothing is counting, but the service stays up so the program is not forgotten while
+            // the phone is in a pocket between sets.
+            is TimerState.AwaitingSet -> startService()
+
+            else -> Unit
+        }
+    }
+
+    /** True while there is a program the user would lose by starting another one. */
+    val hasActiveProgram: Boolean
+        get() = _state.value.let {
+            it is TimerState.Running || it is TimerState.Paused || it is TimerState.AwaitingSet
+        }
 
     fun pause() {
         val running = _state.value as? TimerState.Running ?: return
@@ -165,7 +232,7 @@ class TimerController(
     /** Acknowledges a finished or interrupted run without recording anything. */
     fun dismiss() {
         val current = _state.value
-        if (current is TimerState.Running || current is TimerState.Paused) return
+        if (hasActiveProgram) return
         clearRun(cancelAlarms = true)
         _state.value = TimerState.Idle
         persist()
@@ -179,8 +246,9 @@ class TimerController(
 
     private fun startCountdownLoop() {
         countdownJob?.cancel()
+        val generation = ++loopGeneration
         countdownJob = scope.launch {
-            while (true) {
+            while (loopGeneration == generation) {
                 val running = _state.value as? TimerState.Running ?: return@launch
                 val nowMs = now()
                 val due = running.dueCue(nowMs)
@@ -216,16 +284,25 @@ class TimerController(
 
             if (cue == TimerCue.FINISH) {
                 alarms.cancelAll()
-                val phase = (current as? TimerState.Running)?.phase
-                    ?: (current as? TimerState.Paused)?.phase
-                _state.value = TimerTransitions.finish(current)
+                // The end of an interval is not necessarily the end of the program: the next set,
+                // or the rest between, starts from here under a new run id.
+                val next = TimerTransitions.advance(
+                    state = current,
+                    settings = store.cueSettings,
+                    nowElapsedMs = now(),
+                    nextRunId = UUID.randomUUID().toString(),
+                )
+                // The interval that just ended will never be asked about again.
+                if (next.activeRunId != runId) store.clearCues(runId)
+                _state.value = next
                 persist()
                 if (owed) {
                     cues.play(cue)
                     // Reaching zero is a cue, never a performed set: the logger is offered, and
                     // only the user can confirm that the work happened.
-                    phase?.let(notifications::postFinished)
+                    if (next is TimerState.Finished) notifications.postFinished(next)
                 }
+                engage(next)
             } else {
                 if (current is TimerState.Running) {
                     _state.value = current.copy(delivered = current.delivered + cue)

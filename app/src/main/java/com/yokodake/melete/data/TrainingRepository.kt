@@ -206,6 +206,21 @@ class TrainingRepository(private val database: MeleteDatabase) {
         }
     }
 
+    /**
+     * Replaces the library default with a new prescription row and repoints the exercise at it.
+     * Copies already placed in a week keep pointing at what they were given, because nothing is
+     * mutated in place.
+     */
+    suspend fun updateDefaultPrescription(exerciseId: String, payload: PrescriptionPayload) {
+        database.withTransaction {
+            val existing = library.getExerciseWithDefault(exerciseId)?.exercise
+                ?: return@withTransaction
+            val row = newPrescriptionRow(payload, System.currentTimeMillis())
+            library.insertPrescription(row)
+            library.updateExercise(existing.copy(defaultPrescriptionId = row.id))
+        }
+    }
+
     // ---------------------------------------------------------- scheduling
 
     /**

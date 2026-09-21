@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -50,10 +53,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
+import com.yokodake.melete.data.timer.WorkKind
 import com.yokodake.melete.ui.components.NumberField
 import com.yokodake.melete.ui.theme.aboutToStartColor
 import com.yokodake.melete.ui.theme.workingColor
+import com.yokodake.melete.ui.week.PrescriptionSummary
 
 /** How long before the end of a rest the screen starts warning that work is about to begin. */
 private const val ABOUT_TO_START_MS = 5_000L
@@ -123,6 +129,7 @@ fun TimerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -135,9 +142,14 @@ fun TimerScreen(
                     onCancel = viewModel::cancel,
                 )
 
+                is TimerState.AwaitingSet -> AwaitingSet(
+                    state = state,
+                    onSetDone = viewModel::completeSet,
+                    onCancel = viewModel::cancel,
+                )
+
                 is TimerState.Finished -> FinishedCard(
-                    phase = current.phase,
-                    label = current.label,
+                    state = current,
                     onDismiss = viewModel::dismiss,
                 )
 
@@ -148,9 +160,12 @@ fun TimerScreen(
 
                 TimerState.Idle -> IdleControls(
                     state = state,
-                    onPhase = viewModel::setDraftPhase,
-                    onMinutes = viewModel::setDraftMinutes,
-                    onSeconds = viewModel::setDraftSeconds,
+                    onMode = viewModel::setMode,
+                    onWorkMinutes = viewModel::setWorkMinutes,
+                    onWorkSeconds = viewModel::setWorkSeconds,
+                    onRestMinutes = viewModel::setRestMinutes,
+                    onRestSeconds = viewModel::setRestSeconds,
+                    onSets = viewModel::setSets,
                     onStart = ::startWithNotifications,
                 )
             }
@@ -160,19 +175,24 @@ fun TimerScreen(
 
 /**
  * The colour of the whole screen, which is the part of the timer that can be read from across a
- * room with a bar on your back: green while the work interval is running, plain while resting, and
- * amber for the last few seconds of a rest so the next set is never a surprise.
+ * room with a bar on your back: green while the work is happening, plain while resting, and amber
+ * for the last few seconds of a rest so the next set is never a surprise.
  *
  * A paused countdown deliberately drops back to plain — nothing is happening, and a green screen
- * that is not counting would be a lie.
+ * that is not counting would be a lie. A set of reps is green, because that is work in progress
+ * even though nothing is counting it.
  */
 @Composable
 private fun backgroundFor(state: TimerUiState): Color {
     val plain = MaterialTheme.colorScheme.surface
-    val running = state.state as? TimerState.Running ?: return plain
-    return when {
-        running.phase == TimerPhase.WORK -> workingColor()
-        state.remainingMs <= ABOUT_TO_START_MS -> aboutToStartColor()
+    return when (val current = state.state) {
+        is TimerState.AwaitingSet -> workingColor()
+        is TimerState.Running -> when {
+            current.phase == TimerPhase.WORK -> workingColor()
+            state.remainingMs <= ABOUT_TO_START_MS -> aboutToStartColor()
+            else -> plain
+        }
+
         else -> plain
     }
 }
@@ -221,17 +241,33 @@ private fun CueItem(label: String, checked: Boolean, onChange: (Boolean) -> Unit
 }
 
 @Composable
+private fun SetHeading(state: TimerUiState, what: String) {
+    state.setProgress?.let {
+        Text(
+            text = it,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Text(
+        text = what,
+        style = if (state.setProgress == null) {
+            MaterialTheme.typography.titleMedium
+        } else {
+            MaterialTheme.typography.bodyLarge
+        },
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
 private fun ActiveCountdown(
     state: TimerUiState,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    Text(
-        text = if (state.shownPhase == TimerPhase.WORK) "Work" else "Rest",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    SetHeading(state, if (state.shownPhase == TimerPhase.WORK) "Work" else "Rest")
     Box {
         CircularProgressIndicator(
             progress = { state.progress },
@@ -261,8 +297,38 @@ private fun ActiveCountdown(
     }
 }
 
+/**
+ * Reps cannot be counted by a clock, so the program stops here and waits. The button is the whole
+ * screen's worth of target, because it is pressed with chalk on the hands and the lungs going.
+ */
 @Composable
-private fun FinishedCard(phase: TimerPhase, label: String?, onDismiss: () -> Unit) {
+private fun AwaitingSet(state: TimerUiState, onSetDone: () -> Unit, onCancel: () -> Unit) {
+    SetHeading(state, "Do your reps")
+    Button(
+        onClick = onSetDone,
+        modifier = Modifier
+            .fillMaxWidth()
+            .size(width = 280.dp, height = 140.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+        ),
+    ) {
+        Text("Set done", style = MaterialTheme.typography.headlineMedium)
+    }
+    Text(
+        text = state.state.activeProgram
+            ?.takeIf { it.restSeconds > 0 }
+            ?.let { "The ${PrescriptionSummary.duration(it.restSeconds)} rest starts when you tap." }
+            ?: "The next set starts when you tap.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
+    OutlinedButton(onClick = onCancel) { Text("Cancel") }
+}
+
+@Composable
+private fun FinishedCard(state: TimerState.Finished, onDismiss: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -274,10 +340,16 @@ private fun FinishedCard(phase: TimerPhase, label: String?, onDismiss: () -> Uni
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = if (phase == TimerPhase.WORK) "Work finished" else "Rest finished",
+                text = if (state.program.sets > 1) {
+                    "${state.setsCompleted} sets done"
+                } else if (state.phase == TimerPhase.WORK) {
+                    "Work finished"
+                } else {
+                    "Rest finished"
+                },
                 style = MaterialTheme.typography.headlineSmall,
             )
-            label?.let {
+            state.program.label?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium)
             }
             Text(
@@ -317,50 +389,59 @@ private fun InterruptedCard(phase: TimerPhase, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * Building a timer: what a set is made of, how long the rest is, and how many times round. Those
+ * three numbers are what training actually is, and the prescription already knows all of them —
+ * this screen is for the times you are counting something that is not in the plan.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun IdleControls(
     state: TimerUiState,
-    onPhase: (TimerPhase) -> Unit,
-    onMinutes: (String) -> Unit,
-    onSeconds: (String) -> Unit,
+    onMode: (WorkKind) -> Unit,
+    onWorkMinutes: (String) -> Unit,
+    onWorkSeconds: (String) -> Unit,
+    onRestMinutes: (String) -> Unit,
+    onRestSeconds: (String) -> Unit,
+    onSets: (String) -> Unit,
     onStart: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
-            selected = state.draftPhase == TimerPhase.REST,
-            onClick = { onPhase(TimerPhase.REST) },
-            label = { Text("Rest") },
+            selected = state.mode == WorkKind.TIMED,
+            onClick = { onMode(WorkKind.TIMED) },
+            label = { Text("Timed sets") },
         )
         FilterChip(
-            selected = state.draftPhase == TimerPhase.WORK,
-            onClick = { onPhase(TimerPhase.WORK) },
-            label = { Text("Work") },
+            selected = state.mode == WorkKind.REPS,
+            onClick = { onMode(WorkKind.REPS) },
+            label = { Text("Reps") },
         )
     }
-    // Typed, not nudged. Stepping to four and a half minutes fifteen seconds at a time is a
-    // worse way to say "4:30" than saying it.
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        NumberField(
-            label = "Minutes",
-            value = state.draftMinutes,
-            onValueChange = onMinutes,
-            modifier = Modifier.width(120.dp),
-        )
-        Text(":", style = MaterialTheme.typography.headlineMedium)
-        NumberField(
-            label = "Seconds",
-            value = state.draftSeconds,
-            onValueChange = onSeconds,
-            modifier = Modifier.width(120.dp),
+
+    if (state.mode == WorkKind.TIMED) {
+        DurationRow("Set", state.work, onWorkMinutes, onWorkSeconds)
+    } else {
+        Text(
+            text = "A set of reps is not timed. The rest starts when you say the set is done.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
+    DurationRow("Rest", state.rest, onRestMinutes, onRestSeconds)
+
+    NumberField(
+        label = "Sets",
+        value = state.setsText,
+        onValueChange = onSets,
+        modifier = Modifier.width(140.dp),
+    )
+
     Text(
-        text = formatClock(state.draftTotalSeconds * 1000L),
-        style = MaterialTheme.typography.displaySmall,
+        text = summarise(state),
+        style = MaterialTheme.typography.titleLarge,
+        textAlign = TextAlign.Center,
     )
     Button(
         onClick = onStart,
@@ -380,12 +461,68 @@ private fun IdleControls(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
+        modifier = Modifier.padding(bottom = 16.dp),
     )
 }
 
+/** Typed, not nudged: saying "4:30" beats stepping to it fifteen seconds at a time. */
+@Composable
+private fun DurationRow(
+    label: String,
+    value: DurationDraft,
+    onMinutes: (String) -> Unit,
+    onSeconds: (String) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.width(48.dp),
+        )
+        NumberField(
+            label = "min",
+            value = value.minutes,
+            onValueChange = onMinutes,
+            modifier = Modifier.width(96.dp),
+        )
+        Text(":", style = MaterialTheme.typography.titleLarge)
+        NumberField(
+            label = "sec",
+            value = value.seconds,
+            onValueChange = onSeconds,
+            modifier = Modifier.width(96.dp),
+        )
+    }
+}
+
+/** The whole program in one line, so what Start will do is never a surprise. */
+private fun summarise(state: TimerUiState): String {
+    val program = state.draftProgram ?: return "—"
+    return buildString {
+        append(program.sets)
+        append(" × ")
+        append(
+            if (program.work == WorkKind.REPS) {
+                "reps"
+            } else {
+                PrescriptionSummary.duration(program.workSeconds)
+            }
+        )
+        if (program.restSeconds > 0 && program.sets > 1) {
+            append(", ")
+            append(PrescriptionSummary.duration(program.restSeconds))
+            append(" rest")
+        }
+        program.totalSeconds?.let { append("  ·  ${PrescriptionSummary.duration(it)} total") }
+    }
+}
+
 /**
- * What this particular countdown will actually sound. A setting that cannot apply to the length
- * picked says so instead of quietly doing nothing.
+ * What one interval of this program will sound. A setting that cannot apply to the length picked
+ * says so instead of quietly doing nothing.
  */
 private fun cueExplanation(state: TimerUiState): String {
     val notes = mutableListOf<String>()
@@ -393,14 +530,14 @@ private fun cueExplanation(state: TimerUiState): String {
         notes += "too short for a 30s warning"
     }
     if (state.cues.quarterCues && !state.quarterCuesApply) {
-        notes += if (state.draftPhase != TimerPhase.WORK) {
+        notes += if (state.shownPhase != TimerPhase.WORK) {
             "quarter cues are for work intervals"
         } else {
             "quarter cues start at one minute"
         }
     }
     val count = state.plannedCues.size
-    val sounding = "$count cue${if (count == 1) "" else "s"} this countdown"
+    val sounding = "$count cue${if (count == 1) "" else "s"} per interval"
     return if (notes.isEmpty()) sounding else "$sounding — ${notes.joinToString(", ")}"
 }
 

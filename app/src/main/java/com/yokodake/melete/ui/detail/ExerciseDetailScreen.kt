@@ -13,6 +13,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
@@ -26,11 +28,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,12 +44,12 @@ import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.ui.components.CategoryDot
+import com.yokodake.melete.ui.components.PrescriptionFields
 
 /**
  * What a workout *is*, before anything is asked of the user.
  *
- * Tapping an exercise used to land straight in the logger, which answered a question nobody had
- * asked yet. This screen answers "what is this and what am I meant to do" and then offers the two
+ * This screen answers "what is this and what am I meant to do" and then offers the two
  * things worth doing: record it, or count it.
  */
 @Composable
@@ -61,6 +67,10 @@ fun ExerciseDetailRoute(
         onStartTimer = { viewModel.requestStartTimer(onOpenTimer) },
         onConfirmReplace = { viewModel.confirmStartTimer(onOpenTimer) },
         onDismissReplace = viewModel::dismissReplacePrompt,
+        onEditPlan = viewModel::openPrescriptionEditor,
+        onPlanChange = viewModel::updatePrescriptionEditor,
+        onSavePlan = viewModel::savePrescription,
+        onDismissPlan = viewModel::dismissPrescriptionEditor,
         onEditExercise = onEditExercise,
         onBack = onBack,
     )
@@ -74,6 +84,10 @@ fun ExerciseDetailScreen(
     onStartTimer: () -> Unit,
     onConfirmReplace: () -> Unit,
     onDismissReplace: () -> Unit,
+    onEditPlan: () -> Unit,
+    onPlanChange: (com.yokodake.melete.ui.components.PrescriptionFormState) -> Unit,
+    onSavePlan: () -> Unit,
+    onDismissPlan: () -> Unit,
     onEditExercise: (String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -103,6 +117,11 @@ fun ExerciseDetailScreen(
                     ) {
                         Text("‹", style = MaterialTheme.typography.headlineMedium)
                     }
+                },
+                // Changing what the exercise *is* — its name, category, explanation, how a set is
+                // measured — is rarer than changing its numbers, so it sits one level further in.
+                actions = {
+                    state.exerciseId?.let { ExerciseMenu(it, onEditExercise) }
                 },
             )
         },
@@ -161,16 +180,31 @@ fun ExerciseDetailScreen(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 ),
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = state.prescriptionSummary,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = facts(state),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
+                Row(
+                    modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = state.prescriptionSummary,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = facts(state),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                    // The numbers are edited where they are shown, rather than through a button
+                    // further down that has to re-explain which plan it means.
+                    IconButton(
+                        onClick = onEditPlan,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Edit this plan"
+                        },
+                    ) {
+                        Text("⚙", style = MaterialTheme.typography.titleLarge)
+                    }
                 }
             }
 
@@ -187,19 +221,39 @@ fun ExerciseDetailScreen(
                 )
             }
 
-            // Editing the definition is opt-in. The screen shows what the exercise is; changing
-            // what it is, or what it prescribes by default, is a separate decision.
-            state.exerciseId?.let { exerciseId ->
-                OutlinedButton(
-                    onClick = { onEditExercise(exerciseId) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 24.dp),
-                ) {
-                    Text("Edit this exercise and its default plan")
-                }
-            }
         }
+    }
+
+    state.prescriptionEditor?.let { form ->
+        AlertDialog(
+            onDismissRequest = onDismissPlan,
+            title = {
+                Text(if (state.occurrenceId == null) "Default plan" else "Plan for this copy")
+            },
+            text = {
+                Column {
+                    Text(
+                        text = if (state.occurrenceId == null) {
+                            "Changes here are what future copies will be cut from. Anything " +
+                                "already in a week keeps the plan it was given."
+                        } else {
+                            "Changes stay in this week. The library default is untouched."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    PrescriptionFields(
+                        state = form,
+                        onStateChange = onPlanChange,
+                        mode = state.mode,
+                        unilateral = state.unilateral,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = onSavePlan) { Text("Save") } },
+            dismissButton = { TextButton(onClick = onDismissPlan) { Text("Cancel") } },
+        )
     }
 
     state.replacePrompt?.let { running ->
@@ -230,6 +284,26 @@ fun ExerciseDetailScreen(
 }
 
 @Composable
+private fun ExerciseMenu(exerciseId: String, onEditExercise: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(
+        onClick = { expanded = true },
+        modifier = Modifier.semantics { contentDescription = "Exercise actions" },
+    ) {
+        Text("⋮", style = MaterialTheme.typography.titleLarge)
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text("Edit this exercise") },
+            onClick = {
+                expanded = false
+                onEditExercise(exerciseId)
+            },
+        )
+    }
+}
+
+@Composable
 private fun ActionBar(
     state: ExerciseDetailUiState,
     onLog: () -> Unit,
@@ -244,7 +318,7 @@ private fun ActionBar(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             OutlinedButton(onClick = onStartTimer, modifier = Modifier.weight(1f)) {
-                Text(state.timerPlan?.buttonLabel ?: "Start the timer")
+                Text(state.timerButtonLabel)
             }
             Button(onClick = onLog, modifier = Modifier.weight(1f)) {
                 Text("Log the workout")

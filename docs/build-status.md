@@ -86,6 +86,30 @@ Changes made after the app was used, from `src/feedback.md`. Schema 3.
   countdown carries the exercise it was started from; and starting one from a workout while another
   is still counting asks before calling the first one off. More timer work is expected.
 
+### Second round: the timer counts sets ✅
+
+- **The timer was the wrong shape.** It could count one work interval or one rest, so real
+  training — *five sets of ten seconds with three minutes between* — had to be driven by hand
+  between every set. `TimerProgram` now holds all three numbers, and `TimerTransitions` walks it:
+  work, rest, work, rest, with **no trailing rest after the last set**, because that is time the
+  app would have invented.
+- **Reps are not timed.** A set of eights has no honest length, so a reps program stops at
+  `TimerState.AwaitingSet` and waits; the athlete says the set is done, and the rest starts by
+  itself. That is the one manual step in an otherwise automatic sequence, and it is on the
+  notification as well as the screen.
+- **One interval is one run id.** The at-most-once cue bookkeeping is keyed by run id, so a
+  program that kept a single id would sound the first set's end and then stay silent for every
+  set after it. Each interval gets a fresh id and the finished one's bookkeeping is cleared.
+- The create screen now asks what a set is made of, how long the rest is and how many times round,
+  and shows the whole program in one line before you start it.
+- Starting from a workout builds the program from the prescription, which already knows all three
+  numbers. Nothing further is asked.
+- The plan is edited by a cog on the card that shows it, rather than a button lower down that has
+  to re-explain which plan it means; from the week that edits this copy, from the library the
+  default. Changing what the exercise *is* moved into the top-bar overflow.
+- The library list no longer prints the explanation under every row: the list is for finding an
+  exercise, and a paragraph under each one turns scanning into reading.
+
 Not implemented yet, by design: modules, duration capture, dashboard, export — and moving
 an occurrence that already has a date, which belongs to phase 4 because it needs the explicit
 distinction between moving remaining planned work and correcting a historical training date.
@@ -118,7 +142,8 @@ com.yokodake.melete
   ui/logger/                LoggerScreen, LoggerViewModel, SetDraft
   ui/timer/                 TimerScreen, TimerViewModel
   data/timer/
-    TimerState.kt           deadline-based state and the pure pause/resume arithmetic
+    TimerProgram.kt         sets, work, rest: what the timer is actually counting
+    TimerState.kt           deadline-based state, and the pure pause/resume/sequencing logic
     TimerSnapshot.kt        what is persisted, and how a run is restored after a reboot
     TimerStore.kt           SharedPreferences: snapshot, cue bookkeeping, settings
     TimerController.kt      the single owner: start, pause, resume, cancel, cue delivery
@@ -344,8 +369,21 @@ First round of use feedback:
   already gone by is written off rather than fired late, cues switched off while paused stay off
   across the resume, and a countdown's exercise label surviving pause, resume, finish and the
   process being killed.
-- **Not yet run:** the instrumented suite, which carries the new `migrate2To3…` test. No device
-  was attached when the work was done.
+- `./gradlew :app:testDebugUnitTest --rerun-tasks` — 33 instrumented tests passed on the Pixel 9,
+  including `migrate2To3…`.
+
+Second round:
+
+- 71 unit tests passing, 12 of them a new `TimerProgramTest` that walks whole programs the way the
+  controller walks them: five timed sets alternating with four rests and stopping, a reps program
+  waiting at every set, a bare rest, sets with no rest running straight into each other, five
+  distinct run ids across five intervals, and a program resuming on the right set after the
+  process dies.
+- Two real bugs were found by those tests before the code ran on a phone: the no-argument
+  `TimerProgram` was invalid and threw from every state that defaulted it, and a program with no
+  rest configured stopped after its first set instead of running them back to back.
+- **Not yet run on a device:** the instrumented suite, against the new timer. The phone was
+  unplugged when this round was finished.
 
 ## Known limitations
 
@@ -361,8 +399,14 @@ First round of use feedback:
   under test never started, so nothing can be claimed about it yet. Surviving the app being
   *killed* is explicitly not a requirement: the foreground service is what keeps the countdown
   alive in the background, and that is what was verified.
-- Only one countdown exists at a time, and there is no automatic work/rest sequence. That is
-  phase 7C, deliberately after the single timer has been used in a real session.
+- Only one program runs at a time. Starting another from a workout asks before calling the first
+  one off.
+- A program's set count comes from the prescription, and a prescription of four sets means four
+  timer sets. Nothing reconciles that against what was actually logged; the timer still records
+  nothing, by design.
+- A reps program waiting on `AwaitingSet` waits forever. There is no timeout, because there is no
+  honest length for a set of repetitions — but it does mean a forgotten timer sits in the
+  notification shade until it is cancelled.
 - An occurrence that already has a date cannot be moved to another day, and a recorded set cannot
   be re-dated. Both need phase 4's explicit distinction between rescheduling remaining work and
   correcting a historical date.
