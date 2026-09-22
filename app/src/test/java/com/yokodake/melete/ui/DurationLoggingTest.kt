@@ -57,7 +57,6 @@ class DurationLoggingTest {
         state = OccurrenceState.PLANNED,
         comment = null,
         orderIndex = 0,
-        isSampleData = false,
         loggedDurationSeconds = loggedDurationSeconds,
         loggedDurationManual = loggedDurationManual,
     )

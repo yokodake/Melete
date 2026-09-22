@@ -347,14 +347,6 @@ fun LoggerScreen(
     }
 }
 
-/** The set number shown for a row: counted per side when the exercise is unilateral. */
-fun displayNumber(sets: List<PerformedSet>, set: PerformedSet, unilateral: Boolean): Int =
-    if (unilateral && set.side != null) {
-        sets.count { it.side == set.side && it.orderIndex <= set.orderIndex }
-    } else {
-        sets.count { it.orderIndex <= set.orderIndex }
-    }
-
 @Composable
 private fun SectionLabel(text: String) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -441,57 +433,6 @@ private fun PreviousResultCard(result: PreviousResult, occurrence: PlannedOccurr
     }
 }
 
-@Composable
-private fun PerformedSetRow(
-    set: PerformedSet,
-    number: Int,
-    unit: String?,
-    isEditing: Boolean,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onEdit),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isEditing) {
-                MaterialTheme.colorScheme.tertiaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = buildString {
-                    append("Set ")
-                    append(number)
-                    set.side?.let { append(if (it == BodySide.LEFT) " L" else " R") }
-                },
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.width(72.dp),
-            )
-            Text(
-                text = formatSet(set.payload, side = null, unit = unit),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onDelete) { Text("Delete") }
-        }
-    }
-}
-
-/**
- * The note, written where it is read.
- *
- * It used to be a row that opened a dialog to type into, which is two taps and a context switch
- * to write one line. The note belongs to this exercise on this day, so it sits with it and is
- * saved with it when the workout is marked done.
- */
 @Composable
 private fun CommentBox(comment: String, onChange: (String) -> Unit) {
     CompactTextField(
@@ -639,115 +580,6 @@ private fun LoggerMenu(state: OccurrenceState, onMark: (OccurrenceState) -> Unit
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SetEntryBar(
-    state: LoggerUiState,
-    occurrence: PlannedOccurrence,
-    onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
-    onSide: (BodySide) -> Unit,
-    onEffort: (EffortLevel?) -> Unit,
-    onToggleEffort: () -> Unit,
-    onConfirm: () -> Unit,
-    onUndo: () -> Unit,
-    onCancelEdit: () -> Unit,
-    onStartRest: () -> Unit,
-) {
-    val draft = state.draft
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 3.dp,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (occurrence.unilateral) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Side", style = MaterialTheme.typography.labelLarge)
-                    FilterChip(
-                        selected = draft.side == BodySide.LEFT,
-                        onClick = { onSide(BodySide.LEFT) },
-                        label = { Text("Left") },
-                    )
-                    FilterChip(
-                        selected = draft.side == BodySide.RIGHT,
-                        onClick = { onSide(BodySide.RIGHT) },
-                        label = { Text("Right") },
-                    )
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (occurrence.mode.isTimed) {
-                    NumberField(
-                        label = "Seconds",
-                        value = draft.durationSeconds,
-                        onValueChange = { value -> onDraftChange { it.copy(durationSeconds = value) } },
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    NumberField(
-                        label = "Reps",
-                        value = draft.reps,
-                        onValueChange = { value -> onDraftChange { it.copy(reps = value) } },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                occurrence.measurementUnit?.let { unit ->
-                    NumberField(
-                        label = unit,
-                        value = draft.measurement,
-                        onValueChange = { value -> onDraftChange { it.copy(measurement = value) } },
-                        decimal = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            if (draft.showEffortFields) {
-                Text("How hard?", style = MaterialTheme.typography.labelLarge)
-                EffortSelector(selected = draft.effort, onSelect = onEffort)
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onToggleEffort) {
-                    Text(if (draft.showEffortFields) "Hide RPE" else "RPE")
-                }
-                if (draft.editingSetId != null) {
-                    TextButton(onClick = onCancelEdit) { Text("Cancel") }
-                } else if (state.undoableSetId != null) {
-                    TextButton(onClick = onUndo) { Text("Undo") }
-                    TextButton(onClick = onStartRest) { Text("Rest") }
-                }
-                Button(
-                    onClick = onConfirm,
-                    enabled = state.canConfirm,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        when {
-                            draft.editingSetId != null -> "Save correction"
-                            draft.side == BodySide.LEFT -> "Confirm left"
-                            draft.side == BodySide.RIGHT -> "Confirm right"
-                            else -> "Confirm set"
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * The heaviest set, which is the number worth seeing first, and the fastest way to fill a session
- * where every set was the same. Typing here fills every row that has not been ticked yet.
- */
 @Composable
 private fun MaxLoadRow(
     table: SetTable,

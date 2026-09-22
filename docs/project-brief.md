@@ -96,7 +96,9 @@ app structure, not a generic framework.
    midnight cannot regroup history. A placement carries **one** date and its sets are filed under
    that same date: moving trained work re-dates its actuals and rehomes the day's session, and
    logged work cannot become unscheduled.
-10. Migrations preserve existing data. A destructive reset is never the normal upgrade path.
+10. Migrations preserve existing data, and a destructive reset is never the normal upgrade path
+    — from phase 6 onward. Before it, the schema is free to change and the debug build resets
+    rather than migrating, because the record is not yet one anybody would mind losing.
 
 ## Session and duration defaults
 

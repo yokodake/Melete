@@ -274,13 +274,7 @@ fun ExerciseDetailScreen(
             onDismissRequest = onDismissReplace,
             title = { Text("Start a new workout?") },
             text = {
-                Text(
-                    buildString {
-                        append("The current timer will be stopped and progress")
-                        running.label?.let { append(" for $it") }
-                        append(" will be lost.")
-                    }
-                )
+                Text("The current timer will be stopped and progress will be lost.")
             },
             confirmButton = {
                 TextButton(onClick = onConfirmReplace) { Text("START") }

@@ -45,7 +45,6 @@ class WeekUiStateTest {
         state = OccurrenceState.PLANNED,
         comment = null,
         orderIndex = order,
-        isSampleData = false,
         circuitInstanceId = circuitInstanceId,
         circuitPosition = circuitPosition,
     )
@@ -83,7 +82,6 @@ class WeekUiStateTest {
                 occurrence("Mobility", null),
                 occurrence("Squat", monday.plusDays(1)),
             ),
-            sampleDataPresent = false,
         )
         assertEquals(listOf("Mobility"), state.unscheduled.names())
         assertEquals(7, state.days.size)
@@ -112,7 +110,6 @@ class WeekUiStateTest {
                 occurrence("Second", monday, order = 1),
                 occurrence("First", monday, order = 0),
             ),
-            sampleDataPresent = false,
         )
         assertEquals(listOf("First", "Second"), state.days[0].items.names())
     }

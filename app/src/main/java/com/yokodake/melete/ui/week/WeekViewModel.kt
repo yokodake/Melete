@@ -40,9 +40,8 @@ class WeekViewModel(
             combine(
                 repository.observeWeek(start),
                 repository.observeWeekCircuits(start),
-                repository.sampleDataPresent,
-            ) { occurrences, circuits, sampleDataPresent ->
-                WeekUiState.build(start, today, occurrences, circuits, sampleDataPresent)
+            ) { occurrences, circuits ->
+                WeekUiState.build(start, today, occurrences, circuits)
             }
         }
         .stateIn(
@@ -65,15 +64,6 @@ class WeekViewModel(
 
     fun showCurrentWeek() {
         weekStart.value = WeekMath.weekStartOf(today)
-    }
-
-    fun seedSampleData() {
-        val target = weekStart.value
-        viewModelScope.launch { repository.seedSampleWeek(target) }
-    }
-
-    fun clearSampleData() {
-        viewModelScope.launch { repository.clearSampleData() }
     }
 
     /**

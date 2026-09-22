@@ -25,7 +25,6 @@ class ExerciseRemovalTest {
             description = null,
             category = null,
             defaultPrescription = null,
-            isSampleData = false,
         ),
         plannedCopies = plannedCopies,
         loggedSets = loggedSets,

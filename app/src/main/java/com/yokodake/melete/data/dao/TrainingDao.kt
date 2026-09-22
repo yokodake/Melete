@@ -84,9 +84,6 @@ interface TrainingDao {
     )
     suspend fun firstOrderIndex(weekStartEpochDay: Long, trainingDateEpochDay: Long?): Int
 
-    @Query("SELECT COUNT(*) FROM exercise_occurrences WHERE isSampleData = 1")
-    fun observeSampleOccurrenceCount(): Flow<Int>
-
     /** Every scheduled circuit of one week, in the order its cards are shown. */
     @Query(
         """
@@ -173,17 +170,6 @@ interface TrainingDao {
         trainingDateEpochDay: Long?,
     ): List<ExerciseOccurrenceEntity>
 
-    @Query("DELETE FROM actual_sets WHERE occurrenceId IN (SELECT id FROM exercise_occurrences WHERE isSampleData = 1)")
-    suspend fun deleteSampleActualSets()
-
-    @Query("DELETE FROM exercise_occurrences WHERE isSampleData = 1")
-    suspend fun deleteSampleOccurrences()
-
-    @Query("DELETE FROM exercises WHERE isSampleData = 1")
-    suspend fun deleteSampleExercises()
-
-    @Query("DELETE FROM prescriptions WHERE isSampleData = 1")
-    suspend fun deleteSamplePrescriptions()
 }
 
 @Dao
