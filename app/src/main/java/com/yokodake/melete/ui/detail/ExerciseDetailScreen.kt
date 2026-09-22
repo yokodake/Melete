@@ -223,16 +223,16 @@ fun ExerciseDetailScreen(
             }
 
             state.loggedDurationSeconds?.let { seconds ->
-                Section("Time taken")
+                Section("Duration")
                 Text(
-                    text = PrescriptionSummary.duration(seconds) +
-                        if (state.loggedDurationManual) "" else " (worked out from the plan)",
+                    text = if (state.loggedDurationManual) "" else "≈"
+                            + PrescriptionSummary.duration(seconds),
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
 
             state.comment?.let {
-                Section("Your note")
+                Section("Comment")
                 Text(it, style = MaterialTheme.typography.bodyMedium)
             }
 
@@ -255,16 +255,6 @@ fun ExerciseDetailScreen(
             },
             text = {
                 Column {
-                    Text(
-                        text = if (state.occurrenceId == null) {
-                            "Changes here are what future copies will be cut from. Anything " +
-                                "already in a week keeps the plan it was given."
-                        } else {
-                            "Changes stay in this week. The library default is untouched."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     PrescriptionFields(
                         state = form,
                         onStateChange = onPlanChange,
@@ -282,25 +272,21 @@ fun ExerciseDetailScreen(
     state.replacePrompt?.let { running ->
         AlertDialog(
             onDismissRequest = onDismissReplace,
-            title = { Text("A countdown is already running") },
+            title = { Text("Start a new workout?") },
             text = {
                 Text(
                     buildString {
-                        append(if (running.phase == TimerPhase.WORK) "A work" else "A rest")
-                        append(" countdown")
+                        append("The current timer will be stopped and progress")
                         running.label?.let { append(" for $it") }
-                        append(
-                            " is still going. Starting this one cancels it — nothing that was " +
-                                "recorded is affected."
-                        )
+                        append(" will be lost.")
                     }
                 )
             },
             confirmButton = {
-                TextButton(onClick = onConfirmReplace) { Text("Cancel it and start") }
+                TextButton(onClick = onConfirmReplace) { Text("START") }
             },
             dismissButton = {
-                TextButton(onClick = onDismissReplace) { Text("Keep the current one") }
+                TextButton(onClick = onDismissReplace) { Text("CANCEL") }
             },
         )
     }

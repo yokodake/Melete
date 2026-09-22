@@ -28,7 +28,7 @@ the two ever disagree, the code and the first half win.
 | 5B — daily notes, metrics, export and restore | not started |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **5**. Prescription payload version **3**, actual-set payload version **2**, circuit
+Schema version **6**. Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
 ## The week
@@ -199,6 +199,7 @@ com.yokodake.melete
     model/CircuitSnapshot.kt      the routine structure a scheduled circuit was cut from
     model/ExerciseCategory.kt     the closed set of training-purpose categories
   ui/components/            PrescriptionFormState and the shared prescription fields, CategoryDot
+                            ChoiceField.kt    one-of-N as a single line, used by every dropdown
                             CompactField.kt   every text field in the app, sized for its content
                             Chip.kt           SAMPLE / Done / Skipped, shared by week and library
                             PlanTargetDialog  week+day for a move, week-only for library adds
@@ -443,11 +444,42 @@ Then a first round of feedback on all of it, from using the app (2026-09-22):
 
 **152 unit tests passing**, up from 141: `TimerCreateTest` (9) walks everything the create screen
 can now express and checks a hand-built repeater is the same sequence as a prescribed one, and
-`DurationLoggingTest` gained the check that each mode takes only the numbers it means.
+`DurationLoggingTest` gained the check that each mode takes only the numbers it means. A new
+migration test covers the category rename, the untouched `FLEXIBILITY` and a null staying null.
 
-**Still owed on the phone** — everything in *What still needs a phone* from section 1 onwards, and
-none of the four changes above has been run on a device either: the phone was unplugged before the
-suite could be re-run against them. The APKs are built and waiting.
+Then a second round, on the phone this time (2026-09-23):
+
+- **The timer's create screen stopped moving.** The form shared the countdown's centred column, so
+  every mode change re-centred the page. It owns its own layout now — chips pinned top, summary and
+  Start pinned bottom, a weighted middle that absorbs the slack — and every element holds position
+  to the pixel across all three modes and both toggle states. Every row is full width with the same
+  label column, so the fields keep one left edge.
+- **Dropdowns replaced chip rows** for how a set is measured and what the number means, behind one
+  shared `ui/components/ChoiceField`. The arrow is a filled triangle in a 36dp box: Material's
+  `TrailingIcon` carries a 48dp icon slot and was setting the height of every dropdown in the app,
+  and the first hand-rolled replacement went too far the other way.
+- **Seven categories, recoloured**, replacing the three the app shipped with. Open climbing, board
+  climbing and structured climbing are violet, red and blue; finger training is raspberry; strength
+  and conditioning keeps the old orange; flexibility is yellow; other activity is a soft green. Each
+  has a light and a dark variant, because a fully saturated dot glares on a dark surface — and the
+  pairs that are hue neighbours separate by darkness in one mode and by hue in the other.
+- Two fixes found by looking: `lastWorkSeconds` had been zeroed by an earlier build storing a
+  repeater program's empty `workSeconds`, so Timed sets opened at 0:00 with Start dead; and the
+  category chips were a plain `Row`, which fitted three and crushed the sixth to one letter a line.
+
+**Schema 6** renames two stored category constants. Enum constants are stored by name and
+`MeleteConverters` reads an unknown one as *no category*, so without `MIGRATION_5_6` the upgrade
+would have silently stripped the colour off every exercise and every snapshot that had one.
+`OPEN` becomes `OPEN_CLIMBING` and `CONDITIONING` becomes `STRENGTH_CONDITIONING`; `FLEXIBILITY` is
+unchanged and the four new categories start empty. That is a narrowing — an `OPEN` row that meant
+an open *lifting* session now reads as climbing — so the library is worth a glance afterwards.
+
+**Applied to the real record and verified**: `user_version` 5 to 6, `integrity_check` ok, all five
+exercises and seven occurrences renamed with none lost, against a backup taken immediately before.
+
+**Still owed on the phone** — everything in *What still needs a phone* from section 1 onwards. The
+instrumented suite last ran green against the timer and circuit work, not against any of the
+changes in these two rounds.
 
 ## Known limitations
 

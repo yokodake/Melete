@@ -689,7 +689,7 @@ private fun IdleControls(
                 textAlign = TextAlign.Center,
                 // Two lines of room, always, so a long summary cannot push the button down.
                 minLines = 2,
-                maxLines = 2,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
             Button(
@@ -809,11 +809,10 @@ private fun summarise(state: TimerUiState): String {
                 add("${PrescriptionSummary.duration(program.restSeconds)} rest")
             }
 
-            // Includes preparation, both sides and every repeater pulse.
-            program.totalSeconds?.let {
-                add(
-                    "${PrescriptionSummary.duration(program.estimatedSeconds())} total"
-                )
+            // Includes preparation, both sides and every repeater pulse. Offered only when
+            // every interval has a length: a program with a set of reps in it has no honest total.
+            if (program.isFullyTimed) {
+                add("${PrescriptionSummary.duration(program.estimatedSeconds())} total")
             }
         }
 

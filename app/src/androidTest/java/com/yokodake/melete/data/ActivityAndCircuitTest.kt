@@ -72,7 +72,7 @@ class ActivityAndCircuitTest {
         measurementMeaning = unit?.let { MeasurementMeaning.TOTAL_LOAD },
         notes = null,
         description = null,
-        category = ExerciseCategory.CONDITIONING,
+        category = ExerciseCategory.STRENGTH_CONDITIONING,
         defaultPrescription = prescription,
     )
 
@@ -107,7 +107,7 @@ class ActivityAndCircuitTest {
     }
 
     @Test
-    fun anActivityIsCompletedWithNoDurationAndNoFabricatedSets() = runBlocking {
+    fun `an activity is completed with no duration and no fabricated sets`() = runBlocking {
         val id = repository.createOneOffActivity("Silks class", monday, tuesday, null)
         repository.saveLogs(
             trainingDate = tuesday,

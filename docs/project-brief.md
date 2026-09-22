@@ -40,6 +40,9 @@ creation form covers:
 - Optional numeric measurement with a unit (initially kg). No measurement is valid (stretch,
   bodyweight).
 - Unilateral flag — unilateral sets are labelled *per side* and executed left, switch, right.
+- An optional category, from a closed set: open / board / structured climbing, finger training,
+  strength and conditioning, flexibility, other activity. Each carries a colour, shown as a dot
+  before the name. Absent is a valid answer.
 - Default prescription: sets, target reps or duration, rest, side-switch rest, an optional repeater
   shape, optional RPE or RIR, and an optional planned duration. It deliberately fixes no load: the
   weight is what the day decides and what the logger records.

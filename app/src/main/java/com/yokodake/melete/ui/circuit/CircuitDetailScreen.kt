@@ -161,12 +161,6 @@ fun CircuitDetailScreen(
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Text(
-                        text = "One set of each per round, in order. A station's own set count " +
-                            "and set rest do not apply here.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                    Text(
                         text = restLine(state),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -176,8 +170,7 @@ fun CircuitDetailScreen(
 
             state.estimatedSeconds?.let {
                 Text(
-                    text = "About ${PrescriptionSummary.duration(it)} in all, worked out from the " +
-                        "sequence it will run.",
+                    text = "≈ ${PrescriptionSummary.duration(it)}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -256,10 +249,10 @@ private fun restLine(state: CircuitDetailUiState): String {
     val circuit = state.circuit ?: return ""
     val parts = buildList {
         if (circuit.transitionSeconds > 0) {
-            add("${PrescriptionSummary.duration(circuit.transitionSeconds)} between exercises")
+            add("${PrescriptionSummary.duration(circuit.transitionSeconds)} rest")
         }
         if (circuit.roundRestSeconds > 0) {
-            add("${PrescriptionSummary.duration(circuit.roundRestSeconds)} between rounds")
+            add("${PrescriptionSummary.duration(circuit.roundRestSeconds)} set rest")
         }
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "Straight through, no rests"

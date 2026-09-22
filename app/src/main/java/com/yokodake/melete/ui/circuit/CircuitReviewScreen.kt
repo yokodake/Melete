@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -216,7 +217,13 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
         ),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // One height for every collapsed row. A load field is taller than two lines of text,
+            // so without this a list of stations stepped up and down depending on which of them
+            // happened to track a weight.
+            Row(
+                modifier = Modifier.heightIn(min = 52.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 DoneCheck(
                     done = station.completed,
                     onToggle = { viewModel.toggleStation(id) },
@@ -328,15 +335,6 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Time taken", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = if (station.table.durationMinutes.isBlank()) {
-                                "This exercise's share of the circuit"
-                            } else {
-                                "Your own number"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                     NumberField(
                         label = "min",

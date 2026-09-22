@@ -37,7 +37,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         RoutineEntryEntity::class,
         CircuitInstanceEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)
@@ -236,8 +236,40 @@ abstract class MeleteDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * The categories grew from three to six, and two of the three were renamed.
+         *
+         * Enum constants are stored by name, so a rename is a data change even though no column
+         * moves: `MeleteConverters` reads an unknown name as "no category", which would have
+         * quietly stripped the colour off every exercise and every snapshot that had one. This
+         * rewrites them instead.
+         *
+         * `OPEN` becomes `OPEN_CLIMBING` and `CONDITIONING` becomes `STRENGTH_CONDITIONING`,
+         * which is the closest each one maps to. That is a narrowing — an `OPEN` row that meant
+         * an open *lifting* session now reads as climbing — so it is worth glancing over the
+         * library afterwards. `FLEXIBILITY` is unchanged, and the three new categories start
+         * empty because nothing could have been filed under them yet.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(connection: SQLiteConnection) {
+                listOf(
+                    "exercises" to "category",
+                    "exercise_occurrences" to "categorySnapshot",
+                ).forEach { (table, column) ->
+                    listOf(
+                        "OPEN" to "OPEN_CLIMBING",
+                        "CONDITIONING" to "STRENGTH_CONDITIONING",
+                    ).forEach { (from, to) ->
+                        connection.execSQL(
+                            "UPDATE `$table` SET `$column` = '$to' WHERE `$column` = '$from'"
+                        )
+                    }
+                }
+            }
+        }
+
         val MIGRATIONS: Array<Migration> =
-            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 
         fun build(context: Context): MeleteDatabase =
             Room.databaseBuilder(context, MeleteDatabase::class.java, DATABASE_NAME)

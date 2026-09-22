@@ -470,12 +470,12 @@ private fun previewExercise(
 )
 
 private val previewLibrary = listOf(
-    previewExercise("Back squat", ExerciseCategory.CONDITIONING, reps = 5),
-    previewExercise("Bouldering session", ExerciseCategory.OPEN, sets = 1, reps = null, seconds = 5400, unit = null),
+    previewExercise("Back squat", ExerciseCategory.STRENGTH_CONDITIONING, reps = 5),
+    previewExercise("Bouldering session", ExerciseCategory.OPEN_CLIMBING, sets = 1, reps = null, seconds = 5400, unit = null),
     previewExercise("Couch stretch", ExerciseCategory.FLEXIBILITY, sets = 2, reps = null, seconds = 90, unit = null),
-    previewExercise("Dumbbell row", ExerciseCategory.CONDITIONING),
-    previewExercise("Max hangs 20 mm", ExerciseCategory.CONDITIONING, sets = 5, reps = null, seconds = 10),
-    previewExercise("Pullups", ExerciseCategory.CONDITIONING, sets = 4, reps = 4, unit= "kg", sample=true),
+    previewExercise("Dumbbell row", ExerciseCategory.STRENGTH_CONDITIONING),
+    previewExercise("Max hangs 20 mm", ExerciseCategory.STRENGTH_CONDITIONING, sets = 5, reps = null, seconds = 10),
+    previewExercise("Pullups", ExerciseCategory.STRENGTH_CONDITIONING, sets = 4, reps = 4, unit= "kg", sample=true),
 )
 
 @Preview(name = "Library · populated", showBackground = true, heightDp = 760)
@@ -526,7 +526,7 @@ private fun LibraryRetiredPreview() {
         LibraryScreen(
             title = "Previously trained",
             subtitle = "Removed from the library",
-            exercises = listOf(previewExercise("Pull-up", ExerciseCategory.CONDITIONING, retired = true)),
+            exercises = listOf(previewExercise("Pull-up", ExerciseCategory.STRENGTH_CONDITIONING, retired = true)),
             emptyMessage = "",
             onRowClick = {},
             onNewExercise = {},
@@ -590,7 +590,7 @@ private fun RemoveUnusedPreview() {
     MeleteTheme {
         RemovalDialog(
             removal = ExerciseRemoval(
-                exercise = previewExercise("Sissy squat", ExerciseCategory.CONDITIONING),
+                exercise = previewExercise("Sissy squat", ExerciseCategory.STRENGTH_CONDITIONING),
                 plannedCopies = 0,
                 loggedSets = 0,
             ),
@@ -606,7 +606,7 @@ private fun RemovePlannedPreview() {
     MeleteTheme {
         RemovalDialog(
             removal = ExerciseRemoval(
-                exercise = previewExercise("Sissy squat", ExerciseCategory.CONDITIONING),
+                exercise = previewExercise("Sissy squat", ExerciseCategory.STRENGTH_CONDITIONING),
                 plannedCopies = 3,
                 loggedSets = 0,
             ),
@@ -622,7 +622,7 @@ private fun RemoveLoggedPreview() {
     MeleteTheme {
         RemovalDialog(
             removal = ExerciseRemoval(
-                exercise = previewExercise("Back squat", ExerciseCategory.CONDITIONING, reps = 5),
+                exercise = previewExercise("Back squat", ExerciseCategory.STRENGTH_CONDITIONING, reps = 5),
                 plannedCopies = 6,
                 loggedSets = 24,
             ),

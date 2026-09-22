@@ -146,19 +146,19 @@ fun RoutineEditorScreen(
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumberField(
-                        label = "Rounds",
+                        label = "Sets",
                         value = state.rounds,
                         onValueChange = onRounds,
                         modifier = Modifier.weight(1f),
                     )
                     NumberField(
-                        label = "Between exercises",
+                        label = "switch",
                         value = state.transitionSeconds,
                         onValueChange = onTransition,
                         modifier = Modifier.weight(1f),
                     )
                     NumberField(
-                        label = "Between rounds",
+                        label = "Rest",
                         value = state.roundRestSeconds,
                         onValueChange = onRoundRest,
                         modifier = Modifier.weight(1f),
@@ -166,18 +166,9 @@ fun RoutineEditorScreen(
                 }
             }
             item {
-                Text(
-                    text = "These replace each exercise's own set rest while the circuit runs. " +
-                        "Rest between repeater reps and the side switch still apply.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            item {
                 state.estimatedSeconds?.let {
                     Text(
-                        text = "About ${PrescriptionSummary.duration(it)} in all, " +
-                            "worked out from the sequence it will run.",
+                        text = "≈ ${PrescriptionSummary.duration(it)} total",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -290,11 +281,6 @@ private fun StationCard(
             if (station.expanded) {
                 Surface(color = MaterialTheme.colorScheme.surface) {
                     Column(modifier = Modifier.padding(top = 8.dp)) {
-                        Text(
-                            text = "This circuit's own copy. The library default is untouched.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                         PrescriptionFields(
                             state = station.form,
                             onStateChange = onForm,

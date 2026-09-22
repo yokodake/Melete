@@ -58,7 +58,7 @@ class LoggingInvariantsTest {
         measurementMeaning = MeasurementMeaning.TOTAL_LOAD,
         notes = null,
         description = "One hand and one knee on the bench, back flat.",
-        category = ExerciseCategory.CONDITIONING,
+        category = ExerciseCategory.STRENGTH_CONDITIONING,
         defaultPrescription = PrescriptionPayload(
             sets = sets,
             targetReps = 8,

@@ -15,14 +15,31 @@ import com.yokodake.melete.data.model.ExerciseCategory
  * the dark ones are lifted and slightly desaturated, because a fully saturated dot on a dark
  * surface glares.
  */
-private val OpenOrangeLight = Color(0xFFE2701A)
-private val OpenOrangeDark = Color(0xFFFF9D4D)
+private val OpenClimbingVioletLight = Color(0xFF9875D6)
+private val OpenClimbingVioletDark = Color(0xFFB79BE8)
 
-private val ConditioningGreenLight = Color(0xFF2E8B45)
-private val ConditioningGreenDark = Color(0xFF5FD27E)
+private val StructuredClimbingBlueLight = Color(0xFF528DDD)
+private val StructuredClimbingBlueDark = Color(0xFF8CB8F0)
 
-private val FlexibilityYellowLight = Color(0xFFD2A70C)
-private val FlexibilityYellowDark = Color(0xFFF2CC45)
+// Deep rather than hot. A fire-engine red at dot size reads as an error state, and at this
+// lightness it also starts arguing with the orange two rows down; pulling it darker and a little
+// less saturated keeps it unmistakably red while letting the orange stay the bright one.
+private val BoardClimbingRedLight = Color(0xFFD32F2F)
+// Lifted well past the light value, and pushed a few degrees warm so it separates from the
+// raspberry on a dark surface -- the two are neighbours in hue, and coral against pink is the
+// difference that survives being four millimetres across.
+private val BoardClimbingRedDark = Color(0xFFF2776A)
+private val FingerRaspberryLight = Color(0xFFDD77AD)
+private val FingerRaspberryDark = Color(0xFFEE7BA4)
+
+private val ConditioningOrangeLight = Color(0xFFE2701A)
+private val ConditioningOrangeDark = Color(0xFFFF9D4D)
+
+private val FlexibilityYellowLight = Color(0xFFEAC521)
+private val FlexibilityYellowDark = Color(0xFFFFE066)
+
+private val OtherActivityGreenLight = Color(0xFF5CA37C)
+private val OtherActivityGreenDark = Color(0xFF8ED0A6)
 
 private val DoneGreenLight = Color(0xFF1E7A38)
 private val DoneGreenDark = Color(0xFF3FBF63)
@@ -33,9 +50,26 @@ private val DoneGreenDark = Color(0xFF3FBF63)
 fun categoryColor(category: ExerciseCategory): Color {
     val dark = isSystemInDarkTheme()
     return when (category) {
-        ExerciseCategory.OPEN -> if (dark) OpenOrangeDark else OpenOrangeLight
-        ExerciseCategory.CONDITIONING -> if (dark) ConditioningGreenDark else ConditioningGreenLight
-        ExerciseCategory.FLEXIBILITY -> if (dark) FlexibilityYellowDark else FlexibilityYellowLight
+        ExerciseCategory.OPEN_CLIMBING ->
+            if (dark) OpenClimbingVioletDark else OpenClimbingVioletLight
+
+        ExerciseCategory.STRUCTURED_CLIMBING ->
+            if (dark) StructuredClimbingBlueDark else StructuredClimbingBlueLight
+
+        ExerciseCategory.BOARD_CLIMBING ->
+            if (dark) BoardClimbingRedDark else BoardClimbingRedLight
+
+        ExerciseCategory.FINGER_TRAINING ->
+            if (dark) FingerRaspberryDark else FingerRaspberryLight
+
+        ExerciseCategory.STRENGTH_CONDITIONING ->
+            if (dark) ConditioningOrangeDark else ConditioningOrangeLight
+
+        ExerciseCategory.FLEXIBILITY ->
+            if (dark) FlexibilityYellowDark else FlexibilityYellowLight
+
+        ExerciseCategory.OTHER_ACTIVITY ->
+            if (dark) OtherActivityGreenDark else OtherActivityGreenLight
     }
 }
 

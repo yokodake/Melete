@@ -872,7 +872,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
             unilateralSnapshot = false,
             measurementUnitSnapshot = null,
             measurementMeaningSnapshot = null,
-            categorySnapshot = ExerciseCategory.OPEN,
+            categorySnapshot = ExerciseCategory.OTHER_ACTIVITY,
             prescriptionId = prescription.id,
             orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
             state = OccurrenceState.PLANNED,
