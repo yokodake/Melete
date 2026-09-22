@@ -92,7 +92,7 @@ class TrainingPersistenceTest {
 
         val week = TrainingRepository(database).observeWeek(weekStart).first()
         assertEquals(
-            ExerciseCategory.CONDITIONING,
+            ExerciseCategory.STRENGTH_CONDITIONING,
             week.first { it.name.endsWith("Dumbbell row") }.category,
         )
         assertEquals(
@@ -100,7 +100,7 @@ class TrainingPersistenceTest {
             week.first { it.name.endsWith("Couch stretch") }.category,
         )
         assertEquals(
-            ExerciseCategory.OPEN,
+            ExerciseCategory.OPEN_CLIMBING,
             week.first { it.name.endsWith("Mobility flow") }.category,
         )
     }

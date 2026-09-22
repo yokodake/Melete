@@ -1008,7 +1008,7 @@ private fun WeekScreenPreview() {
         name: String,
         date: LocalDate?,
         unilateral: Boolean = false,
-        category: ExerciseCategory? = ExerciseCategory.CONDITIONING,
+        category: ExerciseCategory? = ExerciseCategory.STRENGTH_CONDITIONING,
     ) = PlannedOccurrence(
         id = "$name-$date",
         exerciseId = name,
@@ -1041,7 +1041,7 @@ private fun WeekScreenPreview() {
                 weekStart = monday,
                 today = monday.plusDays(2),
                 occurrences = listOf(
-                    sample("Mobility flow", null, category = ExerciseCategory.OPEN),
+                    sample("Mobility flow", null, category = ExerciseCategory.OPEN_CLIMBING),
                     sample("Back squat", monday.plusDays(1)),
                     sample("Dumbbell row", monday.plusDays(2), unilateral = true),
                 ),
@@ -1096,20 +1096,20 @@ private fun BusyWeekPreview() {
                 weekStart = monday,
                 today = monday.plusDays(2),
                 occurrences = listOf(
-                    item("Mobility flow", null, ExerciseCategory.OPEN),
-                    item("Bouldering", null, ExerciseCategory.OPEN, order = 1),
+                    item("Mobility flow", null, ExerciseCategory.OPEN_CLIMBING),
+                    item("Bouldering", null, ExerciseCategory.OPEN_CLIMBING, order = 1),
                     // Trained: the card sits on the day the work actually happened, because
                     // moving it moved its sets too.
                     item(
                         "Back squat",
                         monday.plusDays(1),
-                        ExerciseCategory.CONDITIONING,
+                        ExerciseCategory.STRENGTH_CONDITIONING,
                         state = OccurrenceState.COMPLETED,
                     ),
-                    item("Max hangs 20 mm", monday, ExerciseCategory.CONDITIONING, order = 1),
-                    item("Dumbbell row", monday.plusDays(2), ExerciseCategory.CONDITIONING),
+                    item("Max hangs 20 mm", monday, ExerciseCategory.STRENGTH_CONDITIONING, order = 1),
+                    item("Dumbbell row", monday.plusDays(2), ExerciseCategory.STRENGTH_CONDITIONING),
                     item("Couch stretch", monday.plusDays(2), ExerciseCategory.FLEXIBILITY, order = 1),
-                    item("very long name of thing Deadlift", monday.plusDays(4), ExerciseCategory.CONDITIONING, state= OccurrenceState.COMPLETED),
+                    item("very long name of thing Deadlift", monday.plusDays(4), ExerciseCategory.STRENGTH_CONDITIONING, state= OccurrenceState.COMPLETED),
                 ),
                 sampleDataPresent = false,
             ),
@@ -1175,7 +1175,7 @@ private fun RemoveLoggedPreview() {
                 unilateral = false,
                 measurementUnit = "kg",
                 measurementMeaning = MeasurementMeaning.TOTAL_LOAD,
-                category = ExerciseCategory.CONDITIONING,
+                category = ExerciseCategory.STRENGTH_CONDITIONING,
                 trainingDate = monday,
                 weekStart = monday,
                 prescriptionId = null,

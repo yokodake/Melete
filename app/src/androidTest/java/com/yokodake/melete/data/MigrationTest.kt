@@ -252,8 +252,71 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate5To6RenamesTheCategoriesRatherThanLosingThem() {
+        val exerciseId = "exercise-6"
+        val prescriptionId = "prescription-6"
+        val occurrenceId = "occurrence-6"
+
+        helper.createDatabase(TEST_DB, 5).use { db ->
+            db.execSQL(
+                "INSERT INTO prescriptions (id, payloadVersion, payloadJson, createdAtEpochMs, isSampleData) " +
+                    "VALUES ('$prescriptionId', 3, '{\"sets\":3}', 1000, 0)"
+            )
+            listOf(
+                "ex-open" to "OPEN",
+                "ex-cond" to "CONDITIONING",
+                "ex-flex" to "FLEXIBILITY",
+                "ex-none" to null,
+            ).forEach { (id, category) ->
+                val value = category?.let { "'$it'" } ?: "NULL"
+                db.execSQL(
+                    "INSERT INTO exercises (id, name, mode, measurementUnit, measurementMeaning, " +
+                        "unilateral, notes, defaultPrescriptionId, createdAtEpochMs, isSampleData, " +
+                        "description, category, deletedAtEpochMs) " +
+                        "VALUES ('$id', '$id', 'DURATION', NULL, NULL, 0, NULL, " +
+                        "'$prescriptionId', 1000, 0, NULL, $value, NULL)"
+                )
+            }
+            db.execSQL(
+                "INSERT INTO exercise_occurrences (id, weekStartEpochDay, trainingDateEpochDay, " +
+                    "exerciseId, exerciseNameSnapshot, modeSnapshot, unilateralSnapshot, " +
+                    "measurementUnitSnapshot, measurementMeaningSnapshot, prescriptionId, " +
+                    "orderIndex, state, comment, createdAtEpochMs, isSampleData, categorySnapshot, " +
+                    "loggedDurationSeconds, loggedDurationManual, loggedEffort, isOneOff, " +
+                    "circuitInstanceId, circuitPosition) " +
+                    "VALUES ('$occurrenceId', 20718, 20719, '$exerciseId', 'Bouldering', " +
+                    "'ACTIVITY', 0, NULL, NULL, '$prescriptionId', 0, 'COMPLETED', NULL, 1000, 0, " +
+                    "'OPEN', NULL, 0, NULL, 0, NULL, NULL)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 6, true, MeleteDatabase.MIGRATION_5_6).use { db ->
+            db.query("SELECT id, category FROM exercises ORDER BY id").use { cursor ->
+                val found = buildMap {
+                    while (cursor.moveToNext()) {
+                        put(cursor.getString(0), if (cursor.isNull(1)) null else cursor.getString(1))
+                    }
+                }
+                // Renamed where the meaning carries over, untouched where it does not, and an
+                // exercise that never had a category still has none.
+                assertEquals("OPEN_CLIMBING", found["ex-open"])
+                assertEquals("STRENGTH_CONDITIONING", found["ex-cond"])
+                assertEquals("FLEXIBILITY", found["ex-flex"])
+                assertNull(found["ex-none"])
+            }
+            db.query(
+                "SELECT categorySnapshot FROM exercise_occurrences WHERE id = '$occurrenceId'"
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                // The snapshot is rewritten too, or history would lose its colour.
+                assertEquals("OPEN_CLIMBING", cursor.getString(0))
+            }
+        }
+    }
+
+    @Test
     fun theProductionBuilderCarriesEveryMigration() {
-        assertEquals(4, MeleteDatabase.MIGRATIONS.size)
+        assertEquals(5, MeleteDatabase.MIGRATIONS.size)
         assertNull(
             MeleteDatabase.MIGRATIONS.firstOrNull { it.startVersion >= it.endVersion }
         )

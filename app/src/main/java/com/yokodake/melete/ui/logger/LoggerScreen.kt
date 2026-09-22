@@ -574,17 +574,6 @@ private fun DurationRow(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(
-                text = if (state.table.durationMinutes.isBlank()) {
-                    state.inferredDurationMinutes
-                        ?.let { "Worked out from the plan" }
-                        ?: "Not known, and not guessed"
-                } else {
-                    "Your own number"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
         NumberField(
             label = "min",

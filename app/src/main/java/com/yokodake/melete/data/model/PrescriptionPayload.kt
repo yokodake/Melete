@@ -10,12 +10,12 @@ import kotlinx.serialization.json.Json
 const val PRESCRIPTION_PAYLOAD_VERSION: Int = 3
 
 /** How the app asks for a performed set. */
-enum class ExerciseMode {
+enum class ExerciseMode(val label: String) {
     /** Countable repetitions, e.g. a squat. */
-    REPETITIONS,
+    REPETITIONS("Repetitions"),
 
     /** Timed sets of a discrete exercise, e.g. a hang or a stretch. */
-    DURATION,
+    DURATION("Timed sets"),
 
     /**
      * Timed sets made of pulses: so many short efforts inside one set, e.g. hangboard repeaters.
@@ -25,22 +25,22 @@ enum class ExerciseMode {
      * and a hang is not a repeater with one rep — asking which of the two you are creating is a
      * clearer question than asking for a duration and then taking it away again.
      */
-    REPEATERS,
+    REPEATERS("Repeaters"),
 
     /** Duration-only activity with no set structure, e.g. a mobility flow or a climbing session. */
-    ACTIVITY,
+    ACTIVITY("Activity"),
 }
 
 /** What a numeric measurement means. These are different quantities and must never be merged. */
-enum class MeasurementMeaning {
+enum class MeasurementMeaning(val label: String) {
     /** Everything on the bar / the whole implement. */
-    TOTAL_LOAD,
+    TOTAL_LOAD("Total load"),
 
     /** Load added to bodyweight, e.g. a weight belt. */
-    ADDED_LOAD,
+    ADDED_LOAD("Added load"),
 
     /** Load taken away, e.g. a band or a pulley counterweight. */
-    ASSISTANCE,
+    ASSISTANCE("Assistance"),
 }
 
 @Serializable

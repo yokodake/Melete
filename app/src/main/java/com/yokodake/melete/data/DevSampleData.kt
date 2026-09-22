@@ -92,7 +92,7 @@ object DevSampleData {
             unit = "kg",
             meaning = MeasurementMeaning.TOTAL_LOAD,
             unilateral = false,
-            category = ExerciseCategory.CONDITIONING,
+            category = ExerciseCategory.STRENGTH_CONDITIONING,
             description = "Bar on the upper back, brace, sit between the hips and stand up. " +
                 "Depth below parallel without the pelvis tucking under.",
             payload = PrescriptionPayload(
@@ -110,7 +110,7 @@ object DevSampleData {
             unit = "kg",
             meaning = MeasurementMeaning.ADDED_LOAD,
             unilateral = false,
-            category = ExerciseCategory.CONDITIONING,
+            category = ExerciseCategory.STRENGTH_CONDITIONING,
             description = "Half crimp on the 20 mm edge, shoulders engaged, elbows soft. " +
                 "Stop the set the moment the grip position changes.",
             payload = PrescriptionPayload(
@@ -127,7 +127,7 @@ object DevSampleData {
             unit = "kg",
             meaning = MeasurementMeaning.TOTAL_LOAD,
             unilateral = true,
-            category = ExerciseCategory.CONDITIONING,
+            category = ExerciseCategory.STRENGTH_CONDITIONING,
             description = "One hand and one knee on the bench, back flat, pull the dumbbell to " +
                 "the hip rather than to the shoulder.",
             payload = PrescriptionPayload(
@@ -158,7 +158,7 @@ object DevSampleData {
             unit = null,
             meaning = null,
             unilateral = false,
-            category = ExerciseCategory.OPEN,
+            category = ExerciseCategory.OPEN_CLIMBING,
             description = "Whatever the body asks for. No prescribed shape; move for the time.",
             payload = PrescriptionPayload(sets = 1, targetDurationSeconds = 600),
             dayOffset = null,

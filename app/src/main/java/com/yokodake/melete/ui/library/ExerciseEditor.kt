@@ -1,7 +1,7 @@
 package com.yokodake.melete.ui.library
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,8 +17,10 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import com.yokodake.melete.ui.components.ChoiceField
 import com.yokodake.melete.ui.components.CompactTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -30,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.model.ExerciseCategory
@@ -37,6 +40,7 @@ import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.PrescriptionFields
+import com.yokodake.melete.ui.theme.MeleteTheme
 import com.yokodake.melete.ui.components.PrescriptionFormState
 
 @Composable
@@ -116,7 +120,12 @@ fun ExerciseEditorScreen(
             )
 
             Text("Category", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Wrapped. Six categories do not fit across a phone, and a plain Row squeezes the
+            // ones that overflow until their labels break a letter per line.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 ExerciseCategory.entries.forEach { category ->
                     CategoryChip(category, state.category, onCategoryChange)
                 }
@@ -134,41 +143,21 @@ fun ExerciseEditorScreen(
             )
 
             HorizontalDivider()
-            Text("How is a set measured?", style = MaterialTheme.typography.titleSmall)
-            // Wrapped, because four chips do not fit across a phone and a row that scrolls
-            // sideways hides the one you have not thought of.
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ModeChip("Repetitions", ExerciseMode.REPETITIONS, state.mode, onModeChange)
-                ModeChip("Timed sets", ExerciseMode.DURATION, state.mode, onModeChange)
-                ModeChip("Repeaters", ExerciseMode.REPEATERS, state.mode, onModeChange)
-                ModeChip("Activity", ExerciseMode.ACTIVITY, state.mode, onModeChange)
-            }
-            Text(
-                text = when (state.mode) {
-                    ExerciseMode.REPETITIONS -> "Counted reps, e.g. a squat."
-                    ExerciseMode.DURATION -> "Timed sets, e.g. a hang or a stretch."
-                    ExerciseMode.REPEATERS ->
-                        "Timed sets made of pulses, e.g. hangboard repeaters: so many short " +
-                            "efforts inside one set, with a short rest between them."
-
-                    ExerciseMode.ACTIVITY -> "Duration only, no set structure."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ChoiceField(
+                value = state.mode,
+                options = ExerciseMode.entries,
+                optionLabel = ExerciseMode::label,
+                onSelect = onModeChange,
+                label = "How is a set measured?",
+                modifier = Modifier.fillMaxWidth(),
             )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Left and right separately", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = "Sets are then prescribed and logged per side.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text("Unilateral", style = MaterialTheme.typography.bodyLarge)
                 }
                 Switch(checked = state.unilateral, onCheckedChange = onUnilateralChange)
             }
@@ -180,39 +169,23 @@ fun ExerciseEditorScreen(
                 onValueChange = onUnitChange,
                 label = "Unit (empty for none)",
                 placeholder = "kg",
-                supportingText = "A stretch or a bodyweight movement needs no measurement.",
+                supportingText = "",
                 minHeight = 48,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (state.unit.isNotBlank()) {
-                Text(
-                    text = "What the number means",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MeaningChip("Total load", MeasurementMeaning.TOTAL_LOAD, state, onMeaningChange)
-                    MeaningChip("Added", MeasurementMeaning.ADDED_LOAD, state, onMeaningChange)
-                    MeaningChip("Assistance", MeasurementMeaning.ASSISTANCE, state, onMeaningChange)
-                }
-                Text(
-                    text = when (state.meaning) {
-                        MeasurementMeaning.TOTAL_LOAD -> "Everything on the bar or the implement."
-                        MeasurementMeaning.ADDED_LOAD -> "Load added to bodyweight, e.g. a belt."
-                        MeasurementMeaning.ASSISTANCE -> "Load taken away, e.g. a band."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ChoiceField(
+                    value = state.meaning,
+                    options = MeasurementMeaning.entries,
+                    optionLabel = MeasurementMeaning::label,
+                    onSelect = onMeaningChange,
+                    label = "What the number means",
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 
             HorizontalDivider()
             Text("Default prescription", style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = "Copied into the week when you schedule this exercise. Editing it later " +
-                    "never changes copies that are already scheduled.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             PrescriptionFields(
                 state = state.prescription,
                 onStateChange = onPrescriptionChange,
@@ -255,36 +228,121 @@ private fun CategoryChip(
         selected = category == selected,
         onClick = { onSelect(if (category == selected) null else category) },
         leadingIcon = { CategoryDot(category) },
-        label = { Text(category.label) },
+        label = { Text(category.shortLabel) },
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+
+
+// ---------------------------------------------------------------- previews
+
+/**
+ * The editor as it opens, and the editor with everything filled in.
+ *
+ * Worth previewing because this screen is nearly all controls: a dropdown that has grown an option,
+ * or a field that has gained a label, shows up here without a build and an install.
+ */
 @Composable
-private fun ModeChip(
-    label: String,
-    mode: ExerciseMode,
-    selected: ExerciseMode,
-    onSelect: (ExerciseMode) -> Unit,
-) {
-    FilterChip(
-        selected = mode == selected,
-        onClick = { onSelect(mode) },
-        label = { Text(label) },
+private fun EditorPreview(state: ExerciseEditorUiState) {
+    MeleteTheme {
+        ExerciseEditorScreen(
+            state = state,
+            onNameChange = {},
+            onModeChange = {},
+            onUnilateralChange = {},
+            onUnitChange = {},
+            onMeaningChange = {},
+            onNotesChange = {},
+            onDescriptionChange = {},
+            onCategoryChange = {},
+            onPrescriptionChange = {},
+            onSave = {},
+            onBack = {},
+        )
+    }
+}
+
+@Preview(name = "Editor · new", showBackground = true, widthDp = 400, heightDp = 1100)
+@Composable
+private fun NewExercisePreview() {
+    EditorPreview(ExerciseEditorUiState())
+}
+
+@Preview(name = "Editor · repeaters", showBackground = true, widthDp = 400, heightDp = 1100)
+@Composable
+private fun RepeaterExercisePreview() {
+    EditorPreview(
+        ExerciseEditorUiState(
+            exerciseId = "existing",
+            name = "Max hangs 20 mm",
+            mode = ExerciseMode.REPEATERS,
+            unit = "kg",
+            meaning = MeasurementMeaning.ADDED_LOAD,
+            category = ExerciseCategory.FINGER_TRAINING,
+            description = "Half crimp, both hands, feet on the floor.",
+            prescription = PrescriptionFormState(
+                sets = "3",
+                restSeconds = "180",
+                repeaterReps = "6",
+                repeaterWorkSeconds = "7",
+                repeaterRestSeconds = "3",
+            ),
+        )
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Preview(name = "Editor · unilateral, no unit", showBackground = true, widthDp = 400, heightDp = 1100)
 @Composable
-private fun MeaningChip(
-    label: String,
-    meaning: MeasurementMeaning,
-    state: ExerciseEditorUiState,
-    onSelect: (MeasurementMeaning) -> Unit,
-) {
-    FilterChip(
-        selected = state.meaning == meaning,
-        onClick = { onSelect(meaning) },
-        label = { Text(label) },
+private fun UnilateralExercisePreview() {
+    EditorPreview(
+        ExerciseEditorUiState(
+            exerciseId = "existing",
+            name = "Copenhagen plank",
+            mode = ExerciseMode.DURATION,
+            unilateral = true,
+            // No unit, so the "what the number means" dropdown is not offered at all.
+            unit = "",
+            category = ExerciseCategory.STRENGTH_CONDITIONING,
+            prescription = PrescriptionFormState(sets = "3", targetDurationSeconds = "30"),
+        )
     )
+}
+
+/**
+ * Every category, at the size it is actually seen.
+ *
+ * A palette is only as good as its worst pair, and the dot is four millimetres across — so the
+ * question is not whether the colours are nice but whether any two of them are the same colour at
+ * a glance. Both yellows are here so the choice can be made by looking rather than by imagining.
+ */
+@Preview(name = "Category colours · light", showBackground = true, widthDp = 400)
+@Composable
+private fun CategoryColoursPreview() {
+    MeleteTheme {
+        Surface {
+            Column(modifier = Modifier.padding(16.dp)) {
+                ExerciseCategory.entries.forEach { category ->
+                    Row(
+                        modifier = Modifier.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CategoryDot(category)
+                        Text(category.label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Preview(
+    name = "Category colours · dark",
+    showBackground = true,
+    widthDp = 400,
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun CategoryColoursDarkPreview() {
+    CategoryColoursPreview()
 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
@@ -202,8 +203,8 @@ fun PrescriptionFields(
         )
         Text(
             text = estimate
-                ?.let { "Estimated ${PrescriptionSummary.duration(it)} from the plan, rests included." }
-                ?: "No estimate can be made from this plan, so the time stays unknown.",
+                ?.let { "${PrescriptionSummary.duration(it)} estimated." }
+                ?: "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -220,12 +221,6 @@ fun PrescriptionFields(
             value = state.rir,
             onValueChange = { onStateChange(state.copy(rir = it)) },
             modifier = Modifier.fillMaxWidth(0.5f),
-        )
-        Text(
-            text = "Leave a field empty to record it as not set. Empty is not zero. " +
-                "Load belongs to the set you actually did, not to the plan.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -267,11 +262,6 @@ private fun RepeaterFields(
             modifier = Modifier.weight(1f),
         )
     }
-    Text(
-        text = "Seconds off falls between reps only. After the last rep the set rest takes over.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 /**
@@ -284,45 +274,23 @@ private fun RepeaterFields(
  * "Not set" is a real entry rather than a gesture, because clearing a rating must be as findable
  * as setting one.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EffortSelector(
     selected: EffortLevel?,
     onSelect: (EffortLevel?) -> Unit,
     modifier: Modifier = Modifier,
+    minHeight: Int = 44,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
+    ChoiceField(
+        value = selected,
+        // "Not set" is a real entry rather than a gesture, because clearing a rating must be as
+        // findable as setting one.
+        options = listOf<EffortLevel?>(null) + EffortLevel.entries,
+        optionLabel = { it?.label ?: NOT_SET },
+        onSelect = onSelect,
         modifier = modifier,
-    ) {
-        CompactTextField(
-            value = selected?.label ?: NOT_SET,
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(NOT_SET) },
-                onClick = {
-                    expanded = false
-                    onSelect(null)
-                },
-            )
-            EffortLevel.entries.forEach { level ->
-                DropdownMenuItem(
-                    text = { Text(level.label) },
-                    onClick = {
-                        expanded = false
-                        onSelect(level)
-                    },
-                )
-            }
-        }
-    }
+        minHeight = minHeight,
+    )
 }
 
 private const val NOT_SET = "Not set"
@@ -339,6 +307,7 @@ fun NumberField(
     modifier: Modifier = Modifier,
     decimal: Boolean = false,
     placeholder: String? = null,
+    minHeight: Int = 48,
 ) {
     CompactTextField(
         value = value,
@@ -349,7 +318,7 @@ fun NumberField(
         },
         label = label,
         placeholder = placeholder,
-        minHeight = 48,
+        minHeight = minHeight,
         keyboardOptions = KeyboardOptions(
             keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
         ),

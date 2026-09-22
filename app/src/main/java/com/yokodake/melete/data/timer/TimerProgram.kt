@@ -226,6 +226,15 @@ data class TimerProgram(
         return (if (isCircuit) step.roundIndex else step.setIndex) + 1
     }
 
+/**
+     * Whether every interval has a length, so a total can be stated without inventing one.
+     *
+     * Named, rather than left as "is [totalSeconds] null", because callers ask this question for
+     * its own sake — whether to offer a total at all — and a null standing in for a boolean is a
+     * thing the next reader has to decode.
+     */
+    val isFullyTimed: Boolean get() = steps.none { it.untimed }
+
     /**
      * How long the whole thing takes, or null when a set is untimed and the answer would be a
      * fabrication. Rests are counted only where one actually falls; the preparation countdowns are
@@ -233,7 +242,7 @@ data class TimerProgram(
      * planning number.
      */
     val totalSeconds: Int?
-        get() = if (steps.any { it.untimed }) null else steps.sumOf { it.seconds }
+        get() = if (isFullyTimed) steps.sumOf { it.seconds } else null
 
     /**
      * Just the work, with every rest excluded: the number a "time under tension" total is made of.
