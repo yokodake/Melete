@@ -311,7 +311,7 @@ private fun StationCard(
 
 /** One station in one line: what a round of it is, not what it would be on its own. */
 private fun stationLine(station: StationDraft): String {
-    val payload = station.form.toPayload()
+    val payload = station.form.toPayload(station.mode)
     val parts = mutableListOf<String>()
     payload.repeater?.let {
         parts += "${it.repsPerSet} × ${PrescriptionSummary.duration(it.workSecondsPerRep)}"

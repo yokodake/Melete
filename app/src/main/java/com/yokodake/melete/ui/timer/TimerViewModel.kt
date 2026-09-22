@@ -10,6 +10,7 @@ import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.data.timer.CuePlanner
 import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.PlannedCue
+import com.yokodake.melete.data.timer.RepeaterSpec
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
@@ -41,14 +42,33 @@ data class DurationDraft(val minutes: String = "0", val seconds: String = "00") 
     }
 }
 
+/**
+ * What kind of thing the create screen is building.
+ *
+ * Not [WorkKind], because a repeater *is* timed work — the difference is the shape of the set, not
+ * whether it is counted by a clock. Three choices here map onto two work kinds plus a pulse spec,
+ * which is exactly the distinction the athlete makes and the engine does not.
+ */
+enum class TimerCreateMode(val label: String) {
+    TIMED("Timed"),
+    REPS("Reps"),
+    REPEATERS("Repeaters"),
+}
+
 data class TimerUiState(
     val state: TimerState = TimerState.Idle,
     val remainingMs: Long = 0,
     val totalMs: Long = 0,
-    val mode: WorkKind = WorkKind.TIMED,
+    val mode: TimerCreateMode = TimerCreateMode.TIMED,
     val work: DurationDraft = DurationDraft.of(30),
     val rest: DurationDraft = DurationDraft.of(180),
     val setsText: String = "3",
+    /** Both sides inside one set, left first. */
+    val unilateral: Boolean = false,
+    val sideSwitchText: String = TimerProgram.DEFAULT_SIDE_SWITCH_SECONDS.toString(),
+    val repeaterRepsText: String = "6",
+    val repeaterWorkText: String = "7",
+    val repeaterRestText: String = "3",
     val cues: CueSettings = CueSettings(),
 ) {
     val isRunning: Boolean get() = state is TimerState.Running
@@ -58,30 +78,65 @@ data class TimerUiState(
 
     val sets: Int get() = (setsText.toIntOrNull() ?: 0).coerceIn(0, 99)
 
+    val sideSwitchSeconds: Int
+        get() = (sideSwitchText.toIntOrNull() ?: TimerProgram.DEFAULT_SIDE_SWITCH_SECONDS)
+            .coerceIn(0, 300)
+
+    /** The pulse shape, or null while the fields do not yet describe one. */
+    val repeaterSpec: RepeaterSpec?
+        get() {
+            val reps = repeaterRepsText.toIntOrNull() ?: return null
+            val work = repeaterWorkText.toIntOrNull() ?: return null
+            if (reps < 1 || work < 1) return null
+            return RepeaterSpec(
+                repsPerSet = reps,
+                workSecondsPerRep = work,
+                restSecondsBetweenReps = repeaterRestText.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+            )
+        }
+
     /** The program the fields add up to, or null when they do not yet describe a valid one. */
     val draftProgram: TimerProgram?
         get() {
             if (sets < 1) return null
-            if (mode == WorkKind.TIMED && work.totalSeconds < 1) return null
-            return TimerProgram(
-                sets = sets,
-                work = mode,
-                workSeconds = work.totalSeconds,
-                restSeconds = rest.totalSeconds,
-            )
+            fun program(work: WorkKind, workSeconds: Int = 0, repeater: RepeaterSpec? = null) =
+                TimerProgram(
+                    sets = sets,
+                    work = work,
+                    workSeconds = workSeconds,
+                    restSeconds = rest.totalSeconds,
+                    unilateral = unilateral,
+                    sideSwitchSeconds = sideSwitchSeconds,
+                    repeater = repeater,
+                )
+            return when (mode) {
+                TimerCreateMode.TIMED ->
+                    if (work.totalSeconds < 1) null
+                    else program(WorkKind.TIMED, workSeconds = work.totalSeconds)
+
+                TimerCreateMode.REPS -> program(WorkKind.REPS)
+
+                TimerCreateMode.REPEATERS ->
+                    repeaterSpec?.let { program(WorkKind.TIMED, repeater = it) }
+            }
         }
 
     val canStart: Boolean get() = draftProgram != null
 
-    /** The phase whose length the cue preview should describe: the work, or the rest alone. */
+    /**
+     * The interval the cue preview describes.
+     *
+     * For repeaters that is one pulse, not the whole set: the pulse is what the cues actually land
+     * inside, and saying "no 30-second warning" about a seven-second effort is the useful answer.
+     */
     private val previewPhase: TimerPhase
-        get() = if (mode == WorkKind.TIMED) TimerPhase.WORK else TimerPhase.REST
+        get() = if (mode == TimerCreateMode.REPS) TimerPhase.REST else TimerPhase.WORK
 
     private val previewMs: Long
-        get() = if (mode == WorkKind.TIMED) {
-            work.totalSeconds * 1000L
-        } else {
-            rest.totalSeconds * 1000L
+        get() = when (mode) {
+            TimerCreateMode.TIMED -> work.totalSeconds * 1000L
+            TimerCreateMode.REPS -> rest.totalSeconds * 1000L
+            TimerCreateMode.REPEATERS -> (repeaterSpec?.workSecondsPerRep ?: 0) * 1000L
         }
 
     /** What one interval of this program will sound, given its length. */
@@ -131,10 +186,15 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
 
     private val draft = MutableStateFlow(
         Draft(
-            mode = WorkKind.TIMED,
+            mode = TimerCreateMode.TIMED,
             work = DurationDraft.of(controller.lastDurationSeconds(TimerPhase.WORK)),
             rest = DurationDraft.of(controller.lastDurationSeconds(TimerPhase.REST)),
             sets = controller.lastSets.toString(),
+            unilateral = controller.lastUnilateral,
+            sideSwitch = controller.lastSideSwitchSeconds.toString(),
+            repeaterReps = controller.lastRepeaterReps.toString(),
+            repeaterWork = controller.lastRepeaterWorkSeconds.toString(),
+            repeaterRest = controller.lastRepeaterRestSeconds.toString(),
             cues = controller.cueSettings,
         )
     )
@@ -162,6 +222,11 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
                 work = currentDraft.work,
                 rest = currentDraft.rest,
                 setsText = currentDraft.sets,
+                unilateral = currentDraft.unilateral,
+                sideSwitchText = currentDraft.sideSwitch,
+                repeaterRepsText = currentDraft.repeaterReps,
+                repeaterWorkText = currentDraft.repeaterWork,
+                repeaterRestText = currentDraft.repeaterRest,
                 cues = currentDraft.cues,
             )
         }.stateIn(
@@ -186,7 +251,21 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
      * the set count mean the same thing either way, and having them replaced the moment you
      * classify the work is maddening.
      */
-    fun setMode(mode: WorkKind) = draft.update { it.copy(mode = mode) }
+    fun setMode(mode: TimerCreateMode) = draft.update { it.copy(mode = mode) }
+
+    fun setUnilateral(value: Boolean) = draft.update { it.copy(unilateral = value) }
+
+    fun setSideSwitch(value: String) =
+        draft.update { it.copy(sideSwitch = value.filter(Char::isDigit).take(3)) }
+
+    fun setRepeaterReps(value: String) =
+        draft.update { it.copy(repeaterReps = value.filter(Char::isDigit).take(2)) }
+
+    fun setRepeaterWork(value: String) =
+        draft.update { it.copy(repeaterWork = value.filter(Char::isDigit).take(3)) }
+
+    fun setRepeaterRest(value: String) =
+        draft.update { it.copy(repeaterRest = value.filter(Char::isDigit).take(3)) }
 
     fun setWorkMinutes(value: String) =
         draft.update { it.copy(work = it.work.copy(minutes = value.take(3))) }
@@ -229,10 +308,15 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
     fun dismiss() = controller.dismiss()
 
     private data class Draft(
-        val mode: WorkKind,
+        val mode: TimerCreateMode,
         val work: DurationDraft,
         val rest: DurationDraft,
         val sets: String,
+        val unilateral: Boolean,
+        val sideSwitch: String,
+        val repeaterReps: String,
+        val repeaterWork: String,
+        val repeaterRest: String,
         val cues: CueSettings,
     )
 

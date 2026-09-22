@@ -7,6 +7,7 @@ import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
 import com.yokodake.melete.data.model.RepeaterPrescription
+import com.yokodake.melete.data.timer.DurationEstimate
 import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.ui.components.PrescriptionFormState
 import com.yokodake.melete.ui.logger.LoggerUiState
@@ -157,34 +158,90 @@ class DurationLoggingTest {
         val form = PrescriptionFormState.from(payload)
         assertEquals("25", form.plannedDurationMinutes)
         assertEquals("10", form.sideSwitchSeconds)
-        assertTrue(form.repeaterEnabled)
-        assertEquals(payload, form.toPayload())
+        assertEquals("6", form.repeaterReps)
+        assertEquals(payload, form.toPayload(ExerciseMode.REPEATERS))
+    }
+
+    @Test
+    fun `the mode decides which numbers the plan actually carries`() {
+        // One form, filled in as if the user had switched modes about; each mode takes only what
+        // it means, so a plain timed set cannot quietly carry pulse numbers it never shows.
+        val form = PrescriptionFormState(
+            sets = "3",
+            targetReps = "8",
+            targetDurationSeconds = "10",
+            repeaterReps = "6",
+            repeaterWorkSeconds = "7",
+            repeaterRestSeconds = "3",
+        )
+
+        val reps = form.toPayload(ExerciseMode.REPETITIONS)
+        assertEquals(8, reps.targetReps)
+        assertNull(reps.targetDurationSeconds)
+        assertNull(reps.repeater)
+
+        val timed = form.toPayload(ExerciseMode.DURATION)
+        assertNull(timed.targetReps)
+        assertEquals(10, timed.targetDurationSeconds)
+        assertNull(timed.repeater)
+
+        val repeaters = form.toPayload(ExerciseMode.REPEATERS)
+        assertNull(repeaters.targetReps)
+        // A repeater states its per-rep length, so a set length would be the same question twice.
+        assertNull(repeaters.targetDurationSeconds)
+        assertEquals(RepeaterPrescription(6, 7, 3), repeaters.repeater)
     }
 
     @Test
     fun `an empty duration field stays absent rather than becoming zero`() {
         val form = PrescriptionFormState(sets = "3", targetDurationSeconds = "10")
-        assertNull(form.toPayload().plannedDurationSeconds)
-        assertNull(form.toPayload().sideSwitchSeconds)
-        assertNull(form.toPayload().repeater)
+        val payload = form.toPayload(ExerciseMode.DURATION)
+        assertNull(payload.plannedDurationSeconds)
+        assertNull(payload.sideSwitchSeconds)
+        assertNull(payload.repeater)
     }
 
     @Test
     fun `a zero side switch is a real answer and is not the default`() {
         val form = PrescriptionFormState(sets = "3", sideSwitchSeconds = "0")
-        assertEquals(0, form.toPayload().sideSwitchSeconds)
+        assertEquals(0, form.toPayload(ExerciseMode.DURATION).sideSwitchSeconds)
         assertEquals(
             TimerProgram.DEFAULT_SIDE_SWITCH_SECONDS,
-            PrescriptionFormState(sets = "3").toPayload().sideSwitchSeconds
+            PrescriptionFormState(sets = "3").toPayload(ExerciseMode.DURATION).sideSwitchSeconds
                 ?: TimerProgram.DEFAULT_SIDE_SWITCH_SECONDS,
         )
     }
 
     @Test
     fun `a half-typed repeater describes no repeater at all`() {
-        val form = PrescriptionFormState(repeaterEnabled = true, repeaterReps = "6")
+        val form = PrescriptionFormState(repeaterReps = "6")
         assertNull(form.toRepeater())
         assertNull(form.copy(repeaterWorkSeconds = "0").toRepeater())
+        // And a repeater exercise that has not been filled in yet has no plan to run.
+        assertNull(form.toPayload(ExerciseMode.REPEATERS).repeater)
+    }
+
+    @Test
+    fun `a repeater exercise is estimated from its pulses`() {
+        val plan = PrescriptionFormState(
+            sets = "3",
+            restSeconds = "180",
+            repeaterReps = "6",
+            repeaterWorkSeconds = "7",
+            repeaterRestSeconds = "3",
+        ).toPayload(ExerciseMode.REPEATERS)
+        assertEquals(
+            536,
+            DurationEstimate.forPrescription(ExerciseMode.REPEATERS, unilateral = false, plan),
+        )
+        // With the pulses not yet stated there is nothing to go on, and null says so.
+        assertNull(
+            DurationEstimate.forPrescription(
+                ExerciseMode.REPEATERS,
+                unilateral = false,
+                PrescriptionFormState(sets = "3").toPayload(ExerciseMode.REPEATERS),
+            )
+        )
     }
 
     // ------------------------------------------------------- one-off identity

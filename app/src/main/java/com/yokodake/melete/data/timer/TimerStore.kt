@@ -76,14 +76,47 @@ class TimerStore(context: Context) {
         get() = preferences.getInt(KEY_LAST_REST, DEFAULT_REST_SECONDS)
         set(value) = preferences.edit().putInt(KEY_LAST_REST, value).apply()
 
+    /**
+     * Coerced on the way out, not just on the way in. An earlier build stored a repeater program's
+     * empty [TimerEntry.workSeconds] here, and a zero read back as a work length the create screen
+     * could not start from — so a value that cannot be a length is treated as no value at all.
+     */
     var lastWorkSeconds: Int
         get() = preferences.getInt(KEY_LAST_WORK, DEFAULT_WORK_SECONDS)
+            .takeIf { it > 0 } ?: DEFAULT_WORK_SECONDS
         set(value) = preferences.edit().putInt(KEY_LAST_WORK, value).apply()
 
     /** How many sets the last program had, so the create screen opens on a familiar number. */
     var lastSets: Int
         get() = preferences.getInt(KEY_LAST_SETS, DEFAULT_SETS)
         set(value) = preferences.edit().putInt(KEY_LAST_SETS, value).apply()
+
+    /**
+     * The rest of the last hand-built program's shape.
+     *
+     * Remembered for the same reason the set count is: the create screen is used mid-session with
+     * chalk on your hands, and retyping six-sevens-and-threes every time you want another set of
+     * repeaters is exactly the friction this app exists to remove.
+     */
+    var lastUnilateral: Boolean
+        get() = preferences.getBoolean(KEY_LAST_UNILATERAL, false)
+        set(value) = preferences.edit().putBoolean(KEY_LAST_UNILATERAL, value).apply()
+
+    var lastSideSwitchSeconds: Int
+        get() = preferences.getInt(KEY_LAST_SIDE_SWITCH, TimerProgram.DEFAULT_SIDE_SWITCH_SECONDS)
+        set(value) = preferences.edit().putInt(KEY_LAST_SIDE_SWITCH, value).apply()
+
+    var lastRepeaterReps: Int
+        get() = preferences.getInt(KEY_LAST_REPEATER_REPS, DEFAULT_REPEATER_REPS)
+        set(value) = preferences.edit().putInt(KEY_LAST_REPEATER_REPS, value).apply()
+
+    var lastRepeaterWorkSeconds: Int
+        get() = preferences.getInt(KEY_LAST_REPEATER_WORK, DEFAULT_REPEATER_WORK)
+        set(value) = preferences.edit().putInt(KEY_LAST_REPEATER_WORK, value).apply()
+
+    var lastRepeaterRestSeconds: Int
+        get() = preferences.getInt(KEY_LAST_REPEATER_REST, DEFAULT_REPEATER_REST)
+        set(value) = preferences.edit().putInt(KEY_LAST_REPEATER_REST, value).apply()
 
     private companion object {
         const val KEY_SNAPSHOT = "snapshot"
@@ -93,8 +126,18 @@ class TimerStore(context: Context) {
         const val KEY_LAST_REST = "last-rest-seconds"
         const val KEY_LAST_WORK = "last-work-seconds"
         const val KEY_LAST_SETS = "last-sets"
+        const val KEY_LAST_UNILATERAL = "last-unilateral"
+        const val KEY_LAST_SIDE_SWITCH = "last-side-switch-seconds"
+        const val KEY_LAST_REPEATER_REPS = "last-repeater-reps"
+        const val KEY_LAST_REPEATER_WORK = "last-repeater-work-seconds"
+        const val KEY_LAST_REPEATER_REST = "last-repeater-rest-seconds"
         const val DEFAULT_REST_SECONDS = 180
         const val DEFAULT_WORK_SECONDS = 10
         const val DEFAULT_SETS = 3
+        // The classic hangboard repeater, which is what anyone reaching for this is most likely
+        // to want: six seven-second efforts with three seconds between them.
+        const val DEFAULT_REPEATER_REPS = 6
+        const val DEFAULT_REPEATER_WORK = 7
+        const val DEFAULT_REPEATER_REST = 3
     }
 }

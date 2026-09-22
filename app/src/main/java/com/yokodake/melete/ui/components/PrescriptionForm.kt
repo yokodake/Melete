@@ -11,7 +11,6 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.Switch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,14 +53,12 @@ data class PrescriptionFormState(
     val plannedDurationMinutes: String = "",
     /** Empty means the default. Zero is a real answer and runs the sides back to back. */
     val sideSwitchSeconds: String = "",
-    val repeaterEnabled: Boolean = false,
     val repeaterReps: String = "",
     val repeaterWorkSeconds: String = "",
     val repeaterRestSeconds: String = "",
 ) {
     /** The repeater the fields describe, or null when they do not describe one yet. */
     fun toRepeater(): RepeaterPrescription? {
-        if (!repeaterEnabled) return null
         val reps = repeaterReps.toIntOrNull() ?: return null
         val work = repeaterWorkSeconds.toIntOrNull() ?: return null
         if (reps < 1 || work < 1) return null
@@ -74,21 +70,28 @@ data class PrescriptionFormState(
     }
 
     /**
+     * The payload these fields describe.
+     *
+     * The mode is an argument rather than a field because it belongs to the *exercise*, not to the
+     * plan: it is what decides whether the pulse numbers mean anything, so passing it here is what
+     * stops a plain timed set from quietly carrying a repeater it never shows.
+     *
      * Written with `measurement = null`. An older prescription that still carries a load keeps it
      * on disk — rows are never mutated — but re-saving one drops it, which is the intended
      * migration away from prescribed weight.
      */
-    fun toPayload(): PrescriptionPayload = PrescriptionPayload(
+    fun toPayload(mode: ExerciseMode): PrescriptionPayload = PrescriptionPayload(
         sets = sets.toIntOrNull()?.coerceAtLeast(0) ?: 1,
-        targetReps = targetReps.toIntOrNull(),
-        targetDurationSeconds = targetDurationSeconds.toIntOrNull(),
+        targetReps = targetReps.toIntOrNull()?.takeIf { mode == ExerciseMode.REPETITIONS },
+        targetDurationSeconds = targetDurationSeconds.toIntOrNull()
+            ?.takeIf { mode != ExerciseMode.REPETITIONS && mode != ExerciseMode.REPEATERS },
         restSeconds = restSeconds.toIntOrNull(),
         measurement = null,
         effort = effort,
         rir = rir.toIntOrNull(),
         plannedDurationSeconds = plannedDurationMinutes.toIntOrNull()?.let { it * 60 },
         sideSwitchSeconds = sideSwitchSeconds.toIntOrNull(),
-        repeater = toRepeater(),
+        repeater = toRepeater().takeIf { mode == ExerciseMode.REPEATERS },
     )
 
     companion object {
@@ -105,7 +108,6 @@ data class PrescriptionFormState(
                 ?.let { ((it + 30) / 60).toString() }
                 .orEmpty(),
             sideSwitchSeconds = payload?.sideSwitchSeconds?.toString().orEmpty(),
-            repeaterEnabled = payload?.repeater != null,
             repeaterReps = payload?.repeater?.repsPerSet?.toString().orEmpty(),
             repeaterWorkSeconds = payload?.repeater?.workSecondsPerRep?.toString().orEmpty(),
             repeaterRestSeconds = payload?.repeater?.restSecondsBetweenReps?.toString().orEmpty(),
@@ -128,13 +130,12 @@ fun PrescriptionFields(
     unilateral: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val timed = mode == ExerciseMode.DURATION
     // What the shape of the work implies, so the duration field can show it in grey rather than
     // asking for a number the app can already work out.
     val estimate = DurationEstimate.forPrescription(
         mode = mode,
         unilateral = unilateral,
-        prescription = state.toPayload().copy(plannedDurationSeconds = null),
+        prescription = state.toPayload(mode).copy(plannedDurationSeconds = null),
     )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -154,16 +155,16 @@ fun PrescriptionFields(
                     modifier = Modifier.weight(1f),
                 )
 
-                // A repeater states its own per-rep length, so asking for a set length too would
-                // be asking the same question twice with two different answers.
-                ExerciseMode.DURATION, ExerciseMode.ACTIVITY -> if (!state.repeaterEnabled) {
-                    NumberField(
-                        label = "Target seconds",
-                        value = state.targetDurationSeconds,
-                        onValueChange = { onStateChange(state.copy(targetDurationSeconds = it)) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                ExerciseMode.DURATION, ExerciseMode.ACTIVITY -> NumberField(
+                    label = "Target seconds",
+                    value = state.targetDurationSeconds,
+                    onValueChange = { onStateChange(state.copy(targetDurationSeconds = it)) },
+                    modifier = Modifier.weight(1f),
+                )
+
+                // A repeater states its own per-rep length below, so asking for a set length here
+                // would be the same question twice with two different answers.
+                ExerciseMode.REPEATERS -> Unit
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -184,7 +185,7 @@ fun PrescriptionFields(
             }
         }
 
-        if (timed) {
+        if (mode == ExerciseMode.REPEATERS) {
             HorizontalDivider()
             RepeaterFields(state, onStateChange)
         }
@@ -230,39 +231,22 @@ fun PrescriptionFields(
 }
 
 /**
- * The repeater shape, hidden until it is asked for.
+ * What one set of repeaters is made of.
  *
- * Off by default and out of the way, because most timed work is one interval and three extra
- * fields on every stretch would be three fields to scroll past. On, one set becomes a series of
- * pulses — which is a different thing from more sets, and is stored as such.
+ * Always shown for a repeater exercise, because it is the whole of what such a set *is* — there is
+ * no plain duration to fall back on. Never shown for anything else, so an ordinary hang cannot end
+ * up carrying pulse numbers it does not use.
  */
 @Composable
 private fun RepeaterFields(
     state: PrescriptionFormState,
     onStateChange: (PrescriptionFormState) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Repeaters",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "One set is a series of timed efforts",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(
-            checked = state.repeaterEnabled,
-            onCheckedChange = { onStateChange(state.copy(repeaterEnabled = it)) },
-        )
-    }
-    if (!state.repeaterEnabled) return
+    Text(
+        text = "One set",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         NumberField(
             label = "Reps per set",
@@ -343,9 +327,13 @@ fun EffortSelector(
 
 private const val NOT_SET = "Not set"
 
+/**
+ * A number input. [label] is nullable because a field whose row already names it does not need to
+ * say the same word twice.
+ */
 @Composable
 fun NumberField(
-    label: String,
+    label: String?,
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,

@@ -1,6 +1,7 @@
 # Build status
 
-Last updated: 2026-09-22, after phase 5A and the timer extensions A, B and C.
+Last updated: 2026-09-22, after phase 5A, the timer extensions A, B and C, and the first
+round of feedback on them.
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -52,12 +53,15 @@ happened. The stronger answer exists and names what it would destroy.
 
 ## Exercises, activities and circuits
 
-- **An exercise** is user-defined: name, mode (repetitions / timed sets / duration-only activity),
-  optional measurement with explicit load semantics, unilateral flag, notes, description, category,
-  and a default prescription. Nothing is hardcoded.
-- **A prescription** fixes the shape of the work: sets, target reps or duration, rest, side-switch
-  rest, an optional repeater, target effort or RIR, and an optional planned duration. It
-  deliberately does not fix a load.
+- **An exercise** is user-defined: name, mode, optional measurement with explicit load semantics,
+  unilateral flag, notes, description, category, and a default prescription. Nothing is hardcoded.
+  There are four modes — **repetitions**, **timed sets**, **repeaters** and **activity** — and the
+  mode is what decides which numbers a plan carries: a repeater states its pulses and has no set
+  length, a timed set states a length and has no pulses. Neither can quietly hold the other's
+  numbers, because `PrescriptionFormState.toPayload` takes the mode as an argument.
+- **A prescription** fixes the shape of the work: sets, target reps or duration or pulses, rest,
+  side-switch rest, target effort or RIR, and an optional planned duration. It deliberately does
+  not fix a load.
 - **A one-off activity** is an occurrence with no library row. Its exercise id is derived from its
   name (`core/OneOffActivity`), so two sessions called the same thing already group in history and
   could be promoted to a definition later. Going for a run once leaves no clutter behind.
@@ -86,10 +90,16 @@ the same gesture as making one and the button says *Save changes*.
 - A duration-only activity has no set table at all. It records that it happened, optionally how
   long and how it felt, and counts once — with no fabricated set records.
 
+**A circuit opens as information**, exactly as an exercise does: what it is, how many rounds of
+what, what falls between, the stations in order with their plans and their share of the clock, and
+then the only two things worth doing next — *Start the circuit* and *Log the workout*. Going
+straight into the review meant a circuit could only be answered and never read.
+
 **A circuit is logged in one review**: a list of expandable rows, one per exercise. Collapsed, a
 row is a tick, a name and a max load; expanded, it has the same set table, per-side loads, partial
 completion, effort, duration and comment as the single-exercise logger, because it is the same
-record. One Save commits every station atomically.
+record. One Save commits every station atomically. The review starts nothing: the detail screen
+owns that button, so there is one place a countdown begins.
 
 ## The timer
 
@@ -130,6 +140,13 @@ the more specific one, so a three-second rep rest sounds *two, one, go* rather t
 The screen and the notification say the same sentence about where you are —
 `positionDetail()` — naming the set or round, the circuit station, the side and the repeater rep,
 each only when it distinguishes something.
+
+**The timer tab builds all of it by hand**, not just the shapes it could before. Three modes —
+timed sets, reps, repeaters — plus a *both sides* switch with its own side-switch field. The
+create screen's `TimerCreateMode` is deliberately not `WorkKind`: a repeater *is* timed work, and
+the difference is the shape of the set rather than whether a clock counts it. The numbers are
+remembered between runs, opening on the classic six sevens with threes between, because this
+screen is used mid-session with chalk on your hands.
 
 ## Duration
 
@@ -191,7 +208,7 @@ com.yokodake.melete
   ui/library/               LibraryPicker, ExerciseEditor (+ view models)
   ui/logger/                LoggerScreen, LoggerViewModel, SetDraft, SetTable
   ui/routine/               RoutineListScreen, RoutineEditorScreen (+ view models)
-  ui/circuit/               CircuitReviewScreen + view model
+  ui/circuit/               CircuitDetailScreen (what it is), CircuitReviewScreen (logging it)
   ui/timer/                 TimerScreen, TimerViewModel
   data/timer/
     TimerProgram.kt         entries, steps and the sequencer: what the timer is actually counting
@@ -413,8 +430,24 @@ Then on the Pixel 9 (2026-09-22):
   `melete.db`, `melete.db-wal` and `melete.db-shm` together; opening the set once with any SQLite
   client replays the WAL and leaves a self-contained `.db`.
 
-**Still owed on the phone** — everything in *What still needs a phone* from section 1 onwards. The
-suite exercises the database, not the screens, the speaker or the lock screen.
+Then a first round of feedback on all of it, from using the app (2026-09-22):
+
+- **Repeaters became a mode** rather than a switch on a timed prescription. It is a different
+  movement to plan, to run and to read back — six sevens on and threes off is not "a 57-second
+  hang" — so asking which of the two you are creating is a clearer question than asking for a
+  duration and then taking it away again. The mode now decides which numbers a plan carries.
+- **The timer tab grew repeaters and a both-sides switch.** They were reachable only from a
+  prescription, which made the hand-built timer quietly the weaker of the two.
+- **A circuit opens as information**, with *Start the circuit* and *Log the workout*, instead of
+  dropping straight into the review.
+
+**152 unit tests passing**, up from 141: `TimerCreateTest` (9) walks everything the create screen
+can now express and checks a hand-built repeater is the same sequence as a prescribed one, and
+`DurationLoggingTest` gained the check that each mode takes only the numbers it means.
+
+**Still owed on the phone** — everything in *What still needs a phone* from section 1 onwards, and
+none of the four changes above has been run on a device either: the phone was unplugged before the
+suite could be re-run against them. The APKs are built and waiting.
 
 ## Known limitations
 
@@ -506,6 +539,8 @@ tests pass unchanged.
 - [ ] **Renaming a one-off** from its logger corrects the name on the card.
 - [ ] **A reusable activity.** Create a library exercise in *Activity* mode, schedule it on two
       days, log both. One definition, two occurrences, no set table on either.
+- [ ] **A repeater exercise.** Create one in *Repeaters* mode: the editor asks for reps, seconds on
+      and seconds off, and never for a set length. Its card reads as its pulses.
 - [ ] **An activity with no duration** still marks done and still counts.
 
 ### 3. Duration and its provenance
@@ -534,6 +569,10 @@ These are the ones no test can make.
       take about 57 s, not about 87 s.
 - [ ] **Short intervals still cue.** The 3 s rep rest sounds *two, one, go* — audible, and not a
       pile-up of overlapping beeps.
+- [ ] **The timer tab builds a repeater by hand**, and it runs identically to a prescribed one.
+- [ ] **The timer tab's *both sides* switch** produces left, switch, right, and the side-switch
+      field appears only when it is on.
+- [ ] **The create screen reopens on the numbers you last used**, including the pulses.
 - [ ] **A repeater set rest** behaves like an ordinary rest, and the next set's first pulse is not
       led into.
 
@@ -545,6 +584,8 @@ These are the ones no test can make.
       for that exercise is untouched.
 - [ ] **Schedule it.** One card in the week with its stations listed inside it, not three loose
       exercises.
+- [ ] **Tapping the card opens what it is**, not the log: rounds, rests, the stations in order with
+      their plans and their share of the time, and two buttons at the bottom.
 - [ ] **Edit the routine afterwards** (change rounds and a station's numbers). The scheduled copy
       must not change.
 - [ ] **Run it on the timer**, phone locked. One set of each exercise per round; the notification

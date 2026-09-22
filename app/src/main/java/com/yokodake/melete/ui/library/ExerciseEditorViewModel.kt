@@ -101,7 +101,7 @@ class ExerciseEditorViewModel(
             notes = state.notes,
             description = state.description,
             category = state.category,
-            defaultPrescription = state.prescription.toPayload(),
+            defaultPrescription = state.prescription.toPayload(state.mode),
         )
         viewModelScope.launch {
             if (state.exerciseId == null) {

@@ -61,18 +61,11 @@ import com.yokodake.melete.ui.week.PrescriptionSummary
 @Composable
 fun CircuitReviewRoute(
     onBack: () -> Unit,
-    onStartTimer: () -> Unit,
     viewModel: CircuitReviewViewModel = viewModel(factory = CircuitReviewViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.finished.collect { onBack() } }
-    CircuitReviewScreen(
-        state = state,
-        viewModel = viewModel,
-        onStartTimer = { viewModel.requestStartTimer(onStartTimer) },
-        onConfirmReplace = { viewModel.confirmStartTimer(onStartTimer) },
-        onBack = onBack,
-    )
+    CircuitReviewScreen(state = state, viewModel = viewModel, onBack = onBack)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,8 +73,6 @@ fun CircuitReviewRoute(
 fun CircuitReviewScreen(
     state: CircuitReviewUiState,
     viewModel: CircuitReviewViewModel,
-    onStartTimer: () -> Unit,
-    onConfirmReplace: () -> Unit,
     onBack: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -159,9 +150,6 @@ fun CircuitReviewScreen(
                     }
                 }
             }
-            item {
-                TextButton(onClick = onStartTimer) { Text("Run the circuit on the timer") }
-            }
             item { HorizontalDivider() }
 
             state.stations.forEach { station ->
@@ -195,28 +183,6 @@ fun CircuitReviewScreen(
         }
     }
 
-    state.replacePrompt?.let { label ->
-        ReplacePrompt(
-            label = label,
-            onConfirm = onConfirmReplace,
-            onDismiss = viewModel::dismissReplacePrompt,
-        )
-    }
-}
-
-@Composable
-private fun ReplacePrompt(
-    label: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Another timer is running") },
-        text = { Text("Starting this circuit calls off $label. Nothing recorded is affected.") },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Start anyway") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep the current one") } },
-    )
 }
 
 /** The circuit's own timing, worked out once from the sequence rather than per exercise. */
