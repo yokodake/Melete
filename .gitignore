@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Training-record backups pulled off the phone. Personal data: never committed.
+/backups/
