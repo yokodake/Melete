@@ -1,339 +1,162 @@
 # Build status
 
-Last updated: 2026-09-21, after the sixth round of use feedback.
+Last updated: 2026-09-22, after phase 5A and the timer extensions A, B and C.
 
-## Completed phases
+This file has two halves. **Current state** describes the app as it is today and is the part to
+trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
+decision is worth more than the decision, and is *not* a description of current behaviour. Where
+the two ever disagree, the code and the first half win.
 
-### Phase 1 — runnable foundation ✅
+---
 
-- Kept the existing Android Studio toolchain (AGP 9.4.1 / Gradle 9.6 / Kotlin 2.2.10 /
-  compileSdk 37 / minSdk 33 / Compose BOM 2026.02.01) and added Room, KSP and
-  kotlinx.serialization to it.
-- **This week** screen: one vertical list with an unscheduled section on top, then Monday–Sunday,
-  today highlighted, previous/next week and a *Today* action, edge-to-edge and inset-aware.
-- Minimal persistence: exercises, prescriptions, exercise occurrences (Room, schema v1).
-- Explicit debug-only sample data: overflow menu → *Insert sample data in this week* /
-  *Remove all sample data*. Nothing is ever seeded automatically.
-- Documentation files created.
+# Current state
 
-### Phase 2 — create an exercise and log it with minimal friction ✅
+## What is built
 
-- Exercise editor: name, mode (repetitions / timed sets / duration-only activity), unilateral
-  flag, optional measurement unit with explicit load semantics (total / added / assistance),
-  optional variation notes, and the default prescription. No exercise is hardcoded.
-- Library picker, reached from a `+` on the unscheduled heading and on every day heading. Picking
-  copies the exercise and its prescription into that slot. Library entries can be edited from the
-  picker.
-- Logger, opened by tapping an occurrence: the planned prescription (editable for this copy only),
-  previous results for the same stable exercise, the sets recorded this time, an occurrence-level
-  comment, and mark done / skip.
-- Set entry bar pinned to the bottom: prefilled values, one tap to confirm, undo, tap a recorded
-  set to correct it, optional RPE/RIR behind a toggle, explicit L/R chips for unilateral work.
-- Remove from this week, offered in the logger only while nothing has been recorded.
-- Schema v2 with a real migration (`MIGRATION_1_2`): `training_sessions` and `actual_sets` added,
-  plus `exercises.measurementMeaning`, `exercises.notes` and
-  `exercise_occurrences.measurementMeaningSnapshot`.
-- Navigation added (`navigation-compose`, type-safe routes in `ui/Navigation.kt`).
-
-### Phase 3 — the timer ✅
-
-- One countdown, for work or for rest, started from the timer tab or from the exercise being
-  logged. Adjustable before it starts, then pause, resume and cancel.
-- Three families of cue, each switchable on its own, each with its own sound: a heads-up at
-  **thirty seconds left**, a **3-2-1** tick through the last three seconds, and **quarter, half
-  and three-quarter** marks through a work interval of a minute or more. The screen says how many
-  cues the countdown will actually sound, and why a setting does not apply when it cannot.
-- A persistent notification carries the remaining time as a countdown chronometer, with pause,
-  resume and cancel buttons.
-- The logger shows the remaining time inline and offers *Rest* right after a set is confirmed.
-- The screen is held awake while a countdown is running and the app is on screen, so the phone
-  does not lock mid-rest.
-- Reaching zero never records a set. The finished notification says so in as many words.
-
-### Bottom navigation and the effort scale
-
-- Three tabs — week, library, timer — hidden inside the picker, exercise editor and logger.
-- Effort is a five-point verbal scale stored as its integer level; reps in reserve stays a
-  planning field and is not asked for when logging.
-
-### First round of use feedback ✅
-
-Changes made after the app was used, from `src/feedback.md`. Schema 3.
-
-- **A workout opens as information, not a form.** Tapping an exercise — in the week or in the
-  library — lands on `ui/detail/ExerciseDetailScreen`: what it is, how to do it, what is planned,
-  and the facts that change how a set is performed. From a planned copy the bottom bar offers the
-  only two things worth doing next, *Log the workout* and *Start the timer*. Editing the definition
-  and its default prescription is a button on that screen, never the screen you land on.
-- **Exercises carry an explanation and a category.** `description` is reference material and is
-  read live from the library rather than snapshotted, so correcting how a movement is done corrects
-  it everywhere; `category` *is* snapshotted alongside mode and unilateral, so re-categorising a
-  library entry cannot recolour history. Three categories for now — open (orange), conditioning
-  (green), flexibility (yellow) — shown as a small coloured dot before the name.
-- **The default prescription no longer prescribes load.** A plan fixes the shape of the work: sets,
-  reps or duration, rest, target effort or RIR. The weight is what the day decides and what the
-  logger records. Older rows keep whatever load they were written with — prescription rows are
-  never mutated — but re-saving one drops it.
-- **Removing a planned workout costs intent.** The text button in the logger is gone. It is now a
-  long press on the week screen and a menu item, and it is still refused outright once sets have
-  been recorded against the occurrence.
-- **Done reads green.** A saturated green chip from `ui/theme/SemanticColors.kt` rather than a
-  scheme colour, so it means the same thing on every phone's wallpaper.
-- **The timer, first pass.** Work/rest no longer discards the duration you just typed; the duration
-  is typed as minutes and seconds instead of nudged in steps of 15 or 60; the cue families moved
-  into an overflow menu in the top right and can be switched **while a countdown is running**; the
-  whole screen goes green through a work interval and amber for the last five seconds of a rest; a
-  countdown carries the exercise it was started from; and starting one from a workout while another
-  is still counting asks before calling the first one off. More timer work is expected.
-
-### Second round: the timer counts sets ✅
-
-- **The timer was the wrong shape.** It could count one work interval or one rest, so real
-  training — *five sets of ten seconds with three minutes between* — had to be driven by hand
-  between every set. `TimerProgram` now holds all three numbers, and `TimerTransitions` walks it:
-  work, rest, work, rest, with **no trailing rest after the last set**, because that is time the
-  app would have invented.
-- **Reps are not timed.** A set of eights has no honest length, so a reps program stops at
-  `TimerState.AwaitingSet` and waits; the athlete says the set is done, and the rest starts by
-  itself. That is the one manual step in an otherwise automatic sequence, and it is on the
-  notification as well as the screen.
-- **One interval is one run id.** The at-most-once cue bookkeeping is keyed by run id, so a
-  program that kept a single id would sound the first set's end and then stay silent for every
-  set after it. Each interval gets a fresh id and the finished one's bookkeeping is cleared.
-- The create screen now asks what a set is made of, how long the rest is and how many times round,
-  and shows the whole program in one line before you start it.
-- Starting from a workout builds the program from the prescription, which already knows all three
-  numbers. Nothing further is asked.
-- The plan is edited by a cog on the card that shows it, rather than a button lower down that has
-  to re-explain which plan it means; from the week that edits this copy, from the library the
-  default. Changing what the exercise *is* moved into the top-bar overflow.
-- The library list no longer prints the explanation under every row: the list is for finding an
-  exercise, and a paragraph under each one turns scanning into reading.
-
-### Fourth round:
-
-- 81 unit tests still passing, unchanged: none of them knew about alarms, because the sequencing
-  they cover was always pure.
-- Four instrumented tests deleted (they existed only to arbitrate between the two delivery paths),
-  one rewritten without the fake alarm scheduler, and one added in their place: a three-set program
-  sounding the end of every preparation and every set, which is the property the run ids were
-  protecting. **Still not run on a device.**
-
-Phase 4A — written without a device, then the instrumented suite was run on the Pixel 9 by the
-user:
-
-- 93 unit tests passing, 9 of them a new `PlanningTest` covering the two decisions that are
-  arithmetic rather than SQL: where an item lands when nudged (clamped at both ends, unchanged for
-  an item not in the list) and what to say when a planned and a performed date differ.
-- `assembleDebug`, `assembleDebugAndroidTest` and the schema-4 export all clean.
-- **34 instrumented tests, all passing**, which is the whole suite. That includes
-  `migrate3To4RetiresNothingAndKeepsEverything` — a schema-3 database carrying an exercise upgrades
-  to 4 with its description and category intact and nothing retired — and the check that the
-  production builder carries all three migrations. The schema-4 upgrade is verified on hardware.
-- Still **unverified end to end**: the acceptance scenarios in the phase prompt — scheduling three
-  weeks out, moving between weeks, surviving a library deletion, the planned/performed mismatch.
-  The instrumented suite exercises the database, not the screens, so these are being checked by
-  hand.
-
-Fifth round — all on the Pixel 9:
-
-- 33 instrumented tests passing, including the four rounds of timer work that had never run on a
-  device. One caught a real bug (below).
-- The three cue-delivery tests pass under genuine `HARDENING_THROW` with no violations. They now
-  assert on the platform's register of active players rather than on the audio-focus result, since
-  focus is no longer requested — and being granted focus never proved a sound came out anyway.
-- A 3 × 15 s program with 31 s rest was run with the phone **locked**, over Spotify. The user heard
-  every cue and the music kept playing.
-
-**Bug found by the device suite:** `start(program, settings)` planned the first interval from the
-settings passed in, while every later interval read `store.cueSettings` — so a program started with
-explicit settings quietly reverted after one set. The store is now the single source.
-
-Third round: preparation, and transport controls ✅
-
-- **Five seconds before a set.** `TimerPhase.PREPARE` is a real countdown, not a flag, so its
-  3-2-1-go falls out of the ordinary cue planner and the screen has something true to display.
-  It runs before the first set, and before any set you arrive at by pressing next or previous.
-  It does **not** run when a rest flows into a set on its own — the tail of the rest is already
-  the getting-ready, which is what the amber is for — unless that rest is shorter than the
-  preparation itself.
-- **Resuming a nearly-finished rest becomes a preparation.** Unpausing with two seconds of rest
-  left would drop you straight into the set. Below five seconds it hands back a fresh five-second
-  preparation instead of stretching the rest, because the old rest has already sounded some of its
-  cues and stretching it would re-owe them.
-- **Transport controls.** Previous / play-pause / next, because a program is a sequence and that is
-  what a sequence's controls look like. Cancel sits apart and below: it ends the whole thing and
-  has no business being a mis-tap from the button pressed between every set. A reps set shows no
-  play-pause, since nothing is counting.
-- `TimerProgram.steps` flattens a program into its intervals, so sequencing, skipping forward and
-  going back are all one operation on an index.
-
-### Fourth round: the alarm backstop is gone ✅
-
-The user was explicit about scope: the timer has to survive the phone being **locked** and other
-apps being in front, not being **killed** from the recents drawer. The foreground service provides
-the first. Exact alarms existed only for the second.
-
-Removing them removed everything they forced:
-
-- `TimerAlarms.kt` (the scheduler, the receiver) and the `USE_EXACT_ALARM` permission.
-- `TimerStore.markCueDelivered` / `clearCues` and the `cue:` keys — the durable at-most-once
-  bookkeeping, which existed because two independent paths could sound the same beep. With one
-  path it is just `TimerState.Running.delivered`, which empties on its own at each interval.
-- `TimerController.onAlarm`, the cue mutex, and the "is this cue owed" negotiation.
-- The countdown loop's generation counter. The loop now runs across a whole program instead of
-  cancelling and relaunching itself at every interval, so there is nothing to guard against.
-
-About 170 lines net out of the main sources, and the timer's hardest invariant — "exactly one of
-two racing deliverers wins, durably, across process death" — stopped existing rather than being
-maintained.
-
-What is kept: the *deadline* is still persisted. A killed process makes no sound, but reopening the
-app recomputes from the monotonic clock and either shows the true remaining time or says the
-countdown ended while the app was not running, rather than pretending it alerted.
-
-### Fifth round: the cue stops interrupting the music ✅
-
-The cue was stopping Spotify dead for every tick. Two separate causes, and fixing only the first
-did nothing audible:
-
-1. **Audio focus.** It was requested as transient-may-duck, which is the polite form, but asking at
-   all hands the music app the decision of whether to duck or stop. Nothing is requested now.
-2. **`USAGE_ALARM`.** The platform fades media to zero *on its own* when an alarm-usage player
-   starts — no focus involved — which is heard as the music stopping. Alarm usage means "interrupt
-   the user", which a timer cue during a set is not.
-
-The cue now plays as `USAGE_MEDIA` and mixes into the music at the volume already set for it.
-Confirmed by ear on the Pixel 9: Spotify keeps playing, the beep is audible over it, **including
-with the phone locked**. `AS.FadeOutManager` no longer appears in logcat while a cue sounds.
-
-There is no ducking. Ducking is the other app's decision and cannot be forced (`setForceDucking`
-is honoured only for accessibility services), so "mixes over" is the achievable version of "does
-not interrupt".
-
-### Phase 4A — library and planning organisation ✅
-
-Schema 4. One nullable column: `exercises.deletedAtEpochMs`.
-
-**Deletion is as complete as the history allows.** Removing an exercise counts what refers to it
-first, and says which of three things it is about to do:
-
-| What exists | What happens |
+| Phase | State |
 | --- | --- |
-| Nothing | The row is deleted, with its default prescription. |
-| Planned copies, never logged | The row and those copies are deleted. A plan never carried out is a mistake too. |
-| At least one logged set | The row is kept as a tombstone and leaves the library. |
+| 1 — runnable foundation | ✅ |
+| 2 — create an exercise and log it | ✅ |
+| 3 — the timer | ✅ |
+| 4A — library and planning organisation | ✅ |
+| 5A — informal activities and duration | ✅ |
+| Timer A — unilateral execution | ✅ |
+| Timer B — repeaters | ✅ |
+| Timer C — supersets/circuits and compact review | ✅ |
+| 4B — modules for planning | not started |
+| 5B — daily notes, metrics, export and restore | not started |
+| 6 — motivating overview dashboard | not started |
 
-The rule is the user's: *keep the fact that I did it, never the fact that I planned it.* A single
-logged set is the whole difference, because the row anchors that set's lineage and the stable
-identity that makes "previous results" group. `LibraryDao.observeExercises` filters on
-`deletedAtEpochMs IS NULL`; everything else reads the row regardless.
+Schema version **5**. Prescription payload version **3**, actual-set payload version **2**, circuit
+structure snapshot version **1**.
 
-`exercise_occurrences.exerciseId` and `actual_sets.exerciseId` are lineage references rather than
-foreign keys, so nothing in the schema stops a delete — the count is what decides. It is re-taken
-inside the transaction rather than trusted from the dialog, so a set logged between asking and
-confirming still protects itself.
+## The week
 
-**One date, and the log follows it.** 4A first shipped a planned date and a performed date that
-were allowed to disagree, with the planner reporting the difference as `Planned Mon · Logged Tue`.
-That was cut on the user's call: *keep the fact that I did it, never the fact that I planned it.*
+One vertical list: the week's unscheduled items on top, then Monday to Sunday. Today is
+highlighted and the list opens near it. Previous/next week and a *Today* action.
 
-A placement now carries one date and its sets are filed under that same date. Moving a placement
-re-dates its sets with it and re-homes them into the new day's session, so the two cannot drift
-apart. A card that has been trained says when the work happened; a card that has not says when you
-intend it to.
+Each day's `+` offers three things, because three genuinely different things can go in a slot:
 
-- **Unlogged cards never move by themselves**, which is what makes the planner still worth reading
-  backwards: what is left sitting on a past day is exactly what you did not do.
-- **Trained work cannot be made unscheduled.** It happened on a day, and "anytime this week" would
-  make the record vaguer than the truth. The dialog omits the option and `moveOccurrence` returns
-  false if asked anyway.
-- Logging an unscheduled card already planted it on the day it was done (`assignOccurrenceDate`);
-  this is the same rule applied to scheduled ones.
+- **an exercise from the library**, which copies the definition and its prescription into the slot;
+- **an other activity**, typed in by name with optional minutes — no library entry is created;
+- **a circuit**, which copies a saved routine in as a container plus one real occurrence per
+  station.
 
-Deleted with it: `PlannedOccurrence.performedDate`, `observePerformedDatesInWeek`,
-`PerformedDateRow`, `Planning.dateMismatch`, the `DateMismatch` label and the *Change the day it was
-done…* menu item. `observeWeek` is a plain `map` again rather than a `combine` reconciling two
-sources.
+A card is tapped to open what it is, and long-pressed for its menu: move to any week and day (or
+back to unscheduled), duplicate, nudge up and down within its slot, remove. A circuit is one card
+with its stations listed inside it, and moves, removes and completes as a unit.
 
-**Organising.** Move to any week (day or unscheduled), copy, nudge up and down within a slot, edit
-the local prescription, and remove. Scheduling from the library reaches any week through the same
-week/day dialog. Copying duplicates the prescription into its own row, so the copies diverge — and
-a copy is a fresh plan, so it never inherits what was logged against the original.
+Removing is refused once anything has been recorded, where "recorded" means a logged set **or** a
+completed occurrence — a duration-only activity writes no sets and is still a workout that
+happened. The stronger answer exists and names what it would destroy.
 
-**Removing something that has been trained.** A placement with no log removes with an ordinary
-confirmation. One with a log gets a dialog naming how many sets it would destroy, and the only
-button that does it says so. History never leaves through an ambiguous yes.
+## Exercises, activities and circuits
 
-**Interaction.** Long press opens the contextual menu, as established for the week screen in the
-first feedback round. Every long press also has a visible `⋮` beside it, because an invisible
-gesture must not be the only route to an action.
+- **An exercise** is user-defined: name, mode (repetitions / timed sets / duration-only activity),
+  optional measurement with explicit load semantics, unilateral flag, notes, description, category,
+  and a default prescription. Nothing is hardcoded.
+- **A prescription** fixes the shape of the work: sets, target reps or duration, rest, side-switch
+  rest, an optional repeater, target effort or RIR, and an optional planned duration. It
+  deliberately does not fix a load.
+- **A one-off activity** is an occurrence with no library row. Its exercise id is derived from its
+  name (`core/OneOffActivity`), so two sessions called the same thing already group in history and
+  could be promoted to a definition later. Going for a run once leaves no clutter behind.
+- **A routine** is a saved, named circuit: ordered library exercises, each with its own copied
+  prescription, plus a round count, a rest between exercises and a rest between rounds. Reached
+  from *Circuits* in the library's top bar, or from a day's `+`.
 
-Not implemented yet, by design: modules, duration capture, dashboard, export.
+## Logging
 
-### Sixth round: logging becomes one act ✅
+Opening a workout shows what it is first: description, the plan, the facts that change how a set is
+performed, and — once logged — how long it took. The bottom bar offers the only two things worth
+doing next.
 
-Used on the phone, and most of it was wrong. Five changes, all of them the user's calls.
+**The logger is a draft table.** Planned rows begin ticked; ticking, unticking and typing cost
+nothing. *Mark done* writes the whole workout in one transaction, sets the occurrence completed and
+closes; pressing it again on a logged workout *replaces* what was written, so correcting a log is
+the same gesture as making one and the button says *Save changes*.
 
-**The tick was the write.** Ticking a row recorded a set and unticking deleted one, so the table
-was a live database view wearing a form's clothes and *Mark done* had nothing left to do. The
-table is a draft now: ticking, unticking and typing cost nothing, and **marking done writes the
-whole workout in one transaction, sets the occurrence completed and closes the screen**. Pressing
-it again on a logged workout *replaces* what was written rather than adding to it
-(`replaceSetsForOccurrence`), so correcting a log is the same gesture as making one — the button
-says *Save changes* to admit it. `SetRow.done` is a plain `Boolean` instead of a list of database
-ids, which is the whole change in one line.
+- Load is per set, with an L/R pair for unilateral work and a max-load fallback that fills rows
+  saying nothing of their own but never overrides one that does.
+- Effort is the optional five-point verbal scale. RIR stays a planning field.
+- **Time taken** sits behind a control (and is simply present for an activity). Empty is not zero:
+  the estimate shows in grey and is what will be saved, marked *inferred*; typing makes the number
+  the user's own; clearing hands the question back. Saved history is never recomputed when a
+  default or a formula changes.
+- A duration-only activity has no set table at all. It records that it happened, optionally how
+  long and how it felt, and counts once — with no fabricated set records.
 
-- Planned rows start ticked: the ordinary case is that you did what you planned, and unticking is
-  how you say otherwise.
-- A recorded load stays editable. The tick says the set happened, the load says what it weighed,
-  and correcting the second is not a statement about the first.
-- Nothing is loggable until every ticked set says what it weighed **or** a max load stands for all
-  of them. The button stays enabled and says which is missing rather than going dead and silent.
-- The max load is a fallback, never an override: a row that says something of its own keeps it.
-  It is also *deduced* from the rows — the heaviest set is the max load — so it cannot sit empty
-  above a table that plainly answers it.
-- Unilateral rows fall back per side, so "60 both" and "60 left, 50 right" both work.
+**A circuit is logged in one review**: a list of expandable rows, one per exercise. Collapsed, a
+row is a tick, a name and a max load; expanded, it has the same set table, per-side loads, partial
+completion, effort, duration and comment as the single-exercise logger, because it is the same
+record. One Save commits every station atomically.
 
-**One date per placement.** 4A shipped a planned date and a performed date allowed to disagree,
-reported as `Planned Mon · Logged Tue`. Cut, on the rule *keep the fact that I did it, never the
-fact that I planned it*. Moving a placement re-dates its sets with it; unlogged cards never move by
-themselves, which is what keeps the planner worth reading backwards. Trained work cannot be made
-unscheduled, because it happened on a day.
+## The timer
 
-**Deleting is as complete as the history allows.** Nothing refers to it → the row and its default
-prescription go. Planned but never trained → those planned copies go too, because a plan never
-carried out is a mistake as well. One logged set → tombstone, and it leaves the library only. The
-dialog says which of the three it is about to do; the count is re-taken inside the transaction, so
-a set logged between asking and confirming still protects itself.
+One program at a time. Starting another from a workout or a circuit asks before calling the first
+one off.
 
-**Planning got smaller.** *Copy to…* became **Duplicate** — same week, unscheduled, at the top,
-no dialog. Adding from the library asks for **a week and nothing finer** (last week included, so a
-session trained but never written down can still go where it happened); the day is a later
-question, answered in the planner.
+A **program** is a list of entries flattened once into a list of fully described steps
+(`ProgramSequencer`). Every question — which exercise, which set, which round, which side, which
+pulse — is answered by the step itself, so sequencing, skipping forward and going back are one
+operation on an index.
 
-**Density.** Material's `OutlinedTextField` enforces a 56dp minimum height and 16dp of padding on
-four sides — none of it reachable through parameters, and absurd for a grid of two-digit numbers.
-`ui/components/CompactField.kt` rebuilds the field from `BasicTextField` and Material's own
-decoration box, same container and colours, at 10dp × 6dp. Every text field in the app goes
-through it. The tick stopped being an `IconButton` (48dp enforced touch target, which was setting
-the height of every row) and the rows moved into one list item so their spacing is 4dp rather than
-the page's 8dp. A set row went from 68dp to 48dp, and effort and max load each went from a heading
-plus a full-width box to a single line: about 175dp, with no font made smaller.
+What it can express:
 
-Also: the countdown left the logger entirely (the exercise screen owns that button), the note is
-written in place instead of behind a dialog, effort is a dropdown starting from what the plan
-asked for, skip moved into the top-bar menu, and a done card in the planner shows the heaviest set
-it took, in bold.
+- **Sets**: work, rest, work, rest, with no trailing rest after the last set.
+- **Reps**: untimed. The timer waits at `AwaitingSet`; the athlete says the set is done and the
+  rest starts by itself. That action is on the notification as well as the screen.
+- **Unilateral**: one prescribed set is *left → switch → right*, then the set rest. Left first. The
+  side-switch rest is a prescription field, default 15 s, and zero is allowed.
+- **Repeaters**: one timed set is a series of pulses — so many reps of so many seconds with so many
+  between. Rep rest falls between pulses only; after the last pulse the set rest takes over. For a
+  unilateral repeater, all pulses on the left, then the switch, then all on the right.
+- **Circuits**: one set of each exercise per round, so many rounds. A station's own set count and
+  set rest are ignored in a circuit; the transition and round rests replace them, and rep rest and
+  side-switch rest still apply. No trailing rest after the final round.
 
-### Release builds ✅
+**Preparation** is five seconds before timed work. It runs at the start, and whenever a set is
+reached by hand (next, previous, resuming a nearly-over rest). It does *not* run when a rest of at
+least five seconds flows into the set on its own — the tail of the rest is the getting-ready, which
+is what the amber is for. It is never inserted **between the pulses of a repeater**, because five
+seconds there would not be the protocol any more; the boundaries around a pulse sequence (its first
+pulse, the side switch, the set rest) keep the ordinary rule.
 
-`release` is signed with the **debug key**, deliberately. This app is sideloaded onto one phone and
-never distributed, and sharing the signature with the debug build is what lets a release install
-over it as an *update* instead of demanding an uninstall — which would take the training history
-with it. `optimization { enable = false }`, so R8 does not run and cannot strip Room or
-kotlinx.serialization reflection; turning minification on is the moment to re-test the database
-paths. A release build is not debuggable, so `adb run-as` cannot read the database from it.
+Cues: a heads-up at thirty seconds, a 3-2-1 tick, and quarter/half/three-quarter marks through a
+work interval of a minute or more. Each family switches on its own, including mid-countdown. Cues
+that would fall outside the countdown are dropped and two landing on the same moment collapse into
+the more specific one, so a three-second rep rest sounds *two, one, go* rather than a pile-up.
+
+The screen and the notification say the same sentence about where you are —
+`positionDetail()` — naming the set or round, the circuit station, the side and the repeater rep,
+each only when it distinguishes something.
+
+## Duration
+
+Two different quantities, kept apart:
+
+- **Total training time** includes the rests and the getting-ready. It is what the planner
+  estimates and what the logger records.
+- **Work time** is the sum of the timed work alone (`TimerProgram.workOnlySeconds`). The timing
+  prescription is preserved so it can be derived later; no chart is built yet.
+
+The estimate comes from the sequence the timer would actually run, so what the planner promises and
+what the timer does cannot drift. Documented assumptions, and only these: **3 seconds per rep**,
+and **30 seconds for a set whose rep count is not even stated**. A timed exercise with no target
+length and an activity with no duration have **no** estimate, and null is the answer rather than a
+fabricated zero.
+
+For a circuit the time is computed once from the circuit and then divided between its exercises
+(`estimatedSecondsByEntry`), allocating every generated segment exactly once: work, rep rest and
+side switch to the exercise being performed; transition and round rest to the exercise they follow.
+The shares sum back to the whole, which is what will keep a dashboard from counting a circuit and
+its parts both. The container itself carries no duration.
+
+## Counting
+
+One completed exercise occurrence is one count. A circuit exercise counts once however many rounds
+it took; the circuit container counts nothing; a duration-only activity counts once with no sets.
+The daily session table is an implementation detail and is not a count of anything.
 
 ## Architecture as built
 
@@ -342,158 +165,148 @@ com.yokodake.melete
   MeleteApplication.kt      Application + AppContainer (manual DI, no framework)
   MainActivity.kt           single activity, Compose, edge-to-edge
   core/WeekMath.kt          Monday-based ISO week arithmetic and labels (pure, unit-tested)
-  ui/Navigation.kt          type-safe routes + NavHost (week, detail, picker, editor, logger)
+  core/Planning.kt          reordering within a slot (pure)
+  core/OneOffActivity.kt    derived, stable identity for a typed-in activity
+  ui/Navigation.kt          type-safe routes + NavHost
   data/
-    MeleteDatabase.kt       Room database v3, exportSchema = true, explicit migrations only
+    MeleteDatabase.kt       Room database v5, exportSchema = true, explicit migrations only
     MeleteConverters.kt     enum <-> String converters (stored names are part of the format)
-    TrainingRepository.kt   week, library, scheduling and logging operations
+    TrainingRepository.kt   week, library, scheduling, logging, activities, routines, circuits
     DevSampleData.kt        explicitly marked development data
-    dao/TrainingDao.kt      TrainingDao, LibraryDao, LoggingDao
+    dao/TrainingDao.kt      TrainingDao, LibraryDao, LoggingDao, RoutineDao
     entity/Entities.kt      ExerciseEntity, PrescriptionEntity, ExerciseOccurrenceEntity,
-                            TrainingSessionEntity, ActualSetEntity
-    model/PrescriptionPayload.kt  versioned named-field prescription payload
-    model/ActualSetPayload.kt     versioned named-field actual-set payload
+                            TrainingSessionEntity, ActualSetEntity, RoutineEntity,
+                            RoutineEntryEntity, CircuitInstanceEntity
+    model/PrescriptionPayload.kt  versioned prescription payload (+ RepeaterPrescription)
+    model/ActualSetPayload.kt     versioned actual-set payload
+    model/CircuitSnapshot.kt      the routine structure a scheduled circuit was cut from
     model/ExerciseCategory.kt     the closed set of training-purpose categories
-  ui/components/            PrescriptionFormState, the shared prescription fields, CategoryDot
+  ui/components/            PrescriptionFormState and the shared prescription fields, CategoryDot
                             CompactField.kt   every text field in the app, sized for its content
                             Chip.kt           SAMPLE / Done / Skipped, shared by week and library
                             PlanTargetDialog  week+day for a move, week-only for library adds
   ui/theme/SemanticColors.kt  colours that carry a meaning, kept out of the dynamic scheme
-  ui/week/                  WeekScreen, WeekViewModel, WeekUiState, PrescriptionSummary
-  ui/detail/                ExerciseDetailScreen + view model: what a workout is, and what to
-                            do next with it
+  ui/week/                  WeekScreen, WeekViewModel, WeekUiState (WeekItem), PrescriptionSummary
+  ui/detail/                ExerciseDetailScreen + view model
   ui/library/               LibraryPicker, ExerciseEditor (+ view models)
-  ui/logger/                LoggerScreen, LoggerViewModel, SetDraft
+  ui/logger/                LoggerScreen, LoggerViewModel, SetDraft, SetTable
+  ui/routine/               RoutineListScreen, RoutineEditorScreen (+ view models)
+  ui/circuit/               CircuitReviewScreen + view model
   ui/timer/                 TimerScreen, TimerViewModel
   data/timer/
-    TimerProgram.kt         sets, work, rest: what the timer is actually counting
+    TimerProgram.kt         entries, steps and the sequencer: what the timer is actually counting
+    PrescriptionProgram.kt  plan -> program, and DurationEstimate
     TimerState.kt           deadline-based state, and the pure pause/resume/sequencing logic
     TimerSnapshot.kt        what is persisted, and how a run is restored after a reboot
-    TimerStore.kt           SharedPreferences: snapshot, cue bookkeeping, settings
+    TimerStore.kt           SharedPreferences: snapshot and settings
     TimerController.kt      the single owner: start, pause, resume, cancel, cue delivery
     TimerService.kt         foreground service (specialUse) and the notification actions
-    TimerAlarms.kt          one-shot exact alarms as the backstop, and their receiver
-    TimerCuePlayer.kt       generated USAGE_ALARM tone and vibration
+    TimerCuePlayer.kt       generated USAGE_MEDIA tone and vibration
     TimerNotifications.kt   channels, the ongoing countdown, the finished alert
 ```
 
 ## Important choices
 
-- **Week identity.** The training week is Monday–Sunday (ISO-8601) and is identified by its
-  Monday's `LocalDate`. `exercise_occurrences.weekStartEpochDay` is that Monday;
-  `trainingDateEpochDay` is the local training date, or `NULL` for an unscheduled item inside the
-  week. Local dates are stored as epoch days, event timestamps as epoch milliseconds — two
-  different columns, never derived from each other (invariant 9).
+- **Week identity.** Monday–Sunday (ISO-8601), identified by its Monday's `LocalDate`.
+  `exercise_occurrences.weekStartEpochDay` is that Monday; `trainingDateEpochDay` is the local
+  training date, or `NULL` for an unscheduled item inside the week. Local dates are epoch days,
+  event timestamps are epoch milliseconds — two columns, never derived from each other.
+- **One date per placement.** A placement carries one date and its sets are filed under that same
+  date. Moving a placement re-dates its sets and re-homes them into the new day's session, so the
+  two cannot drift apart. Trained work cannot be made unscheduled: it happened on a day. Unlogged
+  cards never move by themselves, which is what makes the planner worth reading backwards.
 - **Prescription payload as versioned JSON.** `prescriptions.payloadJson` holds a named-field
-  document (`sets`, `targetReps`, `targetDurationSeconds`, `restSeconds`, `measurement`, `rpe`,
-  `rir`) with `payloadVersion` alongside it. Absent values are serialized as `null`, never `0`
-  (invariant 7). Decoding uses `ignoreUnknownKeys` so a payload written by a newer version is not
-  lost. A measurement carries `value`, `unit` and an explicit `meaning`
-  (`TOTAL_LOAD` / `ADDED_LOAD` / `ASSISTANCE`) so added load and assistance can never collapse into
-  one quantity (invariant 6).
-- **Prescriptions are value rows, shared by pointer, copied on scheduling.** An exercise points at
-  its default prescription (`exercises.defaultPrescriptionId`) and an occurrence points at its own
-  copy (`exercise_occurrences.prescriptionId`), so editing a library default cannot reach work
-  already placed in a week (invariant 1).
-- **Editing never mutates a shared row.** Editing a library default or a scheduled copy inserts a
-  *new* `prescriptions` row and repoints its owner. An actual set therefore keeps pointing at what
-  was really planned when it was performed. Superseded rows are kept, not deleted.
+  document with `payloadVersion` alongside it. Absent values are `null`, never `0`. Decoding uses
+  `ignoreUnknownKeys`. A measurement carries `value`, `unit` and an explicit `meaning`, so added
+  load and assistance can never collapse into one quantity.
+- **Prescriptions are value rows, copied on scheduling.** An exercise, a routine station and a
+  scheduled occurrence each point at their own row. Editing never mutates a shared row: it inserts
+  a *new* `prescriptions` row and repoints its owner, so an actual set keeps pointing at what was
+  really planned when it was performed. Superseded rows are kept.
 - **Occurrences snapshot their template.** Name, mode, unilateral flag, measurement unit and
-  meaning are copied onto the occurrence. `exerciseId` is lineage only and deliberately carries
-  **no** foreign key, so a renamed or deleted library entry cannot rewrite or delete history
-  (invariants 1 and 5).
-- **Actual sets are identified by id, never by set number.** `actual_sets.orderIndex` is only a
-  position; `id` is identity. Deleting or inserting a set cannot move a correction onto another
-  record. The number shown on screen is computed, and counted per side for unilateral work
-  (invariant 2).
-- **Actual payloads are independent of prescriptions.** `actual_sets.payloadJson` carries its own
-  versioned named fields (`reps`, `durationSeconds`, `measurement`, `rpe`, `rir`);
-  `prescriptionId` is an optional reference. An unplanned set is ordinary, and six performed sets
-  against four planned ones need no special case (invariants 2 and 3).
-- **Sessions are implicit.** The first confirmed set of a training date creates that day's
-  `training_sessions` row and every later set that day reuses it. The user never starts or ends a
-  session, and several exercises trained on one date stay one session.
-- **An undated item is filed when it is logged.** Logging an unscheduled occurrence assigns it to
-  the target date — today by default, overridable in the logger for backfilling.
-- **Deleting an occurrence that has actuals is refused**, enforced by `ON DELETE RESTRICT` and
-  checked in `deleteOccurrenceIfEmpty`, so evidence is never silently dropped.
-- **Explicit state.** `OccurrenceState` is `PLANNED` / `COMPLETED` / `SKIPPED`; nothing is inferred
-  from the absence of actuals, and recording a set does not flip the state by itself (invariant 3).
-- **The set draft lives in `SavedStateHandle`** as JSON, so a half-entered set survives rotation,
-  navigation and process death. Prefilled values are only ever a suggestion: nothing reaches the
-  record until the user confirms it.
-- **No destructive migration.** `MeleteDatabase.build()` has no `fallbackToDestructiveMigration`;
-  it registers `MIGRATIONS` explicitly. Schemas are exported to `app/schemas/` and the 1→2
-  migration is covered by a test (invariant 10).
-- **Sample data is flagged and removable.** Every seeded row carries `isSampleData = true` and the
-  name prefix `Sample · `, the UI shows a SAMPLE chip, the menu action exists only in debug builds,
-  and nothing is inserted on launch.
-- **Manual DI.** `AppContainer` on the `Application`; a DI framework would add more machinery than
-  it removes for a single-user app.
+  meaning, category. `exerciseId` is lineage only and carries **no** foreign key, so a renamed or
+  deleted library entry cannot rewrite or delete history.
+- **A scheduled circuit is a container plus real occurrences.** The container
+  (`circuit_instances`) holds the execution shape and a JSON snapshot of the routine version it was
+  cut from; the stations are ordinary `exercise_occurrences` with `circuitInstanceId` and
+  `circuitPosition`. That is what makes a circuit loggable without running the timer, and what
+  keeps the count honest — the container is not an occurrence and counts nothing.
+- **Actual sets are identified by id, never by set number.** `orderIndex` is a position; `id` is
+  identity.
+- **Actual payloads are independent of prescriptions.** An unplanned set is ordinary, and six
+  performed sets against four planned ones need no special case.
+- **Duration lives on the occurrence, not on a set.** A duration-only activity has no sets, and a
+  circuit exercise's share of the clock belongs to the exercise rather than to any one round.
+  `loggedDurationManual` is provenance, not formatting: an inferred value that has been saved is
+  still what the workout says it took, so changing a default later leaves it alone.
+- **Effort lives on the set, except where there are no sets.** `exercise_occurrences.loggedEffort`
+  is read only when an occurrence has no sets, so the two can never disagree about one workout.
+- **Sessions are implicit.** The first write of a training date creates that day's
+  `training_sessions` row and every later one that day reuses it.
+- **Logging is one transaction.** `TrainingRepository.saveLogs` takes a list of
+  `OccurrenceLogWrite`, so a single exercise and a whole circuit review go through the same path.
+  Replacing rather than appending is what makes saving twice a correction. Unticking clears a
+  station's sets and drops it back to planned; a deliberate skip is left alone.
+- **Deletion is as complete as the history allows.** Nothing refers to it → the row and its default
+  prescription go. Planned but never trained → those copies go too. One logged set *or one
+  completed copy* → tombstone, and it leaves the library only. The count is re-taken inside the
+  transaction.
+- **Removing a routine never touches a scheduled copy.** Those are real occurrences and real logs;
+  a template going away is a statement about what you plan next. A routine that has been scheduled
+  becomes a tombstone, because its id is what a circuit log points at.
+- **No destructive migration.** `MeleteDatabase.build()` registers `MIGRATIONS` explicitly and has
+  no `fallbackToDestructiveMigration`. Schemas are exported to `app/schemas/`.
+- **Sample data is flagged and removable**, debug-only, never seeded on launch.
+- **Manual DI.** `AppContainer` on the `Application`.
 - **Text chevrons instead of Material icons.** `material-icons-core` is frozen at 1.7.8 and is not
   part of the current Compose BOM, so navigation uses `‹` / `›` / `⋮` / `+` glyphs with
-  `contentDescription` semantics. Revisit if an icon dependency is added later.
+  `contentDescription` semantics.
 
 ## How the timer works, and why
 
 Checked against the current Android documentation on 2026-09-20; the version-sensitive parts are
-foreground service types, background audio and exact alarms.
+foreground service types and background audio.
 
 - **A countdown is a deadline on `SystemClock.elapsedRealtime()`**, never a decrementing counter.
   A counter drifts, stops when the process is frozen and cannot be rebuilt after the UI is
-  recreated. Elapsed-realtime keeps running while the device sleeps and is immune to the wall
-  clock being changed. Rotation, navigation and process death therefore cost nothing: the state is
-  re-derived from the clock.
+  recreated. Elapsed-realtime keeps running while the device sleeps and is immune to the wall clock
+  being changed. Rotation, navigation and process death cost nothing: the state is re-derived.
 - **Reboots are detected with `Settings.Global.BOOT_COUNT`**, stored beside the deadline. After a
-  restart the old deadline belongs to a clock that no longer exists, so a running countdown is
-  reported as *interrupted* rather than resumed from a fabricated number. A paused countdown does
-  survive a reboot, because its remaining time is a duration rather than a point in time.
+  restart a running countdown is reported as *interrupted* rather than resumed from a meaningless
+  deadline. A paused one survives, because its remaining time is a duration.
+- **Scope: locked, not killed.** The timer must survive the phone being locked and other apps being
+  in front. It is explicitly *not* required to survive the app being killed. **There are no exact
+  alarms and no `USE_EXACT_ALARM` permission**; they existed only for the killed case and were
+  removed with everything they forced — the durable at-most-once cue bookkeeping, the two racing
+  delivery paths, the cue mutex. A cue that has sounded is remembered in
+  `TimerState.Running.delivered`, which empties by itself at each interval boundary.
+- **The deadline is still persisted.** A killed process makes no sound, but reopening the app
+  recomputes from the monotonic clock and either shows the true remaining time or says the
+  countdown ended while the app was not running, rather than pretending it alerted.
 - **Foreground service type `specialUse`.** A training countdown matches none of the defined
-  categories. `shortService` is the obvious candidate and is wrong twice over: it is capped at
-  three minutes, which is shorter than an ordinary hangboard rest, and Android 17 excludes it from
-  background audio outright. `specialUse` has no runtime timeout, and the Play Console declaration
-  it normally requires does not apply to an app that is never published. The manifest carries the
-  required `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` explanation.
+  categories. `shortService` is capped at three minutes — shorter than a hangboard rest — and
+  Android 17 excludes it from background audio outright. `specialUse` has no runtime timeout, and
+  the Play Console declaration it normally requires does not apply to an app that is never
+  published. The manifest carries the required `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` explanation.
 - **The service is started from a tap while the app is visible**, which is what grants it
-  while-in-use capability. On Android 17 an app in the background may only touch audio through a
-  while-in-use-capable foreground service — with one waiver, for `USAGE_ALARM` streams from an app
-  holding exact-alarm permission. The cues use exactly those attributes and the app holds
-  `USE_EXACT_ALARM`, so the waiver covers the case that matters most: a cue owed after the process
-  has been killed.
-- **`USE_EXACT_ALARM` rather than `SCHEDULE_EXACT_ALARM`.** A countdown that warns ten seconds
-  before a hang ends is an alarm-clock-like function; the permission is granted at install and
-  cannot be revoked out from under a running countdown.
+  while-in-use capability.
 - **The service never calls `stopService` on itself from the controller.** Stopping a service whose
-  `startForegroundService` has not yet reached `startForeground` breaks the platform's promise and
-  it kills the process — easy to hit with a one-second countdown or a start the user immediately
-  cancels. The service watches the state and stands itself down instead, and `startForeground` is
-  always the first thing `onStartCommand` does.
-- **Keeping the screen on is a window flag, not a wake lock.** `View.keepScreenOn` applies only
-  while the app's window is visible, so it cannot leave the display on once the phone is put down,
-  and it is tied to a countdown actually running rather than to the timer tab being open — parking
-  on that tab should not burn the screen. Pause, cancel or the end releases it at once.
-- **A foreground service does not keep the CPU awake.** A partial wake lock does, held only while
-  a countdown is actually running and bounded by its remaining time plus ten seconds, so a bug
-  cannot leave it held.
-- **Two one-shot exact alarms per run, not a repeating alarm.** The countdown itself is driven in
-  process; the alarms exist only so a frozen or killed app still sounds at the warning and at the
-  end. Both are on the elapsed-realtime clock, the same clock as the deadline.
-- **The cue plan is fixed when a run starts**, so changing the settings mid-countdown cannot
-  change what the run in progress will do. Cues that would fall outside the countdown are dropped,
-  and two cues landing on the same moment collapse into the more specific one — on a two minute
-  set, three-quarters done *is* thirty seconds left, and it sounds once.
-- **Quarter cues are for work intervals only.** A rest interval needs to know how much is left,
-  not where its middle was.
-- **Only the thirty-second warning and the end are backed by exact alarms.** The finer cues are
-  company while training, not a reason to wake a dead process, and eight exact alarms per rest
-  would be a poor trade for a phone's battery.
-- **Every cue passes through one delivery gate.** Durable bookkeeping records which cues a run has
-  already had, so the in-process path and the alarm path cannot both sound. The state moves on
-  whichever path wins, so a cue rung by the other one still ends the countdown rather than
-  stranding it.
-- **Audio behaviour with other apps playing.** Focus is requested as transient-may-duck, so music
-  dips for the beep rather than stopping. The notification channels are deliberately silent: the
-  cue is played explicitly, and a channel sound would double every beep.
+  `startForegroundService` has not reached `startForeground` breaks the platform's promise and it
+  kills the process. The service watches the state and stands itself down instead.
+- **Keeping the screen on is a window flag, not a wake lock**, tied to a countdown actually running
+  rather than to the timer tab being open.
+- **A foreground service does not keep the CPU awake.** A partial wake lock does, held only while a
+  countdown is running and bounded by its remaining time plus ten seconds.
+- **The cue does not interrupt the music.** No audio focus is requested — asking at all, even as
+  transient-may-duck, hands the music app the decision — and the tone plays as **`USAGE_MEDIA`**,
+  not `USAGE_ALARM`: the platform fades media to zero on its own when an alarm-usage player starts,
+  which is heard as the music stopping. The notification channels are silent, because the cue is
+  played explicitly and a channel sound would double every beep. There is no ducking; ducking is
+  the other app's decision and cannot be forced.
+- **The cue plan is fixed when an interval starts**, so changing the settings mid-countdown cannot
+  re-owe a moment that has already gone by.
+- **Quarter cues are for work intervals only.** A rest needs to know how much is left, not where
+  its middle was.
 
 ## Commands that work
 
@@ -512,6 +325,7 @@ foreground service types, background audio and exact alarms.
 | Install a built APK by hand | `adb install -r app/build/outputs/apk/debug/app-debug.apk` |
 | Launch | `adb shell am start -n com.yokodake.melete/.MainActivity` |
 | Make audio violations loud instead of silent | `adb shell cmd audio set-hardening throw` |
+| Copy the database off a debug build | `adb exec-out run-as com.yokodake.melete cat databases/melete.db > melete.db` (**and the `-wal` and `-shm` beside it** — see below) |
 
 APKs: `app/build/outputs/apk/debug/app-debug.apk`,
 `app/build/outputs/apk/release/app-release.apk`.
@@ -521,237 +335,462 @@ and the training record survives. It is not debuggable, so `adb run-as` — the 
 database off the phone without root — works against debug builds only. Put a debug build back on
 first if the data needs inspecting.
 
+**A backup is three files, not one.** Room runs in WAL mode, so `melete.db` can be a day or more
+behind while the recent sessions sit in `melete.db-wal`. Pull all of them:
+
+```
+for f in melete.db melete.db-wal melete.db-shm; do
+  adb exec-out run-as com.yokodake.melete cat "databases/$f" > "backups/$f"
+done
+```
+
+Opening the set once with any SQLite client replays the WAL and leaves a self-contained `melete.db`.
+Check it before trusting it: `PRAGMA user_version`, `PRAGMA integrity_check`, and a row count.
+`backups/` is gitignored, because it is personal training data.
+
 **`./gradlew connectedDebugAndroidTest` uninstalls the app when it finishes**, and uninstalling
-deletes `/data/user/0/com.yokodake.melete` — the whole training record on that device. Use
-`scripts/device-tests.sh` instead: it installs both APKs with `install -r`, which keeps app data,
-and drives `am instrument` directly. Reach for the Gradle task only on a device whose data does not
-matter.
+deletes the whole training record on that device. Use `scripts/device-tests.sh` instead: it
+installs both APKs with `install -r`, which keeps app data, and drives `am instrument` directly.
 
 ## Checks actually run
 
-Sixth round (logging as one act, density, release build):
+Phase 5A and timer A/B/C (written without a device; **no phone was connected for any of it**):
 
-- **104 unit tests passing.** 10 of them a new `SetTableTest` covering the commit rules directly:
-  every set carrying its own load is enough; a max load stands for the sets that have none but
-  never overrides one that says something of its own; one missing load blocks the table; an
-  unticked set is neither required to say what it weighed nor written; nothing ticked means
-  nothing to log; an unmeasured exercise needs only a tick; a unilateral row falls back per side.
-  5 more in `ExerciseRemovalTest` on the three-way delete decision, including that one logged set
-  outranks forty planned copies.
-- `assembleDebug`, `assembleDebugAndroidTest`, `assembleRelease` all clean.
-- The **release build is installed and running on the Pixel 9**, confirmed non-debuggable
-  (`flags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP KILL_AFTER_RESTORE ]`, no `DEBUGGABLE`),
-  installed as an update over the debug build with the training record intact.
-- The unilateral write path was checked against the real database pulled off the phone: a
-  4-set unilateral workout stores 8 rows, `LEFT`/`RIGHT` correctly paired and ordered by
-  `orderIndex`.
-- **Verified on the phone by the user**, repeatedly: marking done, reopening the logged workout,
-  correcting it and saving again. That is the path that deletes and rewrites rows, and the one
-  `replaceSetsForOccurrence` exists to make idempotent, so it is the one that most needed a real
-  session rather than a unit test.
+- **141 unit tests passing** (up from 104), all green.
+  - `TimerSequenceTest` (22 new) walks the new shapes exactly as the controller walks them:
+    unilateral timed and reps work running *left, switch, right* before the set rest; a
+    zero-second side switch still getting the ordinary lead-in; transport landing on a side and
+    saying which; the three-sets-of-six-sevens repeater example step by step, with no rep rest
+    after the last pulse and no trailing rest after the last set; exactly one preparation in a
+    whole repeater program; a unilateral repeater doing every pulse on one side before switching;
+    one rep / one set / zero rests degenerating correctly; a circuit running one set of each
+    exercise per round and *ignoring* its stations' own set counts and set rests; a circuit station
+    that is itself unilateral or a repeater; every second of a circuit allocated to exactly one
+    exercise, with the shares summing back to the whole; and the duration estimates, including
+    that a plan with nothing to go on answers null. One of them records a crash the tests caught
+    before any of this reached a phone: a circuit station whose exercise is timed but has no target
+    length became a bare-rest entry, and stripping a circuit station's set rest off one of those
+    produced an invalid program. Such a station now waits for you, as a set of reps does.
+  - `DurationLoggingTest` (12 new) pins the provenance rules: an untouched field saves the estimate
+    as *inferred*, typing makes it *manual*, clearing hands the question back, an explicit planned
+    duration is inherited as inferred until the log overrides it, no estimate saves nothing rather
+    than a zero, the prescription form round-trips the new fields, an empty field stays absent, a
+    zero side switch is a real answer, a half-typed repeater is no repeater, and one-off identity
+    ignores case and spacing but not a real difference.
+  - `WeekUiStateTest` (4 new) on circuit grouping: a circuit is one card with its stations folded
+    into it, it is done only once every station is, and a station whose circuit is missing still
+    shows rather than disappearing.
+  - The 25 existing `TimerProgramTest` cases pass **unchanged** against the rewritten sequencer,
+    which is the evidence that the refactor did not move the single-exercise behaviour.
+- **19 new instrumented tests written and compiling** (`ActivityAndCircuitTest`), plus
+  `migrate4To5KeepsTheRecordAndAddsTimeActivitiesAndCircuits`. **None of them has been run**: no
+  device was attached. They cover a one-off leaving no library entry, two one-offs with the same
+  name sharing one identity, an activity completing with no duration and no fabricated sets, a
+  completed activity being protected from deletion and unscheduling, a reusable class scheduled
+  repeatedly, duration provenance, historical duration staying fixed after a prescription edit,
+  saving twice correcting rather than duplicating, a circuit's snapshot, routine edits not reaching
+  a scheduled copy, two copies not sharing prescriptions, one atomic save across stations with each
+  counting once, unticking clearing a station, moving a circuit with its logs, and removing a
+  routine leaving its copies alone.
+- `./gradlew :app:assembleDebug`, `:app:compileDebugAndroidTestKotlin` and `:app:assembleRelease`
+  all clean. The schema-5 JSON is exported (`app/schemas/.../5.json`).
 
-Phase 1:
+Then on the Pixel 9 (2026-09-22):
 
-- `./gradlew :app:assembleDebug` — success.
-- `./gradlew :app:testDebugUnitTest` — 17 tests passing (week arithmetic and labels including the
-  new-year boundary, prescription JSON round-trip, absence-stays-absence, added load vs
-  assistance, unknown-field tolerance, week grouping and ordering, per-side labelling).
-- 4 Room persistence tests passing on a physical Pixel 9 (Android 17).
-- On-device manual check: sample data appears on the right days, the unscheduled item appears in
-  the unscheduled section, week navigation and the *Today* action work, today is marked.
+- **54 instrumented tests passing**, the whole suite, in 58.5 s via `scripts/device-tests.sh`'s
+  path (`adb install -r` of both APKs, then `am instrument`, so the training record survived the
+  run). That is the 19 new `ActivityAndCircuitTest` cases, the new
+  `migrate4To5KeepsTheRecordAndAddsTimeActivitiesAndCircuits`, and the 34 that already existed.
+- **The 4→5 migration was applied to the real training record and verified against a backup taken
+  immediately before it.** `user_version` 4 → 5, `integrity_check` ok, and every table the same
+  size afterwards (6 exercises, 13 prescriptions, 4 occurrences, 3 sessions, 12 actual sets). The
+  occurrence rows, the actual-set rows and the exercise rows compare **identical column for
+  column** before and after; the three new tables are empty and every new column is unset, so
+  nothing was backfilled with a guess. The app launched clean with no migration exception.
+- **The backup needs the WAL.** `melete.db` alone was a day stale — Room runs in WAL mode, and a
+  461 kB `melete.db-wal` held everything logged that day. Copying only the `.db`, which is what
+  this file used to suggest, would have been a backup missing the most recent session. Pull
+  `melete.db`, `melete.db-wal` and `melete.db-shm` together; opening the set once with any SQLite
+  client replays the WAL and leaves a self-contained `.db`.
 
-Phase 2:
-
-- `./gradlew :app:testDebugUnitTest` — 23 tests passing (phase 1 tests plus set-draft conversion:
-  an empty field stays absent, no unit means no measurement is recorded, the load meaning travels
-  with the set, an empty draft cannot be confirmed, draft and payload round-trips).
-- 20 instrumented tests passing on the Pixel 9,
-  including: a library edit leaving a scheduled copy and its actuals untouched; editing this
-  week's plan leaving the library and the actuals untouched; six sets logged against a plan of
-  four; an unplanned set still belonging to an occurrence and a session; left and right recorded
-  separately with different loads; deleting a set not moving a later correction onto another
-  record; one session per day across several exercises; an undated item filed under the chosen
-  date; previous results coming only from other occurrences; refusing to delete an occurrence that
-  has actuals; completion state independent of recorded sets; and
-  `migrate1To2KeepsExistingRowsAndAddsTheNewTables`.
-- Full on-device walkthrough on the Pixel 9: created an exercise from an empty library, scheduled
-  it onto today, and confirmed three sets with one tap each. The database pulled off the device
-  after a force-stop showed `user_version = 2`, three `actual_sets` rows with explicit
-  `LEFT` / `RIGHT` sides and `rpe` / `rir` stored as `null` rather than `0`, one `training_sessions`
-  row for the training date, and two `prescriptions` rows (the library default and the scheduled
-  copy).
-- `MIGRATION_1_2` has **not** been exercised against a real phase 1 database on a device. The
-  Gradle device-test task had uninstalled the app before the phase 2 build was installed, so the
-  phone started from an empty schema 2 database. The migration is covered by `MigrationTest`, which
-  builds a schema 1 database, fills it and validates the upgrade. Before shipping a schema 3, run
-  the upgrade once over a populated database using `scripts/device-tests.sh` so the install is not
-  wiped first.
-
-Phase 3:
-
-- `./gradlew :app:testDebugUnitTest` — 55 tests passing, 28 of them the timer: the cue plan for
-  each length and phase, collisions collapsing to the more specific cue, each family switching off
-  on its own, and the arithmetic: remaining
-  time never negative, pause and resume preserving remaining time without shifting the deadline, a
-  warning already given not repeated after resuming, a warning at least as long as the countdown
-  dropped rather than fired at the start, a running countdown after a reboot reported interrupted,
-  a paused one surviving a reboot, and a run that expired while the process was gone coming back
-  finished.
-- `scripts/device-tests.sh` — 31 instrumented tests passing on the Pixel 9, 11 of them timer
-  delivery: a countdown sounding exactly once, a late backstop alarm for the same run not sounding
-  again, warning and end delivered once each and in order, cancelling leaving nothing pending,
-  pause and resume not repeating the warning, a run surviving the controller that owned it, and an
-  alarm delivering the cue when the countdown itself never got there.
-- The cue was played through the real `TimerCuePlayer` with
-  `adb shell cmd audio set-hardening throw` in force: focus was granted and no
-  `AudioHardening` entries appeared in logcat, so the `USAGE_ALARM` attributes are accepted rather
-  than silently dropped.
-- A crash found by these tests and fixed: starting the foreground service and then stopping it
-  before it reached `startForeground` killed the process with
-  `ForegroundServiceDidNotStartInTimeException`.
-- A sixty-three second work interval was run on the Pixel 9 **with the screen off**. The platform
-  logged audio going active eight times, spaced 15.8s, 1.5s, 14.2s, 12.7s, 1.0s, 1.0s, 1.1s — an
-  exact match for quarter, half, thirty-seconds-left, three-quarters, three, two, one and the end,
-  with 47.4s measured from the quarter mark to the end against 47.25s planned. The user confirmed
-  hearing the cues.
-
-First round of use feedback:
-
-- `./gradlew :app:testDebugUnitTest --rerun-tasks` — 59 tests passing, including four new timer
-  ones: a cue family switched on mid-run still sounds a moment that is ahead, one whose moment has
-  already gone by is written off rather than fired late, cues switched off while paused stay off
-  across the resume, and a countdown's exercise label surviving pause, resume, finish and the
-  process being killed.
-- `./gradlew :app:testDebugUnitTest --rerun-tasks` — 33 instrumented tests passed on the Pixel 9,
-  including `migrate2To3…`.
-
-Second round:
-
-- 71 unit tests passing, 12 of them a new `TimerProgramTest` that walks whole programs the way the
-  controller walks them: five timed sets alternating with four rests and stopping, a reps program
-  waiting at every set, a bare rest, sets with no rest running straight into each other, five
-  distinct run ids across five intervals, and a program resuming on the right set after the
-  process dies.
-- Two real bugs were found by those tests before the code ran on a phone: the no-argument
-  `TimerProgram` was invalid and threw from every state that defaulted it, and a program with no
-  rest configured stopped after its first set instead of running them back to back.
-- The Android command is `cmd audio set-hardening throw`, cleared with `cmd audio
-  clear-hardening`. An earlier note here said `set-enable-hardening`, which is not a command: it
-  fails silently, so a run "under hardening" that used it proved nothing.
-
-Third round:
-
-- 81 unit tests passing, 22 of them `TimerProgramTest`. The new ones pin every preparation rule:
-  only the first set of a rested program is led into, a program with no rest gives every set its
-  five seconds, a rest shorter than the preparation is still followed by one, a bare rest and a
-  set of reps never get one, skipping in either direction always does, and resuming mid-set
-  carries on untouched while resuming a nearly-over rest turns into a preparation under a new id.
-- Three instrumented tests were adjusted and two added, for the preparation that now leads a work
-  start. **Still not run on a device.**
+**Still owed on the phone** — everything in *What still needs a phone* from section 1 onwards. The
+suite exercises the database, not the screens, the speaker or the lock screen.
 
 ## Known limitations
 
-- **Removing a placement while keeping its log is not offered.** `actual_sets.occurrenceId` is a
-  RESTRICT foreign key, so the occurrence is what the evidence hangs from and cannot be deleted
-  out from under it. The choice presented is therefore "keep it" or "delete it and the sets".
-  Accepted deliberately: the user's rule is to keep what was done, and a trained card *is* that
-  record, so there is nothing to detach it from.
-- Reordering is move-up / move-down from the menu. Drag-and-drop was explicitly optional, and
-  gating reordering behind an explicit "update week" mode — with move-up at the top of a day
-  carrying into the previous day — is asked for and not yet built.
-- **The logger's draft is lost if you leave without marking done.** Ticks, loads and the note are
-  all held in memory until the one write. Consistent, and the same button accounts for everything
-  the screen has to say, but there is no autosave.
-- Logged loads no longer prefill from the previous session. They start empty so that the
-  "every set filled, or a max load" rule means something; previous results stay visible above as
-  the reference.
-- An exercise that has been kept rather than deleted cannot be un-kept from the UI;
-  `restoreExercise` exists in the repository with nothing calling it yet.
-
-- No modules, duration capture, dashboard or export yet; those tables and screens are deliberately
-  not created speculatively.
-- Surviving the app being **killed** is explicitly not a requirement, and as of the fourth round
-  nothing tries to: the countdown makes no sound while the process is dead, and reopening the app
-  recovers the true remaining time from the persisted deadline.
-- **Still owed:** behaviour while another app is playing audio (the user is checking this against
-  Spotify); forced Doze; and end-to-end confirmation that the screen stays awake for a whole
-  countdown. On the last one, the window flag was confirmed engaged —
-  `SCREEN_BRIGHT_WAKE_LOCK 'WindowManager/displayId:0'` attributed to the app appears in
-  `dumpsys power` while a countdown runs — but the observation that the screen outlived the
-  thirty-second timeout was confounded, because the countdown under test may have finished first.
-  The flag is doing what it should; that it holds for a full rest is unconfirmed. A first forced-Doze attempt was inconclusive because the countdown
-  under test never started, so nothing can be claimed about it yet. Surviving the app being
-  *killed* is explicitly not a requirement: the foreground service is what keeps the countdown
-  alive in the background, and that is what was verified.
-- Only one program runs at a time. Starting another from a workout asks before calling the first
-  one off.
-- A program's set count comes from the prescription, and a prescription of four sets means four
-  timer sets. Nothing reconciles that against what was actually logged; the timer still records
-  nothing, by design.
-- Starting a one-off *work* timer from the logger now also leads with the five-second preparation.
-  That follows from "always five seconds before a set" but is a behaviour change to a path that
-  was not about programs.
-- Next moves one interval, not one set: from a set to its rest, from a rest to the next set.
-  Previous restarts the interval on screen, unless it is pressed within
-  `TimerTransitions.RESTART_WINDOW_MS` (one second) of that interval starting, in which case it
-  goes to the one before. A set of reps has no elapsed time to measure, so it has no window and
-  previous always steps back.
-- A reps program waiting on `AwaitingSet` waits forever. There is no timeout, because there is no
-  honest length for a set of repetitions — but it does mean a forgotten timer sits in the
-  notification shade until it is cancelled.
-- An occurrence that already has a date cannot be moved to another day, and a recorded set cannot
-  be re-dated. Both need phase 4's explicit distinction between rescheduling remaining work and
-  correcting a historical date.
-- Target durations and rest are entered in seconds in the library form. The *timer* is typed as
-  minutes and seconds; the prescription form has not caught up.
-- Switching a cue family on part-way through a countdown writes off the moments that have already
-  gone by rather than firing them late. Switching one on in the last seconds of a rest therefore
-  does nothing, which is the intended answer rather than a missed cue.
-- A countdown's label is a snapshotted name, deliberately not a link to the occurrence: a timer
-  reaching zero must never be able to touch what was logged. Renaming an exercise mid-rest leaves
-  the old name on the running countdown.
+- **Nothing in phase 5A or the timer extensions has been run on a device.** Everything above was
+  checked by unit test, compiler and schema export only.
+- **The logger's draft is lost if you leave without marking done.** Ticks, loads, the duration and
+  the note are held in memory until the one write. Draft persistence is deferred by design.
+- **The circuit review's draft is likewise in memory**, and is seeded once when the screen opens.
+- **A one-off cannot be promoted to a library entry** from the UI. The identity is already stable
+  and derived from the name, so the promotion is a later convenience rather than a migration.
+- **An exercise that has been kept rather than deleted cannot be un-kept from the UI.**
+  `restoreExercise` exists in the repository with nothing calling it.
+- **Target durations, rest and the side switch are typed in seconds** in the prescription form; the
+  planned duration is typed in minutes and the timer in minutes and seconds. The forms have not
+  been unified.
+- **A circuit's stations cannot be reordered after scheduling**, only in the routine. Reordering a
+  scheduled circuit's stations would change what the snapshot says was run.
+- **A circuit does not offer duplicate**, only move and remove.
+- **A circuit station cannot be opened on its own.** Tapping the card opens the review, so a
+  station's description and previous results are not reachable from inside a circuit.
+- Only one program runs at a time. Starting another asks before calling the first one off.
+- A program's volume comes from the prescription. Nothing reconciles it against what was actually
+  logged; the timer still records nothing, by design.
+- Next moves one interval, not one set. Previous restarts the interval on screen unless pressed
+  within `TimerTransitions.RESTART_WINDOW_MS` (one second) of it starting. A set of reps has no
+  elapsed time to measure, so it has no window and previous always steps back.
+- A reps program waiting on `AwaitingSet` waits forever. There is no honest length for a set of
+  repetitions, but it does mean a forgotten timer sits in the shade until cancelled.
+- **Resuming a paused rest with under five seconds left becomes a preparation**, including for a
+  three-second repeater rep rest. That follows from the resume rule and is a deliberate choice for
+  a pause the user asked for, but it does lengthen that one gap.
+- Surviving the app being **killed** is explicitly not a requirement; the countdown makes no sound
+  while the process is dead.
+- Switching a cue family on part-way through a countdown writes off moments that have already gone
+  by rather than firing them late.
+- A countdown's labels are snapshotted names, deliberately not live links: a timer reaching zero
+  must never be able to touch what was logged.
 - The library detail screen has no *Start the timer* button; only a planned copy in a week does.
-  A free-standing countdown is started from the timer tab.
-- Superseded prescription rows are kept forever and never garbage collected. Harmless at this scale
-  and safer than deleting a row an actual set may still reference.
-- Sample data is inserted into the week currently on screen; inserting twice creates duplicates by
-  design (removal clears all sample rows at once).
-- Ordering within a day is `orderIndex`, which nothing edits yet; reordering arrives in phase 4.
+- Superseded prescription rows are kept forever and never garbage collected.
+- Sample data is inserted into the week on screen; inserting twice creates duplicates by design.
 - `today` is computed when the UI state is built, so an app left open across midnight keeps the old
   highlight until the state is rebuilt.
-- The month abbreviation in week labels comes from the device locale (JDK/CLDR data), e.g. `Sep`
-  in `en-US` and `Sept` in `en-GB`. Unit tests pin `Locale.US`.
+- The month abbreviation in week labels comes from the device locale. Unit tests pin `Locale.US`.
+- No modules, diary, export or dashboard yet; those tables and screens are deliberately not created
+  speculatively.
+
+## What still needs a phone
+
+Section 0 is **done**, on 2026-09-22. Everything from section 1 onwards still needs a person with
+the phone in their hands: the suite exercises the database, not the screens, the speaker or the
+lock screen.
+
+### 0. Install and upgrade — done
+
+- [x] **Backed up** to `backups/pre-v5-20260922-175123/melete.db` (with the WAL; verified
+      self-contained, `user_version = 4`, `integrity_check` ok, 6 exercises / 4 occurrences /
+      12 sets).
+- [x] **Installed the debug build over the release build** with `adb install -r`. Data preserved.
+- [x] **Ran the instrumented suite**: 54 tests, all passing, in 58.5 s.
+- [x] **Applied the 4→5 migration** by launching the app. No exception, `user_version` 4 → 5,
+      `integrity_check` ok, every table the same size, and the occurrence, actual-set and exercise
+      rows identical column for column against the backup. The new tables are empty and every new
+      column is unset.
+- [ ] **Look at it.** Open two or three past weeks by hand. Every card, its plan, its comment, its
+      "Done" chip and its logged load as before, and **no time shown against any of them** — the
+      row comparison says the data is intact, but only you can say the screen agrees.
+
+### 1. Regressions in what already worked
+
+The timer engine was rewritten underneath, so the old paths need re-walking even though their unit
+tests pass unchanged.
+
+- [ ] **A plain timed program.** 3 × 10 s with 60 s rest, from an exercise. Preparation only before
+      the first set, work, rest, work, rest, work, **no rest after the last one**, then finished.
+- [ ] **A reps program.** It waits at each set; *Set done* on the **notification** starts the rest.
+- [ ] **A bare rest** started from the timer tab still counts down and ends.
+- [ ] **Pause, resume, previous, next** mid-program. Previous within a second of an interval
+      starting steps back; later, it restarts the interval.
+- [ ] **Log an ordinary exercise** exactly as before: tick, type a load, mark done, reopen, correct
+      a load, save again. The record must be corrected, not duplicated.
+
+### 2. The new planning surfaces
+
+- [ ] **The `+` menu** on a day heading and on the unscheduled heading offers exercise / other
+      activity / circuit.
+- [ ] **A one-off activity.** *Other activity* → "Outdoor bouldering", 120 minutes → mark done.
+      It counts, the card shows **2 h**, and the library is still empty of it.
+- [ ] **A one-off resists deletion.** Long-press it → remove. Refused, because it is a record.
+- [ ] **Renaming a one-off** from its logger corrects the name on the card.
+- [ ] **A reusable activity.** Create a library exercise in *Activity* mode, schedule it on two
+      days, log both. One definition, two occurrences, no set table on either.
+- [ ] **An activity with no duration** still marks done and still counts.
+
+### 3. Duration and its provenance
+
+- [ ] **Inferred stays inferred.** Log an ordinary exercise without touching *Time taken*. Reopen:
+      the field is still empty with a grey estimate, and the detail screen says
+      "worked out from the plan".
+- [ ] **Typed stays typed.** Type a number, save, reopen: it comes back as typed, with no
+      "worked out from the plan".
+- [ ] **Clearing goes back to inference**, and does not record a zero.
+- [ ] **History does not move.** After saving a duration, edit that copy's prescription (double the
+      sets). The saved time must be unchanged.
+- [ ] **No estimate is an honest blank.** A timed exercise with no target duration offers no grey
+      value and saves no time.
+
+### 4. The timer extensions — the ear checks
+
+These are the ones no test can make.
+
+- [ ] **Unilateral, timed.** 2 sets × 10 s, both sides, 15 s switch. Watch for
+      *left → switch → right → rest → left …*, and the screen naming the side.
+- [ ] **Unilateral, reps.** Waits for left, counts the switch, waits for right.
+- [ ] **Zero-second switch** still gives a five-second lead-in into the second side.
+- [ ] **Repeaters, the real protocol.** 3 sets × 6 × 7 s on, 3 s off, 180 s between sets.
+      **The critical check: no five-second gap between pulses.** Time a set by hand — it should
+      take about 57 s, not about 87 s.
+- [ ] **Short intervals still cue.** The 3 s rep rest sounds *two, one, go* — audible, and not a
+      pile-up of overlapping beeps.
+- [ ] **A repeater set rest** behaves like an ordinary rest, and the next set's first pulse is not
+      led into.
+
+### 5. Circuits
+
+- [ ] **Build a routine** of three exercises — ideally one timed, one reps, one unilateral or a
+      repeater. Check the "about N minutes" line changes as you change the rounds and rests.
+- [ ] **Station plans are private.** Edit a station's numbers in the routine; the library default
+      for that exercise is untouched.
+- [ ] **Schedule it.** One card in the week with its stations listed inside it, not three loose
+      exercises.
+- [ ] **Edit the routine afterwards** (change rounds and a station's numbers). The scheduled copy
+      must not change.
+- [ ] **Run it on the timer**, phone locked. One set of each exercise per round; the notification
+      names the exercise, the round and the side; no station runs its own four sets.
+- [ ] **Review and save.** Collapsed rows, tick them, one *Mark done*. Each exercise counts **once**
+      however many rounds; the circuit itself adds nothing.
+- [ ] **Partial completion round-trips.** Untick one round of one exercise, save, reopen: it comes
+      back showing that exercise as partly done, not fully.
+- [ ] **Save again** — corrections, not duplicates.
+- [ ] **Allocated time is sane.** The per-exercise minutes in the review add up to roughly the
+      circuit total shown at the top, and no more.
+- [ ] **A recorded circuit resists removal**, and the stronger answer names how many exercises it
+      would destroy.
+- [ ] **Move a recorded circuit** to another day: the stations and their sets move with it, and
+      "anytime this week" is not offered.
+- [ ] **Remove the routine** from the Circuits list. The scheduled copy and its log stay.
+
+### 6. Background and audio
+
+- [ ] Everything in sections 4 and 5 at least once **with Spotify playing**: the music keeps going
+      and the cue is audible over it.
+- [ ] At least one whole program **with the screen off**, confirming every cue is heard.
+- [ ] The ongoing notification's *Pause* / *Resume* / *Set done* / *Cancel* buttons all work from
+      the lock screen.
+
+---
+
+# How it got here
+
+A dated record of the work and the reasoning. **Not a description of current behaviour** — several
+entries below were later reversed, and where they were, the reversal is recorded too.
+
+## Phase 1 — runnable foundation
+
+- Kept the existing Android Studio toolchain (AGP 9.4.1 / Gradle 9.6 / Kotlin 2.2.10 /
+  compileSdk 37 / minSdk 33 / Compose BOM 2026.02.01) and added Room, KSP and
+  kotlinx.serialization to it.
+- **This week** screen, minimal persistence (schema v1), explicit debug-only sample data.
+
+Checks: `assembleDebug` clean; 17 unit tests; 4 Room persistence tests on a physical Pixel 9.
+
+## Phase 2 — create an exercise and log it
+
+- Exercise editor, library picker, logger, set entry bar with prefilled values and one-tap confirm.
+- Schema v2 with `MIGRATION_1_2`: `training_sessions` and `actual_sets` added, plus
+  `exercises.measurementMeaning`, `exercises.notes` and
+  `exercise_occurrences.measurementMeaningSnapshot`.
+- Navigation added (`navigation-compose`, type-safe routes).
+
+Checks: 23 unit tests; 20 instrumented tests on the Pixel 9 covering snapshot isolation,
+actual/prescription independence, set identity, session reuse and `migrate1To2…`. A full on-device
+walkthrough confirmed `user_version = 2`, explicit `LEFT`/`RIGHT` sides and `rpe`/`rir` stored as
+`null` rather than `0`.
+
+*Superseded:* the set entry bar and per-set immediate writes were replaced in the sixth round of
+feedback by the draft table and the single transaction.
+
+## Phase 3 — the timer
+
+A single countdown for work or rest, three cue families, a persistent notification, the screen held
+awake while counting. Reaching zero never records a set.
+
+Checks: 55 unit tests; 31 instrumented tests; a 63-second work interval run with the screen off,
+the platform logging audio active eight times at exactly the planned spacings. A crash was found
+and fixed: starting the foreground service and stopping it before `startForeground` killed the
+process with `ForegroundServiceDidNotStartInTimeException`.
+
+*Superseded:* the exact-alarm backstop, the durable cue bookkeeping and the `USAGE_ALARM` audio
+attributes described in this phase were all removed in the fourth and fifth rounds below.
+
+## Bottom navigation and the effort scale
+
+Three tabs — week, library, timer — hidden inside focused flows. Effort became a five-point verbal
+scale stored as its integer level; reps in reserve stayed a planning field.
+
+## First round of use feedback (schema 3)
+
+From `src/feedback.md`, after the app was used:
+
+- **A workout opens as information, not a form.** `ui/detail/ExerciseDetailScreen`: what it is, how
+  to do it, what is planned. Editing the definition is a button on that screen, never the screen
+  you land on.
+- **Exercises carry an explanation and a category.** `description` is read live so a correction
+  reaches every copy; `category` *is* snapshotted, so re-categorising cannot recolour history.
+- **The default prescription no longer prescribes load.**
+- **Removing a planned workout costs intent**: long press on the week screen, and still refused
+  once sets exist.
+- **Done reads green**, from `SemanticColors.kt` rather than a scheme colour.
+- **The timer, first pass**: work/rest stopped discarding typed durations, minutes-and-seconds
+  input, cue families behind an overflow and switchable mid-run, green through work and amber for
+  the last five seconds of a rest, a label carried from the exercise, and a prompt before replacing
+  a running countdown.
+
+## Second round: the timer counts sets
+
+- `TimerProgram` holds sets, work and rest; `TimerTransitions` walks it, with no trailing rest.
+- Reps stop at `TimerState.AwaitingSet` and wait.
+- **One interval is one run id**, because the at-most-once bookkeeping is keyed by it — a single id
+  would have sounded the first set's end and then stayed silent.
+
+Two real bugs were found by the new tests before the code ran on a phone: the no-argument
+`TimerProgram` was invalid and threw, and a program with no rest stopped after its first set.
+
+## Third round: preparation and transport controls
+
+- `TimerPhase.PREPARE` as a real countdown, before the first set and before any set reached by
+  hand, but not when a long enough rest flows into it.
+- Resuming a nearly-finished rest becomes a fresh preparation rather than a stretched rest, because
+  the old rest has already sounded some of its cues.
+- Previous / play-pause / next; cancel kept apart and below.
+- `TimerProgram.steps` flattened a program into its intervals.
+
+## Fourth round: the alarm backstop is gone
+
+The user was explicit about scope: **locked, not killed**. Exact alarms existed only for the second.
+Removing them removed `TimerAlarms.kt`, the `USE_EXACT_ALARM` permission, the durable
+`markCueDelivered`/`clearCues` bookkeeping, `TimerController.onAlarm`, the cue mutex and the
+countdown loop's generation counter — about 170 lines net, and the timer's hardest invariant
+("exactly one of two racing deliverers wins, durably, across process death") stopped existing
+rather than being maintained.
+
+## Fifth round: the cue stops interrupting the music
+
+The cue was stopping Spotify dead. Two causes, and fixing only the first did nothing audible:
+
+1. **Audio focus**, even as transient-may-duck, hands the music app the decision. Nothing is
+   requested now.
+2. **`USAGE_ALARM`** — the platform fades media to zero on its own when an alarm-usage player
+   starts. The cue now plays as `USAGE_MEDIA`.
+
+Confirmed by ear on the Pixel 9 against Spotify, including locked; `AS.FadeOutManager` no longer
+appears in logcat. There is no ducking: that is the other app's decision and cannot be forced.
+
+Also this round: 33 instrumented tests run on the Pixel 9, including four rounds of timer work that
+had never run on a device. One caught a real bug — `start(program, settings)` planned the first
+interval from the argument while every later one read `store.cueSettings`, so a program started
+with explicit settings quietly reverted after one set. The store is now the single source.
+
+## Phase 4A — library and planning organisation (schema 4)
+
+One nullable column, `exercises.deletedAtEpochMs`.
+
+**Deletion is as complete as the history allows**, on the user's rule *keep the fact that I did it,
+never the fact that I planned it*: nothing refers to it → deleted; planned but never logged → the
+plans go too; one logged set → tombstone. The count is re-taken inside the transaction.
+
+**One date, and the log follows it.** 4A first shipped a planned date and a performed date allowed
+to disagree, reported as `Planned Mon · Logged Tue`. That was cut on the user's call. Deleted with
+it: `PlannedOccurrence.performedDate`, `observePerformedDatesInWeek`, `PerformedDateRow`,
+`Planning.dateMismatch` and the *Change the day it was done…* menu item.
+
+Also: move to any week, duplicate, nudge within a slot, edit the local prescription, and a deletion
+dialog that names how many sets it would destroy.
+
+Checks: 93 unit tests; **34 instrumented tests passing on the Pixel 9**, including
+`migrate3To4RetiresNothingAndKeepsEverything`.
+
+## Sixth round: logging becomes one act
+
+Used on the phone, and most of it was wrong. Five changes, all the user's calls.
+
+**The tick was the write.** Ticking recorded a set and unticking deleted one, so the table was a
+live database view wearing a form's clothes and *Mark done* had nothing to do. The table became a
+draft, and marking done writes the whole workout in one transaction. `SetRow.done` became a plain
+`Boolean` instead of a list of database ids, which is the whole change in one line.
+
+- Planned rows start ticked; unticking is how you say otherwise.
+- Nothing is loggable until every ticked set says what it weighed **or** a max load stands for all
+  of them. The button stays enabled and says what is missing.
+- The max load is a fallback, never an override, and is *deduced* from the rows.
+- Unilateral rows fall back per side.
+
+**Planning got smaller.** *Copy to…* became **Duplicate**. Adding from the library asks for a week
+and nothing finer.
+
+**Density.** `ui/components/CompactField.kt` rebuilds the text field from `BasicTextField` and
+Material's own decoration box at 10dp × 6dp, because `OutlinedTextField` enforces a 56dp minimum
+height and 16dp of padding that are not reachable through parameters. A set row went from 68dp to
+48dp; effort and max load each went from a heading plus a full-width box to one line — about 175dp
+saved with no font made smaller.
+
+Also: the countdown left the logger entirely, the note is written in place, effort is a dropdown
+starting from what the plan asked for, and a done card shows the heaviest set in bold.
+
+Checks: 104 unit tests, 10 of them a new `SetTableTest` on the commit rules and 5 an
+`ExerciseRemovalTest` on the three-way delete decision. The release build was installed on the
+Pixel 9 as an update over the debug build with the record intact, and the log-and-correct path —
+mark done, reopen, correct, save again — was walked through repeatedly by the user.
+
+## Release builds
+
+`release` is signed with the **debug key**, deliberately: sharing the signature is what lets a
+release install over a debug build as an *update* rather than demanding an uninstall, which would
+take the training history with it. `optimization { enable = false }`, so R8 does not run and cannot
+strip Room or kotlinx.serialization reflection; turning minification on is the moment to re-test
+the database paths.
+
+## Phase 5A and timer A/B/C (2026-09-22)
+
+Done in one pass, because the timer work and the duration work are the same arithmetic: the
+estimate a plan shows has to be the sequence the timer runs.
+
+**The timer program was reshaped rather than extended.** `TimerProgram` had three scalar numbers
+and derived `(setIndex, phase)` pairs from them, which stops being unique the moment a set contains
+two sides or six pulses. It now holds a list of `TimerEntry` and flattens once into a list of
+`TimerStep`, each carrying its exercise, round, set, side and rep; `TimerState` carries a single
+`stepIndex` instead of a set index and a phase to look up. All 25 existing `TimerProgramTest` cases
+passed unchanged afterwards, which is what says the single-exercise behaviour did not move.
+
+`TimerProgram(sets = …, work = …)` survives as a companion `operator invoke`, so the ordinary
+single-exercise construction still reads the way it did while the primary constructor takes the
+entry list a circuit needs.
+
+**One function builds the program and the estimate.** `PrescriptionProgram.of` turns a plan into a
+program; `DurationEstimate.forPrescription` asks that program how long it takes. There is no second
+formula that could disagree, and the assumptions (3 s a rep, 30 s an unstated set) are arguments
+rather than constants buried in a branch.
+
+**Duration went on the occurrence**, with a provenance flag, because an activity has no sets to
+hang it from and a circuit exercise's share belongs to the exercise. `loggedEffort` joined it for
+the same reason, read only where there are no sets.
+
+**A one-off activity's identity is derived from its name** rather than stored in a table, so
+repeated sessions group with nothing to keep in step, and "promote this to a library entry" stays
+possible later without rewriting history.
+
+**A circuit is a container plus real occurrences**, so it is loggable without the timer and counts
+nothing of its own. Its time is computed once and divided between its stations, every segment
+allocated exactly once, which is the invariant a dashboard will depend on.
+
+**Documentation reconciliation.** This file previously described exact alarms, a `TimerAlarms.kt`
+that no longer exists, `USAGE_ALARM` audio with a focus request, per-set immediate writes, and
+separate planned and performed dates — all of them contradicted by later sections of the same
+document. Current behaviour and history are now separated, and the stale claims are gone from the
+first half and recorded as superseded in the second.
 
 ## Next step
 
-**Phase 4B — modules as reusable scheduling units.** Deferred while the logger was made usable;
-the user has been training against the app in the meantime and the feedback has been worth more
-than the next phase.
+**Phase 4B — modules for planning.** Reusable named groups of exercises, optionally containing a
+circuit as a single execution item, with template lineage, group moves and ungrouping.
 
 Owed before or alongside it:
 
+- **Everything in *What still needs a phone*.** None of 5A or the timer extensions has been run on
+  hardware.
 - **Gating the planner behind an edit mode**, so cards only move when you have said you are
-  reorganising, with move-up/down crossing day boundaries. Explicitly asked for, explicitly
-  deferred.
-- The 4A acceptance scenarios end to end. The instrumented suite (34 tests) passes on the Pixel 9
-  and covers the schema-4 migration, but it exercises the database, not the screens.
-
-## Superseded next step
-
-**More timer work**, which the user has said they will come back to: the work/rest sequence of
-phase 7C is the obvious next piece, and the create-timer screen should be used in a real session
-before it is changed again.
-
-Then **phase 4**, for reordering within a day and for the explicit distinction between rescheduling
-remaining work and correcting a historical training date.
-
-### Superseded — kept for the record
-
-**Phase 3 — the timer.** Start from the phase 3 prompt in `training-app-coding-prompts.md`
-together with `docs/project-brief.md`. It needs a single countdown for work or rest started from an
-exercise, monotonic deadlines with explicit running/paused/finished state, a persistent
-notification through a user-started foreground service, an advance warning that is not duplicated
-across pause, resume or recreation, and stale active timing marked interrupted after a reboot
-rather than resumed from an invalid deadline. Check the current official Android documentation for
-foreground-service types and background execution limits before choosing the approach, and record
-the choice here. Timer completion must never create a performed set.
+  reorganising, with move-up/down crossing day boundaries. Explicitly asked for, still not built.
+- The 4A acceptance scenarios end to end. The instrumented suite exercises the database, not the
+  screens.
