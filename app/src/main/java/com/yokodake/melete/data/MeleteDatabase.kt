@@ -10,11 +10,15 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 import com.yokodake.melete.data.dao.LibraryDao
 import com.yokodake.melete.data.dao.LoggingDao
+import com.yokodake.melete.data.dao.RoutineDao
 import com.yokodake.melete.data.dao.TrainingDao
 import com.yokodake.melete.data.entity.ActualSetEntity
+import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.PrescriptionEntity
+import com.yokodake.melete.data.entity.RoutineEntity
+import com.yokodake.melete.data.entity.RoutineEntryEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 
 /**
@@ -29,8 +33,11 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         ExerciseOccurrenceEntity::class,
         TrainingSessionEntity::class,
         ActualSetEntity::class,
+        RoutineEntity::class,
+        RoutineEntryEntity::class,
+        CircuitInstanceEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)
@@ -41,6 +48,8 @@ abstract class MeleteDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     abstract fun loggingDao(): LoggingDao
+
+    abstract fun routineDao(): RoutineDao
 
     companion object {
         const val DATABASE_NAME = "melete.db"
@@ -138,8 +147,97 @@ abstract class MeleteDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Phase 5A and the timer extensions: logged duration, one-off activities and circuits.
+         *
+         * All additive. Six nullable-or-defaulted columns on the occurrence and three new tables
+         * that start empty, so every existing plan, log and session is left exactly as it was and
+         * no reset is needed. An occurrence that had no recorded duration yesterday simply has
+         * none today — a valid state rather than something to backfill with a guess.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(connection: SQLiteConnection) {
+                listOf(
+                    "ALTER TABLE `exercise_occurrences` ADD COLUMN `loggedDurationSeconds` INTEGER",
+                    "ALTER TABLE `exercise_occurrences` ADD COLUMN `loggedDurationManual` " +
+                        "INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE `exercise_occurrences` ADD COLUMN `loggedEffort` TEXT",
+                    "ALTER TABLE `exercise_occurrences` ADD COLUMN `isOneOff` " +
+                        "INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE `exercise_occurrences` ADD COLUMN `circuitInstanceId` TEXT",
+                    "ALTER TABLE `exercise_occurrences` ADD COLUMN `circuitPosition` INTEGER",
+                ).forEach(connection::execSQL)
+
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `routines` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `rounds` INTEGER NOT NULL,
+                        `transitionSeconds` INTEGER NOT NULL,
+                        `roundRestSeconds` INTEGER NOT NULL,
+                        `structureVersion` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `deletedAtEpochMs` INTEGER,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `routine_entries` (
+                        `id` TEXT NOT NULL,
+                        `routineId` TEXT NOT NULL,
+                        `orderIndex` INTEGER NOT NULL,
+                        `exerciseId` TEXT NOT NULL,
+                        `exerciseNameSnapshot` TEXT NOT NULL,
+                        `prescriptionId` TEXT,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`routineId`) REFERENCES `routines`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE ,
+                        FOREIGN KEY(`prescriptionId`) REFERENCES `prescriptions`(`id`)
+                            ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent()
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `circuit_instances` (
+                        `id` TEXT NOT NULL,
+                        `routineId` TEXT NOT NULL,
+                        `routineNameSnapshot` TEXT NOT NULL,
+                        `structureVersion` INTEGER NOT NULL,
+                        `structureSnapshotJson` TEXT NOT NULL,
+                        `weekStartEpochDay` INTEGER NOT NULL,
+                        `trainingDateEpochDay` INTEGER,
+                        `orderIndex` INTEGER NOT NULL,
+                        `rounds` INTEGER NOT NULL,
+                        `transitionSeconds` INTEGER NOT NULL,
+                        `roundRestSeconds` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                listOf(
+                    "CREATE INDEX IF NOT EXISTS `index_routine_entries_routineId` " +
+                        "ON `routine_entries` (`routineId`)",
+                    "CREATE INDEX IF NOT EXISTS `index_routine_entries_prescriptionId` " +
+                        "ON `routine_entries` (`prescriptionId`)",
+                    "CREATE INDEX IF NOT EXISTS `index_routine_entries_exerciseId` " +
+                        "ON `routine_entries` (`exerciseId`)",
+                    "CREATE INDEX IF NOT EXISTS `index_circuit_instances_weekStartEpochDay` " +
+                        "ON `circuit_instances` (`weekStartEpochDay`)",
+                    "CREATE INDEX IF NOT EXISTS `index_circuit_instances_trainingDateEpochDay` " +
+                        "ON `circuit_instances` (`trainingDateEpochDay`)",
+                    "CREATE INDEX IF NOT EXISTS `index_circuit_instances_routineId` " +
+                        "ON `circuit_instances` (`routineId`)",
+                ).forEach(connection::execSQL)
+            }
+        }
+
         val MIGRATIONS: Array<Migration> =
-            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 
         fun build(context: Context): MeleteDatabase =
             Room.databaseBuilder(context, MeleteDatabase::class.java, DATABASE_NAME)

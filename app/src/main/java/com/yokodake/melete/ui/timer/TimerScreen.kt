@@ -64,6 +64,7 @@ import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.timer.WorkKind
+import com.yokodake.melete.data.timer.title
 import com.yokodake.melete.ui.components.NumberField
 import com.yokodake.melete.ui.theme.MeleteTheme
 import com.yokodake.melete.ui.theme.aboutToStartColor
@@ -76,11 +77,18 @@ private const val ABOUT_TO_START_MS = 5_000L
 @Composable
 fun TimerRoute(
     onLog: (String) -> Unit = {},
+    onReviewCircuit: (String) -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     viewModel: TimerViewModel = viewModel(factory = TimerViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    TimerScreen(state = state, viewModel = viewModel, onLog = onLog, bottomBar = bottomBar)
+    TimerScreen(
+        state = state,
+        viewModel = viewModel,
+        onLog = onLog,
+        onReviewCircuit = onReviewCircuit,
+        bottomBar = bottomBar,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +97,7 @@ fun TimerScreen(
     state: TimerUiState,
     viewModel: TimerViewModel,
     onLog: (String) -> Unit = {},
+    onReviewCircuit: (String) -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -164,6 +173,10 @@ fun TimerScreen(
                         // already been thanked for is confusing.
                         viewModel.dismiss()
                         onLog(occurrenceId)
+                    },
+                    onReview = { circuitId ->
+                        viewModel.dismiss()
+                        onReviewCircuit(circuitId)
                     },
                 )
 
@@ -320,11 +333,7 @@ private fun ActiveCountdown(
 ) {
     ProgramHeading(
         state = state,
-        phaseLabel = when (state.shownPhase) {
-            TimerPhase.PREPARE -> "Get ready"
-            TimerPhase.WORK -> "Work"
-            TimerPhase.REST -> "Rest"
-        },
+        phaseLabel = state.shownPhase.title(),
     )
     Box {
         CircularProgressIndicator(
@@ -455,6 +464,7 @@ private fun FinishedCard(
     state: TimerState.Finished,
     onDismiss: () -> Unit,
     onLog: (String) -> Unit,
+    onReview: (String) -> Unit = {},
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -468,7 +478,8 @@ private fun FinishedCard(
         ) {
             Text(
                 text = if (state.program.sets > 1) {
-                    "${state.setsCompleted} sets done"
+                    val unit = if (state.program.isCircuit) "rounds" else "sets"
+                    "${state.setsCompleted} $unit done"
                 } else if (state.phase == TimerPhase.WORK) {
                     "Work finished"
                 } else {
@@ -486,10 +497,14 @@ private fun FinishedCard(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onDismiss) { Text("OK") }
-                // Offered only when the countdown came from a planned exercise; a timer built on
-                // this screen has nothing to open.
-                state.program.occurrenceId?.let { occurrenceId ->
-                    Button(onClick = { onLog(occurrenceId) }) { Text("Log") }
+                // Offered only when the countdown came from planned work; a timer built on this
+                // screen has nothing to open. A circuit opens its review, which is where all of
+                // its exercises are confirmed at once.
+                val circuitId = state.program.circuitInstanceId
+                when {
+                    circuitId != null -> Button(onClick = { onReview(circuitId) }) { Text("Review") }
+                    state.program.occurrenceId != null ->
+                        Button(onClick = { onLog(state.program.occurrenceId) }) { Text("Log") }
                 }
             }
         }
@@ -701,15 +716,41 @@ private fun TimerProgram.workLabel(unknownReps: String = "a set"): String = when
     WorkKind.NONE -> PrescriptionSummary.duration(restSeconds)
 }
 
-/** What follows the interval on screen, or null when this is the last one. */
+/**
+ * What follows the interval on screen, or null when this is the last one.
+ *
+ * A preparation is a lead-in to the step it points at rather than a step of its own, so from one
+ * the answer is that step itself — otherwise the screen would say the rest is next while the set
+ * has not happened yet.
+ */
 private fun nextUp(state: TimerUiState): String? {
     val program = state.state.activeProgram ?: return null
-    val setIndex = (state.state.currentSet ?: return null) - 1
-    val next = program.stepAfter(setIndex, state.shownPhase) ?: return null
-    return when (next.phase) {
-        TimerPhase.REST -> "${PrescriptionSummary.duration(program.restSeconds)} rest"
-        TimerPhase.WORK, TimerPhase.PREPARE -> program.workLabel()
+    val index = state.state.activeStepIndex ?: return null
+    val next = if (state.shownPhase == TimerPhase.PREPARE) {
+        program.steps.getOrNull(index)
+    } else {
+        program.stepAfter(index)
+    } ?: return null
+    val entry = program.entries.getOrNull(next.entryIndex)
+    return when {
+        next.untimed -> entry?.workReps?.let { "$it reps" } ?: "a set"
+        next.phase == TimerPhase.WORK -> buildString {
+            append(PrescriptionSummary.duration(next.seconds))
+            // In a circuit the interesting thing about what comes next is which exercise it is.
+            if (program.isCircuit) entry?.label?.let { append(" · ").append(it) }
+        }
+
+        else -> "${PrescriptionSummary.duration(next.seconds)} ${next.phase.restNoun()}"
     }
+}
+
+/** What to call a gap of this kind in a one-line "next up". */
+private fun TimerPhase.restNoun(): String = when (this) {
+    TimerPhase.SWITCH -> "to change sides"
+    TimerPhase.REP_REST -> "between reps"
+    TimerPhase.TRANSITION -> "to move on"
+    TimerPhase.ROUND_REST -> "between rounds"
+    else -> "rest"
 }
 
 // ---------------------------------------------------------------- previews
@@ -748,7 +789,7 @@ private fun previewRunning(
     phase: TimerPhase,
     totalMs: Long,
     remainingMs: Long,
-    setIndex: Int = 1,
+    stepIndex: Int = 2,
     program: TimerProgram = previewHangs,
 ) = TimerUiState(
     state = TimerState.Running(
@@ -758,7 +799,7 @@ private fun previewRunning(
         deadlineElapsedMs = 0,
         plan = emptyList(),
         program = program,
-        setIndex = setIndex,
+        stepIndex = stepIndex,
     ),
     // Plain fields on the ui state, so a preview needs no clock ticking behind it.
     remainingMs = remainingMs,
@@ -814,7 +855,7 @@ private fun PausedPreview() {
             remainingMs = 4_000,
             plan = emptyList(),
             program = previewHangs,
-            setIndex = 1,
+            stepIndex = 2,
         ),
         remainingMs = 4_000,
         totalMs = 10_000,
@@ -837,7 +878,7 @@ private fun MoreRepsPreview() {
                 restSeconds = 60,
                 label = "Dumbbell row",
             ),
-            setIndex = 1,
+            stepIndex = 2,
         ),
     )
     PreviewFrame(state) {
@@ -876,7 +917,7 @@ private fun AwaitingSetPreview() {
                 restSeconds = 60,
                 label = "Dumbbell row",
             ),
-            setIndex = 1,
+            stepIndex = 2,
         ),
     )
     PreviewFrame(state) {

@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
@@ -126,6 +127,134 @@ data class ExerciseOccurrenceEntity(
      * identity fields, so re-categorising a library entry cannot silently recolour history.
      */
     val categorySnapshot: ExerciseCategory? = null,
+    /**
+     * How long this exercise took, once it has been logged. Seconds, rests included.
+     *
+     * On the occurrence rather than on a set, because a duration-only activity has no sets and a
+     * circuit's share of the clock belongs to the exercise rather than to any one of its rounds.
+     * Absent means the time is unknown, which is a different thing from zero and is never
+     * backfilled with a guess.
+     */
+    val loggedDurationSeconds: Int? = null,
+    /**
+     * Whether [loggedDurationSeconds] is a number the user typed, or one the app worked out.
+     *
+     * Kept so that changing a default or a formula later can leave the record alone: an inferred
+     * value that has been saved is still what this workout says it took, and recomputing history
+     * behind the user's back would make the diary untrustworthy.
+     */
+    val loggedDurationManual: Boolean = false,
+    /**
+     * How hard it was, for work that records no sets.
+     *
+     * An ordinary exercise rates its effort on its sets, which is where it belongs. A duration-only
+     * activity has none, so the rating has nowhere else to live; it is read only when there are no
+     * sets, so the two can never disagree about the same workout.
+     */
+    val loggedEffort: EffortLevel? = null,
+    /**
+     * True for an activity typed in by name rather than picked from the library.
+     *
+     * A one-off is a real occurrence with a real name and a stable [exerciseId] derived from that
+     * name, so two runs called the same thing already group together and could be promoted to a
+     * library entry later. What it does not have is a row in `exercises`, which is exactly the
+     * point: going for a run once should leave no clutter behind.
+     */
+    val isOneOff: Boolean = false,
+    /** The scheduled circuit this occurrence is a station of, when it is one. */
+    val circuitInstanceId: String? = null,
+    /** Position within that circuit, so the order survives independently of the day's ordering. */
+    val circuitPosition: Int? = null,
+)
+
+/**
+ * A saved, named routine: an ordered set of exercises executed as a superset or circuit.
+ *
+ * A template, like an exercise's default prescription: scheduling copies it by value, so editing
+ * the routine cannot reach work already placed in a week. A routine is an *execution* pattern —
+ * how the work is performed — which is a different thing from the organisational grouping a
+ * module will be.
+ */
+@Entity(tableName = "routines")
+data class RoutineEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    /** Times round. Every entry shares it: a circuit has one volume number, not one per station. */
+    val rounds: Int,
+    /** Rest between two exercises. Replaces each station's own set rest during execution. */
+    val transitionSeconds: Int,
+    /** Rest after the last exercise of a round. Replaces the transition rest there. */
+    val roundRestSeconds: Int,
+    /** Bumped on every structural edit, so a scheduled copy can say which version it was cut from. */
+    val structureVersion: Int,
+    val createdAtEpochMs: Long,
+    /** Retired from the library of routines, while staying the anchor for scheduled copies. */
+    val deletedAtEpochMs: Long? = null,
+)
+
+/**
+ * One station of a routine, with its own prescription copy.
+ *
+ * The prescription is a copy rather than a pointer at the library default, so editing a circuit's
+ * hang does not change the standalone hang, another circuit's hang, or anything already scheduled.
+ */
+@Entity(
+    tableName = "routine_entries",
+    foreignKeys = [
+        ForeignKey(
+            entity = RoutineEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["routineId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = PrescriptionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["prescriptionId"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [Index("routineId"), Index("prescriptionId"), Index("exerciseId")],
+)
+data class RoutineEntryEntity(
+    @PrimaryKey val id: String,
+    val routineId: String,
+    val orderIndex: Int,
+    /** Lineage into the library, deliberately without a foreign key. */
+    val exerciseId: String,
+    /** So a retired library entry still leaves the routine readable. */
+    val exerciseNameSnapshot: String,
+    val prescriptionId: String?,
+)
+
+/**
+ * A routine copied into a week: the container its exercise occurrences hang from.
+ *
+ * Deliberately *not* an occurrence. A circuit contributes nothing to the completed-workout count —
+ * its stations are the work, and counting the container as well would count the same training
+ * twice. What it holds is the execution shape and a snapshot of the structure it was cut from, so
+ * a log can still be read correctly after the routine has been edited or deleted.
+ */
+@Entity(
+    tableName = "circuit_instances",
+    indices = [Index("weekStartEpochDay"), Index("trainingDateEpochDay"), Index("routineId")],
+)
+data class CircuitInstanceEntity(
+    @PrimaryKey val id: String,
+    /** Stable routine identity, for later "how has this circuit gone" questions. */
+    val routineId: String,
+    val routineNameSnapshot: String,
+    /** Which version of the routine this copy was cut from. */
+    val structureVersion: Int,
+    /** The routine's shape as it stood when scheduled, so the log stays interpretable. */
+    val structureSnapshotJson: String,
+    val weekStartEpochDay: Long,
+    val trainingDateEpochDay: Long?,
+    val orderIndex: Int,
+    val rounds: Int,
+    val transitionSeconds: Int,
+    val roundRestSeconds: Int,
+    val createdAtEpochMs: Long,
 )
 
 /**

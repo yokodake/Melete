@@ -15,6 +15,7 @@ import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.timer.WorkKind
+import com.yokodake.melete.data.timer.positionDetail
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -95,6 +96,10 @@ data class TimerUiState(
     val thirtySecondWarningApplies: Boolean
         get() = cues.thirtySecondWarning && previewMs > 30_000
 
+    /** The routine a circuit is running, shown above the station it is on. */
+    val routineLabel: String?
+        get() = state.activeProgram?.takeIf { it.isCircuit }?.label
+
     /** The phase of whatever is on screen: the live interval, or the one about to start. */
     val shownPhase: TimerPhase
         get() = when (state) {
@@ -106,15 +111,17 @@ data class TimerUiState(
             TimerState.Idle -> previewPhase
         }
 
-    val label: String? get() = state.activeLabel
+    /** The exercise on screen: a circuit names its current station, not the routine. */
+    val label: String? get() = state.currentExerciseLabel
 
-    /** "set 2 of 5", or null when there is only one set or nothing running. */
+    /**
+     * "Set 2 of 5 · left · rep 3 of 6", or null when there is nothing to distinguish.
+     *
+     * The same sentence the notification carries, so glancing at the shade and glancing at the
+     * screen never disagree about where you are.
+     */
     val setProgress: String?
-        get() {
-            val program = state.activeProgram ?: return null
-            val current = state.currentSet ?: return null
-            return if (program.sets > 1) "Set $current of ${program.sets}" else null
-        }
+        get() = state.positionDetail()?.replaceFirstChar { it.uppercase() }
 
     val progress: Float
         get() = if (totalMs <= 0) 0f else (1f - remainingMs.toFloat() / totalMs).coerceIn(0f, 1f)

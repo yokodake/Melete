@@ -1,5 +1,6 @@
 package com.yokodake.melete.data
 
+import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.timer.CueSettings
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
@@ -26,6 +27,37 @@ class TimerProgramTest {
 
     private fun id() = "run-${nextId++}"
 
+    /**
+     * One interval, as a readable line.
+     *
+     * Everything that distinguishes an interval appears only when it distinguishes something: a
+     * plain bilateral program still reads `work set1 10s`, so the expectations that predate sides,
+     * pulses and circuits say exactly what they always said.
+     */
+    private fun describe(state: TimerState): String {
+        val program = state.activeProgram
+        val step = state.currentStep
+        val where = buildString {
+            append(if (program?.isCircuit == true) "round" else "set")
+            append(state.currentSet ?: 0)
+            if (program?.isCircuit == true) append(" e${(step?.entryIndex ?: 0) + 1}")
+            when (step?.side) {
+                BodySide.LEFT -> append(" L")
+                BodySide.RIGHT -> append(" R")
+                null -> Unit
+            }
+            state.currentRep?.let { append(" rep$it") }
+        }
+        return when (state) {
+            is TimerState.Running ->
+                "${state.phase.name.lowercase()} $where ${state.totalMs / 1000}s"
+
+            is TimerState.AwaitingSet -> "reps $where"
+            is TimerState.Finished -> "finished ${state.setsCompleted}"
+            else -> state.toString()
+        }
+    }
+
     /** Plays a program through to the end, recording what each step was. */
     private fun walk(
         program: TimerProgram,
@@ -38,15 +70,13 @@ class TimerProgramTest {
         repeat(limit) {
             when (val current = state) {
                 is TimerState.Running -> {
-                    steps += "${current.phase.name.lowercase()}" +
-                        " set${current.setIndex + 1}" +
-                        " ${current.totalMs / 1000}s"
+                    steps += describe(current)
                     now = current.deadlineElapsedMs
                     state = TimerTransitions.advance(current, settings, now, id())
                 }
 
                 is TimerState.AwaitingSet -> {
-                    steps += "reps set${current.setIndex + 1}"
+                    steps += describe(current)
                     now += repsTakeMs
                     state = TimerTransitions.completeSet(current, settings, now, id())
                 }
@@ -191,11 +221,11 @@ class TimerProgramTest {
         assertTrue(restored is TimerState.Running)
         val running = restored as TimerState.Running
         assertEquals(TimerPhase.REST, running.phase)
-        assertEquals(0, running.setIndex)
+        assertEquals(1, running.currentSet)
         assertEquals(5, running.program.sets)
         // And it keeps going from there rather than stopping at one set.
         val next = TimerTransitions.advance(running, settings, running.deadlineElapsedMs, id())
-        assertEquals(1, (next as TimerState.Running).setIndex)
+        assertEquals(2, (next as TimerState.Running).currentSet)
         assertEquals(TimerPhase.WORK, next.phase)
     }
 
@@ -213,7 +243,7 @@ class TimerProgramTest {
         // Nothing is counting, so even a reboot leaves it exactly where it was.
         val restored = TimerRestore.restore(snapshot, currentBootCount = 3, nowElapsedMs = 0)
         assertTrue(restored is TimerState.AwaitingSet)
-        assertEquals(1, (restored as TimerState.AwaitingSet).setIndex)
+        assertEquals(2, (restored as TimerState.AwaitingSet).currentSet)
         assertEquals(4, restored.program.sets)
     }
 
@@ -257,15 +287,7 @@ class TimerProgramTest {
         restSeconds = 180,
     )
 
-    /** Describes an interval the way the walk helper does, for readable expectations. */
-    private fun describe(state: TimerState): String = when (state) {
-        is TimerState.Running ->
-            "${state.phase.name.lowercase()} set${state.setIndex + 1} ${state.totalMs / 1000}s"
 
-        is TimerState.AwaitingSet -> "reps set${state.setIndex + 1}"
-        is TimerState.Finished -> "finished ${state.setsCompleted}"
-        else -> state.toString()
-    }
 
     private fun forward(state: TimerState, now: Long = 50_000) =
         TimerTransitions.next(state, settings, now, id())

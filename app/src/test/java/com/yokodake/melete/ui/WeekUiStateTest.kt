@@ -1,12 +1,14 @@
 package com.yokodake.melete.ui
 
 import com.yokodake.melete.data.PlannedOccurrence
+import com.yokodake.melete.data.WeekCircuit
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
 import com.yokodake.melete.ui.week.PrescriptionSummary
+import com.yokodake.melete.ui.week.WeekItem
 import com.yokodake.melete.ui.week.WeekUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -24,6 +26,8 @@ class WeekUiStateTest {
         mode: ExerciseMode = ExerciseMode.REPETITIONS,
         unilateral: Boolean = false,
         prescription: PrescriptionPayload? = PrescriptionPayload(sets = 3, targetReps = 5),
+        circuitInstanceId: String? = null,
+        circuitPosition: Int? = null,
     ) = PlannedOccurrence(
         id = "$name-$date-$order",
         exerciseId = name,
@@ -42,7 +46,33 @@ class WeekUiStateTest {
         comment = null,
         orderIndex = order,
         isSampleData = false,
+        circuitInstanceId = circuitInstanceId,
+        circuitPosition = circuitPosition,
     )
+
+    private fun circuit(
+        id: String,
+        date: LocalDate?,
+        order: Int = 0,
+    ) = WeekCircuit(
+        id = id,
+        routineId = "routine-$id",
+        name = id,
+        rounds = 3,
+        transitionSeconds = 30,
+        roundRestSeconds = 120,
+        weekStart = monday,
+        trainingDate = date,
+        orderIndex = order,
+    )
+
+    /** The names of a slot's cards: a circuit reads as its own name, not as its stations. */
+    private fun List<WeekItem>.names(): List<String> = map { item ->
+        when (item) {
+            is WeekItem.Single -> item.occurrence.name
+            is WeekItem.Circuit -> item.circuit.name
+        }
+    }
 
     @Test
     fun `undated items land in the unscheduled section and dated items on their day`() {
@@ -55,19 +85,20 @@ class WeekUiStateTest {
             ),
             sampleDataPresent = false,
         )
-        assertEquals(listOf("Mobility"), state.unscheduled.map { it.name })
+        assertEquals(listOf("Mobility"), state.unscheduled.names())
         assertEquals(7, state.days.size)
-        assertEquals(listOf("Squat"), state.days[1].items.map { it.name })
+        assertEquals(listOf("Squat"), state.days[1].items.names())
         assertTrue(state.days[0].items.isEmpty())
     }
 
     @Test
     fun `exactly one day is marked today and only inside the shown week`() {
-        val current = WeekUiState.build(monday, monday.plusDays(3), emptyList(), false)
+        val current = WeekUiState.build(monday, monday.plusDays(3), emptyList())
         assertEquals(1, current.days.count { it.isToday })
         assertTrue(current.isCurrentWeek)
 
-        val other = WeekUiState.build(monday.plusWeeks(1), monday.plusDays(3), emptyList(), false)
+        val other =
+            WeekUiState.build(monday.plusWeeks(1), monday.plusDays(3), emptyList())
         assertEquals(0, other.days.count { it.isToday })
         assertTrue(!other.isCurrentWeek)
     }
@@ -83,7 +114,63 @@ class WeekUiStateTest {
             ),
             sampleDataPresent = false,
         )
-        assertEquals(listOf("First", "Second"), state.days[0].items.map { it.name })
+        assertEquals(listOf("First", "Second"), state.days[0].items.names())
+    }
+
+    @Test
+    fun `a circuit is one card, and its stations are folded into it`() {
+        val state = WeekUiState.build(
+            weekStart = monday,
+            today = monday,
+            occurrences = listOf(
+                occurrence("Warm-up", monday, order = 0),
+                occurrence("Hang", monday, order = 2, circuitInstanceId = "Pull", circuitPosition = 0),
+                occurrence("Row", monday, order = 3, circuitInstanceId = "Pull", circuitPosition = 1),
+            ),
+            circuits = listOf(circuit("Pull", monday, order = 1)),
+        )
+        // Two cards, not three exercises: the stations live inside the circuit's card.
+        assertEquals(listOf("Warm-up", "Pull"), state.days[0].items.names())
+        val group = state.days[0].items[1] as WeekItem.Circuit
+        assertEquals(listOf("Hang", "Row"), group.stations.map { it.name })
+        assertTrue(!group.completed)
+        assertEquals(0, group.recordedStations)
+    }
+
+    @Test
+    fun `a circuit is done only once every station of it is`() {
+        fun build(vararg states: OccurrenceState) = WeekUiState.build(
+            weekStart = monday,
+            today = monday,
+            occurrences = states.mapIndexed { index, state ->
+                occurrence(
+                    name = "Station $index",
+                    date = monday,
+                    order = index,
+                    circuitInstanceId = "Pull",
+                    circuitPosition = index,
+                ).copy(state = state)
+            },
+            circuits = listOf(circuit("Pull", monday)),
+        ).days[0].items.filterIsInstance<WeekItem.Circuit>().single()
+
+        assertTrue(!build(OccurrenceState.COMPLETED, OccurrenceState.PLANNED).completed)
+        assertEquals(1, build(OccurrenceState.COMPLETED, OccurrenceState.PLANNED).recordedStations)
+        assertTrue(build(OccurrenceState.COMPLETED, OccurrenceState.COMPLETED).completed)
+    }
+
+    @Test
+    fun `a station whose circuit is missing still shows as its own card`() {
+        val state = WeekUiState.build(
+            weekStart = monday,
+            today = monday,
+            occurrences = listOf(
+                occurrence("Orphan", monday, circuitInstanceId = "gone", circuitPosition = 0),
+            ),
+            circuits = emptyList(),
+        )
+        // Losing sight of planned work would be worse than an odd-looking list.
+        assertEquals(listOf("Orphan"), state.days[0].items.names())
     }
 
     @Test

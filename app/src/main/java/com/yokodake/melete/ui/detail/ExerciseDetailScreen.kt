@@ -45,6 +45,7 @@ import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.PrescriptionFields
+import com.yokodake.melete.ui.week.PrescriptionSummary
 
 /**
  * What a workout *is*, before anything is asked of the user.
@@ -151,11 +152,17 @@ fun ExerciseDetailScreen(
             Section("Description")
             Text(
                 text = state.description
-                    ?: if (state.definitionMissing) {
-                        "The library entry this came from no longer exists, so there is nothing " +
-                            "left to explain it. What was planned and what was logged are intact."
-                    } else {
-                        "No explanation written yet."
+                    ?: when {
+                        state.isOneOff ->
+                            "An activity you typed in, so there is no library entry behind it. " +
+                                "Create one in the library if it is something you will plan again."
+
+                        state.definitionMissing ->
+                            "The library entry this came from no longer exists, so there is " +
+                                "nothing left to explain it. What was planned and what was " +
+                                "logged are intact."
+
+                        else -> "No explanation written yet."
                     },
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (state.description == null) {
@@ -194,6 +201,13 @@ fun ExerciseDetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
+                        state.timerShapeLine?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
                     }
                     // The numbers are edited where they are shown, rather than through a button
                     // further down that has to re-explain which plan it means.
@@ -206,6 +220,15 @@ fun ExerciseDetailScreen(
                         Text("⚙", style = MaterialTheme.typography.titleLarge)
                     }
                 }
+            }
+
+            state.loggedDurationSeconds?.let { seconds ->
+                Section("Time taken")
+                Text(
+                    text = PrescriptionSummary.duration(seconds) +
+                        if (state.loggedDurationManual) "" else " (worked out from the plan)",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
 
             state.comment?.let {

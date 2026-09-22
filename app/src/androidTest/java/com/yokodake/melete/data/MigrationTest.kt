@@ -179,8 +179,81 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate4To5KeepsTheRecordAndAddsTimeActivitiesAndCircuits() {
+        val exerciseId = "exercise-5"
+        val prescriptionId = "prescription-5"
+        val occurrenceId = "occurrence-5"
+        val sessionId = "session-5"
+
+        helper.createDatabase(TEST_DB, 4).use { db ->
+            db.execSQL(
+                "INSERT INTO prescriptions (id, payloadVersion, payloadJson, createdAtEpochMs, isSampleData) " +
+                    "VALUES (\'$prescriptionId\', 2, \'{\"sets\":5}\', 1000, 0)"
+            )
+            db.execSQL(
+                "INSERT INTO exercises (id, name, mode, measurementUnit, measurementMeaning, " +
+                    "unilateral, notes, defaultPrescriptionId, createdAtEpochMs, isSampleData, " +
+                    "description, category, deletedAtEpochMs) " +
+                    "VALUES (\'$exerciseId\', \'Max hangs\', \'DURATION\', \'kg\', \'ADDED_LOAD\', 0, " +
+                    "NULL, \'$prescriptionId\', 1000, 0, NULL, \'CONDITIONING\', NULL)"
+            )
+            db.execSQL(
+                "INSERT INTO exercise_occurrences (id, weekStartEpochDay, trainingDateEpochDay, " +
+                    "exerciseId, exerciseNameSnapshot, modeSnapshot, unilateralSnapshot, " +
+                    "measurementUnitSnapshot, measurementMeaningSnapshot, prescriptionId, " +
+                    "orderIndex, state, comment, createdAtEpochMs, isSampleData, categorySnapshot) " +
+                    "VALUES (\'$occurrenceId\', 20718, 20719, \'$exerciseId\', \'Max hangs\', " +
+                    "\'DURATION\', 0, \'kg\', \'ADDED_LOAD\', \'$prescriptionId\', 0, " +
+                    "\'COMPLETED\', \'felt strong\', 1000, 0, \'CONDITIONING\')"
+            )
+            db.execSQL(
+                "INSERT INTO training_sessions (id, trainingDateEpochDay, ordinal, createdAtEpochMs) " +
+                    "VALUES (\'$sessionId\', 20719, 0, 1000)"
+            )
+            db.execSQL(
+                "INSERT INTO actual_sets (id, occurrenceId, sessionId, exerciseId, " +
+                    "trainingDateEpochDay, prescriptionId, orderIndex, side, payloadVersion, " +
+                    "payloadJson, recordedAtEpochMs) " +
+                    "VALUES (\'set-5\', \'$occurrenceId\', \'$sessionId\', \'$exerciseId\', " +
+                    "20719, \'$prescriptionId\', 0, NULL, 2, \'{\"reps\":null}\', 2000)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 5, true, MeleteDatabase.MIGRATION_4_5).use { db ->
+            db.query(
+                "SELECT comment, state, loggedDurationSeconds, loggedDurationManual, " +
+                    "loggedEffort, isOneOff, circuitInstanceId, circuitPosition " +
+                    "FROM exercise_occurrences WHERE id = \'$occurrenceId\'"
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                // Everything that was there is still there, word for word.
+                assertEquals("felt strong", cursor.getString(0))
+                assertEquals("COMPLETED", cursor.getString(1))
+                // And nothing is backfilled with a guess: unknown time stays unknown.
+                assertTrue(cursor.isNull(2))
+                assertEquals(0, cursor.getInt(3))
+                assertTrue(cursor.isNull(4))
+                assertEquals(0, cursor.getInt(5))
+                assertTrue(cursor.isNull(6))
+                assertTrue(cursor.isNull(7))
+            }
+            db.query("SELECT COUNT(*) FROM actual_sets").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+            }
+            // The new tables exist and start empty.
+            listOf("routines", "routine_entries", "circuit_instances").forEach { table ->
+                db.query("SELECT COUNT(*) FROM $table").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
+            }
+        }
+    }
+
+    @Test
     fun theProductionBuilderCarriesEveryMigration() {
-        assertEquals(3, MeleteDatabase.MIGRATIONS.size)
+        assertEquals(4, MeleteDatabase.MIGRATIONS.size)
         assertNull(
             MeleteDatabase.MIGRATIONS.firstOrNull { it.startVersion >= it.endVersion }
         )

@@ -3,6 +3,7 @@ package com.yokodake.melete.data
 import androidx.room.TypeConverter
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
@@ -42,6 +43,14 @@ class MeleteConverters {
     @TypeConverter
     fun stringToExerciseCategory(value: String?): ExerciseCategory? =
         value?.let { name -> ExerciseCategory.entries.firstOrNull { it.name == name } }
+
+    @TypeConverter
+    fun effortLevelToString(value: EffortLevel?): String? = value?.name
+
+    /** An unknown level reads as "not rated" rather than making the whole row unreadable. */
+    @TypeConverter
+    fun stringToEffortLevel(value: String?): EffortLevel? =
+        value?.let { name -> EffortLevel.entries.firstOrNull { it.name == name } }
 
     @TypeConverter
     fun bodySideToString(value: BodySide?): String? = value?.name

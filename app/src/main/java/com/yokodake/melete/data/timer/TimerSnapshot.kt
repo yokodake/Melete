@@ -30,7 +30,8 @@ data class TimerSnapshot(
     val delivered: Set<TimerCue> = emptySet(),
     /** Defaulted, so snapshots written before programs existed still decode. */
     val program: TimerProgram = TimerProgram(),
-    val setIndex: Int = 0,
+    /** Which interval of the program the run was on. */
+    val stepIndex: Int = 0,
     val setsCompleted: Int = 1,
 ) {
     enum class Status { RUNNING, PAUSED, AWAITING_SET, FINISHED }
@@ -50,7 +51,7 @@ object TimerRestore {
             plan = state.plan,
             delivered = state.delivered,
             program = state.program,
-            setIndex = state.setIndex,
+            stepIndex = state.stepIndex,
         )
 
         is TimerState.Paused -> TimerSnapshot(
@@ -63,7 +64,7 @@ object TimerRestore {
             plan = state.plan,
             delivered = state.delivered,
             program = state.program,
-            setIndex = state.setIndex,
+            stepIndex = state.stepIndex,
         )
 
         // Nothing is counting, so there is no deadline to go stale: a set of reps interrupted by
@@ -75,7 +76,7 @@ object TimerRestore {
             bootCount = bootCount,
             status = TimerSnapshot.Status.AWAITING_SET,
             program = state.program,
-            setIndex = state.setIndex,
+            stepIndex = state.stepIndex,
         )
 
         is TimerState.Finished -> TimerSnapshot(
@@ -115,13 +116,13 @@ object TimerRestore {
                 plan = snapshot.plan,
                 delivered = snapshot.delivered,
                 program = snapshot.program,
-                setIndex = snapshot.setIndex,
+                stepIndex = snapshot.stepIndex,
             )
 
             TimerSnapshot.Status.AWAITING_SET -> TimerState.AwaitingSet(
                 runId = snapshot.runId,
                 program = snapshot.program,
-                setIndex = snapshot.setIndex,
+                stepIndex = snapshot.stepIndex,
             )
 
             TimerSnapshot.Status.FINISHED -> TimerState.Finished(
@@ -148,7 +149,7 @@ object TimerRestore {
                     snapshot.phase,
                     snapshot.totalMs,
                     snapshot.program,
-                    snapshot.setIndex + 1,
+                    snapshot.program.setsCompletedAt(snapshot.stepIndex),
                 )
 
                 else -> TimerState.Running(
@@ -159,7 +160,7 @@ object TimerRestore {
                     plan = snapshot.plan,
                     delivered = snapshot.delivered,
                     program = snapshot.program,
-                    setIndex = snapshot.setIndex,
+                    stepIndex = snapshot.stepIndex,
                 )
             }
         }

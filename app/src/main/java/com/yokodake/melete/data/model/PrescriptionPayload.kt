@@ -7,7 +7,7 @@ import kotlinx.serialization.json.Json
  * Version of the named-field prescription payload. Bump it whenever the meaning of a field
  * changes, never reuse a name for a different quantity, and keep old versions readable.
  */
-const val PRESCRIPTION_PAYLOAD_VERSION: Int = 2
+const val PRESCRIPTION_PAYLOAD_VERSION: Int = 3
 
 /** How the app asks for a performed set. */
 enum class ExerciseMode {
@@ -54,10 +54,51 @@ data class PrescriptionPayload(
     /** Target effort on the five-point verbal scale. Replaced the numeric `rpe` field in v2. */
     val effort: EffortLevel? = null,
     val rir: Int? = null,
+    /**
+     * v3. How long the whole exercise is expected to take, rests included.
+     *
+     * Absent asks for an estimate rather than meaning zero: the app can usually work the number
+     * out from the shape of the work, and typing one here is how you overrule it.
+     */
+    val plannedDurationSeconds: Int? = null,
+    /**
+     * v3. How long changing sides takes, for a unilateral exercise. Absent means the default;
+     * zero is a real answer and means the sides run back to back.
+     */
+    val sideSwitchSeconds: Int? = null,
+    /** v3. Present when one timed set is a series of pulses rather than one interval. */
+    val repeater: RepeaterPrescription? = null,
 ) {
     init {
         require(sets >= 0) { "sets must not be negative" }
     }
+}
+
+/**
+ * A repeater, as it is planned: so many timed efforts inside one set, this long each, with this
+ * much between them.
+ *
+ * Stored with the prescription rather than being flattened into sets and rest, because the shape
+ * is what a later reading of the record needs: "three sets of six sevens" and "eighteen sets of
+ * seven" are the same seconds and different training, and only one of them is what happened.
+ */
+@Serializable
+data class RepeaterPrescription(
+    val repsPerSet: Int,
+    val workSecondsPerRep: Int,
+    val restSecondsBetweenReps: Int = 0,
+) {
+    /** The timer shape this plans. Null when the numbers do not yet describe a real repeater. */
+    fun toSpec(): com.yokodake.melete.data.timer.RepeaterSpec? =
+        if (repsPerSet >= 1 && workSecondsPerRep >= 1) {
+            com.yokodake.melete.data.timer.RepeaterSpec(
+                repsPerSet = repsPerSet,
+                workSecondsPerRep = workSecondsPerRep,
+                restSecondsBetweenReps = restSecondsBetweenReps.coerceAtLeast(0),
+            )
+        } else {
+            null
+        }
 }
 
 object PrescriptionJson {

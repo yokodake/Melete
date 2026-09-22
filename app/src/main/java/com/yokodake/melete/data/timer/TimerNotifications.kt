@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.yokodake.melete.MainActivity
+import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.R
 
 /**
@@ -60,7 +61,7 @@ class TimerNotifications(context: Context) {
                 val remaining = state.remainingMs(nowElapsedMs)
                 builder
                     .setContentTitle(state.heading())
-                    .setContentText(state.activeLabel ?: "Counting down")
+                    .setContentText(state.currentExerciseLabel ?: "Counting down")
                     .setUsesChronometer(true)
                     .setChronometerCountDown(true)
                     .setWhen(System.currentTimeMillis() + remaining)
@@ -81,7 +82,7 @@ class TimerNotifications(context: Context) {
             // happened. That action belongs on the notification, not only on the screen.
             is TimerState.AwaitingSet -> builder
                 .setContentTitle(state.heading())
-                .setContentText(state.activeLabel ?: "Tap when the set is done")
+                .setContentText(state.currentExerciseLabel ?: "Tap when the set is done")
                 .addAction(0, "Set done", actionIntent(TimerActionReceiver.ACTION_SET_DONE))
 
             else -> builder.setContentTitle(state.phaseTitleOrDefault())
@@ -140,6 +141,10 @@ internal fun TimerPhase.title(): String = when (this) {
     TimerPhase.PREPARE -> "Get ready"
     TimerPhase.WORK -> "Work"
     TimerPhase.REST -> "Rest"
+    TimerPhase.SWITCH -> "Switch sides"
+    TimerPhase.REP_REST -> "Between reps"
+    TimerPhase.TRANSITION -> "Next exercise"
+    TimerPhase.ROUND_REST -> "Between rounds"
 }
 
 private fun TimerState.phaseTitleOrDefault(): String = when (this) {
@@ -152,18 +157,45 @@ private fun TimerState.phaseTitleOrDefault(): String = when (this) {
 }
 
 /**
- * What the notification calls this moment. A one-set program says only what it is doing; a
- * multi-set one leads with where you are in it, because that is the thing you cannot see from the
- * remaining time alone.
+ * Where the run is, in words: the set or round, the side, the repeater pulse.
+ *
+ * One function for the screen and for the notification, because a countdown that says something
+ * different in two places is a countdown you cannot trust while your hands are on a hold. Each
+ * part appears only when it distinguishes anything — a bilateral single-set timer says nothing.
+ */
+internal fun TimerState.positionDetail(): String? {
+    val program = activeProgram ?: return null
+    val parts = buildList {
+        val set = currentSet
+        if (set != null && program.sets > 1) {
+            add(if (program.isCircuit) "round $set of ${program.sets}" else "set $set of ${program.sets}")
+        }
+        val station = currentStation
+        if (station != null) add("exercise $station of ${program.entries.size}")
+        when (currentSide) {
+            BodySide.LEFT -> add("left")
+            BodySide.RIGHT -> add("right")
+            null -> Unit
+        }
+        val rep = currentRep
+        val reps = currentStep?.entryIndex?.let { program.entries.getOrNull(it) }?.repeater?.repsPerSet
+        if (rep != null && reps != null) add("rep $rep of $reps")
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+/**
+ * What the notification calls this moment. A one-set program says only what it is doing; anything
+ * with more shape than that leads with where you are in it, because that is the thing you cannot
+ * see from the remaining time alone.
  */
 internal fun TimerState.heading(): String {
-    val program = activeProgram ?: return phaseTitleOrDefault()
     val what = when (this) {
         is TimerState.AwaitingSet -> "Reps"
         else -> phaseTitleOrDefault()
     }
-    val set = currentSet ?: return what
-    return if (program.sets > 1) "$what · set $set of ${program.sets}" else what
+    val where = positionDetail() ?: return what
+    return "$what · $where"
 }
 
 internal fun formatRemaining(remainingMs: Long): String {

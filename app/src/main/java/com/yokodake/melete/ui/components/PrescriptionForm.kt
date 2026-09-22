@@ -9,21 +9,28 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.PrescriptionPayload
+import com.yokodake.melete.data.model.RepeaterPrescription
+import com.yokodake.melete.data.timer.DurationEstimate
+import com.yokodake.melete.data.timer.TimerProgram
+import com.yokodake.melete.ui.week.PrescriptionSummary
 
 /**
  * Raw text state for prescription input. Values are kept as typed so half-finished input survives
@@ -41,7 +48,31 @@ data class PrescriptionFormState(
     val restSeconds: String = "",
     val effort: EffortLevel? = null,
     val rir: String = "",
+    /**
+     * Whole minutes, because a plan of an hour typed in seconds is a plan nobody types. Empty asks
+     * for the estimate rather than meaning zero.
+     */
+    val plannedDurationMinutes: String = "",
+    /** Empty means the default. Zero is a real answer and runs the sides back to back. */
+    val sideSwitchSeconds: String = "",
+    val repeaterEnabled: Boolean = false,
+    val repeaterReps: String = "",
+    val repeaterWorkSeconds: String = "",
+    val repeaterRestSeconds: String = "",
 ) {
+    /** The repeater the fields describe, or null when they do not describe one yet. */
+    fun toRepeater(): RepeaterPrescription? {
+        if (!repeaterEnabled) return null
+        val reps = repeaterReps.toIntOrNull() ?: return null
+        val work = repeaterWorkSeconds.toIntOrNull() ?: return null
+        if (reps < 1 || work < 1) return null
+        return RepeaterPrescription(
+            repsPerSet = reps,
+            workSecondsPerRep = work,
+            restSecondsBetweenReps = repeaterRestSeconds.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+        )
+    }
+
     /**
      * Written with `measurement = null`. An older prescription that still carries a load keeps it
      * on disk — rows are never mutated — but re-saving one drops it, which is the intended
@@ -55,6 +86,9 @@ data class PrescriptionFormState(
         measurement = null,
         effort = effort,
         rir = rir.toIntOrNull(),
+        plannedDurationSeconds = plannedDurationMinutes.toIntOrNull()?.let { it * 60 },
+        sideSwitchSeconds = sideSwitchSeconds.toIntOrNull(),
+        repeater = toRepeater(),
     )
 
     companion object {
@@ -65,6 +99,16 @@ data class PrescriptionFormState(
             restSeconds = payload?.restSeconds?.toString().orEmpty(),
             effort = payload?.effort,
             rir = payload?.rir?.toString().orEmpty(),
+            // Rounded to the nearest minute on the way in, because that is the unit it is typed
+            // in; a value that was never typed stays empty and keeps asking for the estimate.
+            plannedDurationMinutes = payload?.plannedDurationSeconds
+                ?.let { ((it + 30) / 60).toString() }
+                .orEmpty(),
+            sideSwitchSeconds = payload?.sideSwitchSeconds?.toString().orEmpty(),
+            repeaterEnabled = payload?.repeater != null,
+            repeaterReps = payload?.repeater?.repsPerSet?.toString().orEmpty(),
+            repeaterWorkSeconds = payload?.repeater?.workSecondsPerRep?.toString().orEmpty(),
+            repeaterRestSeconds = payload?.repeater?.restSecondsBetweenReps?.toString().orEmpty(),
         )
     }
 }
@@ -73,8 +117,8 @@ fun trimNumber(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
 
 /**
- * The prescription half of a form. Shared by the exercise editor (a library default) and by
- * editing the copy that sits in a week — the same fields, two different owners.
+ * The prescription half of a form. Shared by the exercise editor (a library default), by editing
+ * the copy that sits in a week, and by a station of a routine — the same fields, three owners.
  */
 @Composable
 fun PrescriptionFields(
@@ -84,6 +128,14 @@ fun PrescriptionFields(
     unilateral: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val timed = mode == ExerciseMode.DURATION
+    // What the shape of the work implies, so the duration field can show it in grey rather than
+    // asking for a number the app can already work out.
+    val estimate = DurationEstimate.forPrescription(
+        mode = mode,
+        unilateral = unilateral,
+        prescription = state.toPayload().copy(plannedDurationSeconds = null),
+    )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mode != ExerciseMode.ACTIVITY) {
@@ -102,20 +154,60 @@ fun PrescriptionFields(
                     modifier = Modifier.weight(1f),
                 )
 
-                ExerciseMode.DURATION, ExerciseMode.ACTIVITY -> NumberField(
-                    label = "Target seconds",
-                    value = state.targetDurationSeconds,
-                    onValueChange = { onStateChange(state.copy(targetDurationSeconds = it)) },
+                // A repeater states its own per-rep length, so asking for a set length too would
+                // be asking the same question twice with two different answers.
+                ExerciseMode.DURATION, ExerciseMode.ACTIVITY -> if (!state.repeaterEnabled) {
+                    NumberField(
+                        label = "Target seconds",
+                        value = state.targetDurationSeconds,
+                        onValueChange = { onStateChange(state.copy(targetDurationSeconds = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NumberField(
+                label = "Rest seconds",
+                value = state.restSeconds,
+                onValueChange = { onStateChange(state.copy(restSeconds = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            if (unilateral) {
+                NumberField(
+                    label = "Side switch",
+                    value = state.sideSwitchSeconds,
+                    onValueChange = { onStateChange(state.copy(sideSwitchSeconds = it)) },
+                    placeholder = TimerProgram.DEFAULT_SIDE_SWITCH_SECONDS.toString(),
                     modifier = Modifier.weight(1f),
                 )
             }
         }
+
+        if (timed) {
+            HorizontalDivider()
+            RepeaterFields(state, onStateChange)
+        }
+
+        HorizontalDivider()
         NumberField(
-            label = "Rest seconds",
-            value = state.restSeconds,
-            onValueChange = { onStateChange(state.copy(restSeconds = it)) },
+            label = "Planned minutes",
+            value = state.plannedDurationMinutes,
+            onValueChange = { onStateChange(state.copy(plannedDurationMinutes = it)) },
+            // The estimate, shown where the answer would go. Typing overrules it; clearing the
+            // field hands the question back rather than recording a zero.
+            placeholder = estimate?.let { (it + 30) / 60 }?.toString(),
             modifier = Modifier.fillMaxWidth(0.5f),
         )
+        Text(
+            text = estimate
+                ?.let { "Estimated ${PrescriptionSummary.duration(it)} from the plan, rests included." }
+                ?: "No estimate can be made from this plan, so the time stays unknown.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        HorizontalDivider()
         Text("Target RPE", style = MaterialTheme.typography.bodyMedium)
         EffortSelector(
             modifier = Modifier.fillMaxWidth(),
@@ -135,6 +227,67 @@ fun PrescriptionFields(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * The repeater shape, hidden until it is asked for.
+ *
+ * Off by default and out of the way, because most timed work is one interval and three extra
+ * fields on every stretch would be three fields to scroll past. On, one set becomes a series of
+ * pulses — which is a different thing from more sets, and is stored as such.
+ */
+@Composable
+private fun RepeaterFields(
+    state: PrescriptionFormState,
+    onStateChange: (PrescriptionFormState) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Repeaters",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "One set is a series of timed efforts",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = state.repeaterEnabled,
+            onCheckedChange = { onStateChange(state.copy(repeaterEnabled = it)) },
+        )
+    }
+    if (!state.repeaterEnabled) return
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NumberField(
+            label = "Reps per set",
+            value = state.repeaterReps,
+            onValueChange = { onStateChange(state.copy(repeaterReps = it)) },
+            modifier = Modifier.weight(1f),
+        )
+        NumberField(
+            label = "Seconds on",
+            value = state.repeaterWorkSeconds,
+            onValueChange = { onStateChange(state.copy(repeaterWorkSeconds = it)) },
+            modifier = Modifier.weight(1f),
+        )
+        NumberField(
+            label = "Seconds off",
+            value = state.repeaterRestSeconds,
+            onValueChange = { onStateChange(state.copy(repeaterRestSeconds = it)) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Text(
+        text = "Seconds off falls between reps only. After the last rep the set rest takes over.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /**
@@ -197,6 +350,7 @@ fun NumberField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     decimal: Boolean = false,
+    placeholder: String? = null,
 ) {
     CompactTextField(
         value = value,
@@ -206,6 +360,7 @@ fun NumberField(
             onValueChange(filtered)
         },
         label = label,
+        placeholder = placeholder,
         minHeight = 48,
         keyboardOptions = KeyboardOptions(
             keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,

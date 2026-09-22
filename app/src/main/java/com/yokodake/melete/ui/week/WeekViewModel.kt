@@ -39,9 +39,10 @@ class WeekViewModel(
         .flatMapLatest { start ->
             combine(
                 repository.observeWeek(start),
+                repository.observeWeekCircuits(start),
                 repository.sampleDataPresent,
-            ) { occurrences, sampleDataPresent ->
-                WeekUiState.build(start, today, occurrences, sampleDataPresent)
+            ) { occurrences, circuits, sampleDataPresent ->
+                WeekUiState.build(start, today, occurrences, circuits, sampleDataPresent)
             }
         }
         .stateIn(
@@ -51,7 +52,6 @@ class WeekViewModel(
                 weekStart = weekStart.value,
                 today = today,
                 occurrences = emptyList(),
-                sampleDataPresent = false,
             ),
         )
 
@@ -139,6 +139,73 @@ class WeekViewModel(
 
     fun reorderOccurrence(occurrenceId: String, delta: Int) {
         viewModelScope.launch { repository.reorderOccurrence(occurrenceId, delta) }
+    }
+
+    // --------------------------------------------------- activities and circuits
+
+    /**
+     * Adds an activity that is only a name and a duration.
+     *
+     * No library entry is created: a run you went on once is an occurrence, not a movement you
+     * plan to train. Given a date it lands on that day, otherwise it waits in the week.
+     */
+    fun addActivity(name: String, trainingDate: LocalDate?, minutes: Int?) {
+        val week = weekStart.value
+        viewModelScope.launch {
+            repository.createOneOffActivity(
+                name = name,
+                weekStart = trainingDate?.let(WeekMath::weekStartOf) ?: week,
+                trainingDate = trainingDate,
+                plannedDurationSeconds = minutes?.takeIf { it > 0 }?.let { it * 60 },
+            )
+            _message.value = "Added ${name.trim()}"
+        }
+    }
+
+    /** Copies a saved routine into the week as a circuit: a container plus its real stations. */
+    fun scheduleRoutine(routineId: String, trainingDate: LocalDate?) {
+        val week = weekStart.value
+        viewModelScope.launch {
+            val scheduled = repository.scheduleRoutine(
+                routineId = routineId,
+                weekStart = trainingDate?.let(WeekMath::weekStartOf) ?: week,
+                trainingDate = trainingDate,
+            )
+            _message.value =
+                if (scheduled == null) "That circuit no longer exists" else "Circuit added"
+        }
+    }
+
+    fun moveCircuit(circuitId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
+        viewModelScope.launch {
+            val moved = repository.moveCircuit(circuitId, weekStart, trainingDate)
+            _message.value = when {
+                !moved -> "That has been trained, so it needs a day"
+                trainingDate == null -> "Moved to unscheduled"
+                else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
+            }
+        }
+    }
+
+    /** How many stations of a circuit carry evidence, so a deletion can say what it would cost. */
+    suspend fun circuitRecordedStations(circuitId: String): Int =
+        repository.circuitRecordedStations(circuitId)
+
+    fun removeCircuit(circuitId: String) {
+        viewModelScope.launch {
+            if (!repository.deleteCircuitIfEmpty(circuitId)) {
+                _message.value = "Work is recorded in this circuit. Delete it with its log instead."
+            }
+        }
+    }
+
+    fun deleteCircuitAndLogs(circuitId: String, recorded: Int) {
+        viewModelScope.launch {
+            repository.deleteCircuitAndLogs(circuitId)
+            _message.value =
+                "Circuit removed, along with $recorded recorded exercise" +
+                    if (recorded == 1) "" else "s"
+        }
     }
 
     /** The week the planner is currently showing, for defaulting a move or a copy. */
