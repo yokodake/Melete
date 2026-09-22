@@ -8,9 +8,12 @@ import androidx.room.Relation
 import androidx.room.Transaction
 import androidx.room.Update
 import com.yokodake.melete.data.entity.ActualSetEntity
+import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.PrescriptionEntity
+import com.yokodake.melete.data.entity.RoutineEntity
+import com.yokodake.melete.data.entity.RoutineEntryEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -83,6 +86,51 @@ interface TrainingDao {
 
     @Query("SELECT COUNT(*) FROM exercise_occurrences WHERE isSampleData = 1")
     fun observeSampleOccurrenceCount(): Flow<Int>
+
+    /** Every scheduled circuit of one week, in the order its cards are shown. */
+    @Query(
+        """
+        SELECT * FROM circuit_instances
+        WHERE weekStartEpochDay = :weekStartEpochDay
+        ORDER BY trainingDateEpochDay IS NOT NULL, trainingDateEpochDay, orderIndex
+        """
+    )
+    fun observeCircuitsInWeek(weekStartEpochDay: Long): Flow<List<CircuitInstanceEntity>>
+
+    @Query("SELECT * FROM circuit_instances WHERE id = :id")
+    suspend fun getCircuit(id: String): CircuitInstanceEntity?
+
+    @Query("SELECT * FROM circuit_instances WHERE id = :id")
+    fun observeCircuit(id: String): Flow<CircuitInstanceEntity?>
+
+    @Insert
+    suspend fun insertCircuit(circuit: CircuitInstanceEntity)
+
+    @Update
+    suspend fun updateCircuit(circuit: CircuitInstanceEntity)
+
+    @Query("DELETE FROM circuit_instances WHERE id = :id")
+    suspend fun deleteCircuit(id: String)
+
+    /** The stations of one scheduled circuit, in execution order. */
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM exercise_occurrences
+        WHERE circuitInstanceId = :circuitInstanceId
+        ORDER BY circuitPosition, orderIndex
+        """
+    )
+    fun observeCircuitStations(circuitInstanceId: String): Flow<List<OccurrenceWithPrescription>>
+
+    @Query(
+        """
+        SELECT * FROM exercise_occurrences
+        WHERE circuitInstanceId = :circuitInstanceId
+        ORDER BY circuitPosition, orderIndex
+        """
+    )
+    suspend fun circuitStations(circuitInstanceId: String): List<ExerciseOccurrenceEntity>
 
     @Insert
     suspend fun insertExercises(exercises: List<ExerciseEntity>)
@@ -193,6 +241,21 @@ interface LibraryDao {
     @Query("SELECT COUNT(*) FROM actual_sets WHERE exerciseId = :exerciseId")
     suspend fun countSetsOf(exerciseId: String): Int
 
+    /**
+     * How many copies of it were marked done.
+     *
+     * A duration-only activity writes no sets at all, so counting sets would call a year of
+     * climbing sessions "never used" and delete the definition out from under them. Completion is
+     * the other kind of evidence, and it protects the row exactly as a logged set does.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM exercise_occurrences
+        WHERE exerciseId = :exerciseId AND state = 'COMPLETED'
+        """
+    )
+    suspend fun countCompletedOccurrencesOf(exerciseId: String): Int
+
     @Query(
         """
         SELECT prescriptionId FROM exercise_occurrences
@@ -300,4 +363,77 @@ interface LoggingDao {
      */
     @Query("UPDATE actual_sets SET trainingDateEpochDay = :date, sessionId = :sessionId WHERE occurrenceId = :occurrenceId")
     suspend fun repointSets(occurrenceId: String, date: Long, sessionId: String)
+
+    /** Every logged set of one scheduled circuit, as its station and its raw payload. */
+    @Query(
+        """
+        SELECT a.occurrenceId AS occurrenceId, a.payloadJson AS payloadJson
+        FROM actual_sets a
+        JOIN exercise_occurrences o ON a.occurrenceId = o.id
+        WHERE o.circuitInstanceId = :circuitInstanceId
+        """
+    )
+    fun observeSetPayloadsForCircuit(circuitInstanceId: String): Flow<List<SetPayloadRow>>
+}
+
+/** One station of a routine, with the prescription copy it owns. */
+data class RoutineEntryWithPrescription(
+    @Embedded val entry: RoutineEntryEntity,
+    @Relation(parentColumn = "prescriptionId", entityColumn = "id")
+    val prescription: PrescriptionEntity?,
+)
+
+/** A routine with its stations, in order. */
+data class RoutineWithEntries(
+    @Embedded val routine: RoutineEntity,
+    @Relation(entity = RoutineEntryEntity::class, parentColumn = "id", entityColumn = "routineId")
+    val entries: List<RoutineEntryWithPrescription>,
+) {
+    val orderedEntries: List<RoutineEntryWithPrescription>
+        get() = entries.sortedBy { it.entry.orderIndex }
+}
+
+@Dao
+interface RoutineDao {
+
+    /** The routines you can still schedule. Retired ones stay as anchors and are excluded. */
+    @Transaction
+    @Query("SELECT * FROM routines WHERE deletedAtEpochMs IS NULL ORDER BY name COLLATE NOCASE")
+    fun observeRoutines(): Flow<List<RoutineWithEntries>>
+
+    @Transaction
+    @Query("SELECT * FROM routines WHERE id = :id")
+    fun observeRoutine(id: String): Flow<RoutineWithEntries?>
+
+    @Transaction
+    @Query("SELECT * FROM routines WHERE id = :id")
+    suspend fun getRoutine(id: String): RoutineWithEntries?
+
+    @Insert
+    suspend fun insertRoutine(routine: RoutineEntity)
+
+    @Update
+    suspend fun updateRoutine(routine: RoutineEntity)
+
+    @Insert
+    suspend fun insertEntries(entries: List<RoutineEntryEntity>)
+
+    @Query("SELECT prescriptionId FROM routine_entries WHERE routineId = :routineId AND prescriptionId IS NOT NULL")
+    suspend fun entryPrescriptionIdsOf(routineId: String): List<String>
+
+    @Query("DELETE FROM routine_entries WHERE routineId = :routineId")
+    suspend fun deleteEntriesOf(routineId: String)
+
+    @Query("UPDATE routines SET deletedAtEpochMs = :atEpochMs WHERE id = :id")
+    suspend fun markRoutineDeleted(id: String, atEpochMs: Long)
+
+    @Query("DELETE FROM routines WHERE id = :id")
+    suspend fun deleteRoutine(id: String)
+
+    /** How many scheduled copies point at this routine, trained or not. */
+    @Query("SELECT COUNT(*) FROM circuit_instances WHERE routineId = :routineId")
+    suspend fun countInstancesOf(routineId: String): Int
+
+    @Query("SELECT id FROM circuit_instances WHERE routineId = :routineId")
+    suspend fun instanceIdsOf(routineId: String): List<String>
 }

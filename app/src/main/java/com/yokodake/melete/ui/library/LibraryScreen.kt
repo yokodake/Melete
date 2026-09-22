@@ -69,6 +69,7 @@ import com.yokodake.melete.ui.week.PrescriptionSummary
 fun LibraryRoute(
     onOpenExercise: (String) -> Unit,
     onNewExercise: () -> Unit,
+    onOpenCircuits: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
@@ -95,6 +96,7 @@ fun LibraryRoute(
         onCancelRemove = viewModel::cancelRemoval,
         onRowClick = onOpenExercise,
         onNewExercise = onNewExercise,
+        onOpenCircuits = onOpenCircuits,
         onBack = null,
         bottomBar = bottomBar,
     )
@@ -146,6 +148,8 @@ fun LibraryScreen(
     onAskRemove: (LibraryExercise) -> Unit = {},
     onConfirmRemove: () -> Unit = {},
     onCancelRemove: () -> Unit = {},
+    /** Null in the picker: choosing a circuit for a slot is a different flow from browsing them. */
+    onOpenCircuits: (() -> Unit)? = null,
     bottomBar: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -183,6 +187,14 @@ fun LibraryScreen(
                         ) {
                             Text("‹", style = MaterialTheme.typography.headlineMedium)
                         }
+                    }
+                },
+                // Circuits are made of library exercises and are edited the same way, so this is
+                // where they belong; they are not a fourth tab, because they are used far less
+                // often than the three that are.
+                actions = {
+                    if (onOpenCircuits != null) {
+                        TextButton(onClick = onOpenCircuits) { Text("Circuits") }
                     }
                 },
             )

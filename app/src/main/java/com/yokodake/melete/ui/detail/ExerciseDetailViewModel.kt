@@ -17,6 +17,8 @@ import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.PrescriptionPayload
+import com.yokodake.melete.data.timer.DurationEstimate
+import com.yokodake.melete.data.timer.PrescriptionProgram
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
@@ -61,12 +63,20 @@ data class ExerciseDetailUiState(
     val comment: String? = null,
     /** The library entry this copy came from is gone, so there is no explanation to show. */
     val definitionMissing: Boolean = false,
+    /** An activity typed in by name, which never had a library entry to begin with. */
+    val isOneOff: Boolean = false,
     /** The whole timer this workout implies: sets, work, rest. */
     val timerProgram: TimerProgram? = null,
     /** Non-null while the plan is being edited in place. */
     val prescriptionEditor: PrescriptionFormState? = null,
     /** Non-null while the user is being asked whether to call off a countdown already running. */
     val replacePrompt: RunningCountdown? = null,
+    /** How long the plan says this will take, rests included, or null when nothing says. */
+    val plannedDurationSeconds: Int? = null,
+    /** How long it actually took, once logged. */
+    val loggedDurationSeconds: Int? = null,
+    /** Whether that logged number was typed rather than worked out. */
+    val loggedDurationManual: Boolean = false,
 ) {
     /**
      * What the logging button offers.
@@ -82,9 +92,15 @@ data class ExerciseDetailUiState(
     val timerButtonLabel: String
         get() {
             val program = timerProgram ?: return "Start the timer"
+            val repeater = program.entry.repeater
             return when {
                 program.work == WorkKind.NONE ->
                     "Start ${PrescriptionSummary.duration(program.restSeconds)} rest"
+
+                // A repeater set is a series, so saying its total length would be a different
+                // promise from the one the timer is about to keep.
+                repeater != null -> "Start ${program.sets} × ${repeater.repsPerSet} × " +
+                    PrescriptionSummary.duration(repeater.workSecondsPerRep)
 
                 program.sets == 1 && program.work == WorkKind.TIMED ->
                     "Start ${PrescriptionSummary.duration(program.workSeconds)}"
@@ -94,6 +110,32 @@ data class ExerciseDetailUiState(
                 else ->
                     "Start ${program.sets} × ${PrescriptionSummary.duration(program.workSeconds)}"
             }
+        }
+
+    /** The whole sequence in one line, so both sides and every pulse are accounted for. */
+    val timerShapeLine: String?
+        get() {
+            val program = timerProgram ?: return null
+            val parts = buildList {
+                if (unilateral) {
+                    add(
+                        "both sides, " +
+                            PrescriptionSummary.duration(program.entry.sideSwitchSeconds) +
+                            " to switch"
+                    )
+                }
+                program.entry.repeater?.let {
+                    add(
+                        "${it.repsPerSet} reps of " +
+                            PrescriptionSummary.duration(it.workSecondsPerRep) +
+                            " with " + PrescriptionSummary.duration(it.restSecondsBetweenReps)
+                    )
+                }
+                plannedDurationSeconds?.let {
+                    add("about ${PrescriptionSummary.duration(it)} in all")
+                }
+            }
+            return parts.takeIf { it.isNotEmpty() }?.joinToString(" \u00b7 ")
         }
 }
 
@@ -193,54 +235,44 @@ class ExerciseDetailViewModel(
             prescriptionSummary = summary,
             occurrenceState = occurrence?.state,
             comment = occurrence?.comment,
-            definitionMissing = library == null,
-            timerProgram = timerProgram(name, mode, prescription, occurrence?.id),
+            // A one-off never had a definition, which is a different thing from having lost one.
+            definitionMissing = library == null && occurrence?.isOneOff != true,
+            isOneOff = occurrence?.isOneOff == true,
+            timerProgram = timerProgram(name, mode, unilateral, prescription, occurrence?.id),
             prescriptionEditor = extras.prescriptionEditor,
             replacePrompt = extras.replacePrompt,
+            plannedDurationSeconds = occurrence?.estimatedDurationSeconds
+                ?: prescription?.plannedDurationSeconds
+                ?: DurationEstimate.forPrescription(mode, unilateral, prescription),
+            loggedDurationSeconds = occurrence?.loggedDurationSeconds,
+            loggedDurationManual = occurrence?.loggedDurationManual == true,
         )
     }
 
     /**
      * The whole timer the plan implies. A prescription already says how many sets, how long each
-     * one is and how much rest goes between them, which is exactly a program — there is nothing
-     * left to ask. A movement counted in repetitions gets a reps program, because the only honest
-     * length for a set of eights is "however long it takes".
+     * one is, how much rest goes between them, whether both sides are trained and whether the set
+     * is a series of pulses — which is exactly a program, so there is nothing left to ask. One
+     * function builds it and the duration estimate alike, so what the planner says a workout will
+     * take is measured against the sequence the timer actually runs.
      */
     private fun timerProgram(
         name: String,
         mode: ExerciseMode,
+        unilateral: Boolean,
         prescription: PrescriptionPayload?,
         occurrenceId: String? = null,
-    ): TimerProgram {
-        val sets = (prescription?.sets ?: 1).coerceIn(1, 99)
-        val rest = prescription?.restSeconds?.takeIf { it > 0 }
-            ?: timer.lastDurationSeconds(TimerPhase.REST)
-        val timed = mode == ExerciseMode.DURATION || mode == ExerciseMode.ACTIVITY
-        val workSeconds = prescription?.targetDurationSeconds?.takeIf { timed && it > 0 }
-        val workReps = prescription?.targetReps?.takeIf { mode == ExerciseMode.REPETITIONS }
-        return when {
-            workSeconds != null -> TimerProgram(
-                sets = sets,
-                work = WorkKind.TIMED,
-                workSeconds = workSeconds,
-                restSeconds = rest,
-                label = name,
-                occurrenceId = occurrenceId,
-            )
-
-            mode == ExerciseMode.REPETITIONS -> TimerProgram(
-                sets = sets,
-                work = WorkKind.REPS,
-                workReps = workReps,
-                restSeconds = rest,
-                label = name,
-                occurrenceId = occurrenceId,
-            )
-
-            // A timed exercise with no target: there is nothing to count but the rest.
-            else -> TimerProgram.rest(rest, name, occurrenceId)
-        }
-    }
+    ): TimerProgram = PrescriptionProgram.of(
+        label = name,
+        mode = mode,
+        unilateral = unilateral,
+        prescription = prescription,
+        // Only for running it: an exercise that says nothing about rest still gets the rest you
+        // last used rather than none. The *estimate* never sees this, because a planned duration
+        // has to mean the same thing tomorrow as it does today.
+        fallbackRestSeconds = timer.lastDurationSeconds(TimerPhase.REST),
+        occurrenceId = occurrenceId,
+    )
 
     // ------------------------------------------------------------- timer
 

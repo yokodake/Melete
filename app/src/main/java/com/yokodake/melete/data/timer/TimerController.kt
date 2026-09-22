@@ -101,12 +101,11 @@ class TimerController(
     /** How many sets the last program had, so the create screen opens on a familiar number. */
     val lastSets: Int get() = store.lastSets
 
-    fun lastDurationSeconds(phase: TimerPhase): Int = when (phase) {
-        TimerPhase.REST -> store.lastRestSeconds
+    fun lastDurationSeconds(phase: TimerPhase): Int =
         // A preparation has a fixed length, so there is nothing remembered about it; asking
-        // yields the work length, which is what the caller is really after.
-        TimerPhase.WORK, TimerPhase.PREPARE -> store.lastWorkSeconds
-    }
+        // yields the work length, which is what the caller is really after. The same goes for
+        // the short rests a side switch or a repeater pulse uses: those come from a prescription.
+        if (phase.isRest) store.lastRestSeconds else store.lastWorkSeconds
 
     /**
      * Starts a countdown. Called from a tap while the app is on screen, which is what gives the
@@ -119,9 +118,10 @@ class TimerController(
         label: String? = null,
     ) {
         val duration = durationSeconds.coerceAtLeast(1)
-        val program = when (phase) {
-            TimerPhase.REST -> TimerProgram.rest(duration, label)
-            TimerPhase.WORK, TimerPhase.PREPARE -> TimerProgram.work(duration, label)
+        val program = if (phase.isRest) {
+            TimerProgram.rest(duration, label)
+        } else {
+            TimerProgram.work(duration, label)
         }
         start(program, settings)
     }
@@ -134,9 +134,14 @@ class TimerController(
      * front would mean holding a schedule of deadlines that a pause or a skip would invalidate.
      */
     fun start(program: TimerProgram, settings: CueSettings = store.cueSettings) {
-        if (program.work == WorkKind.TIMED) store.lastWorkSeconds = program.workSeconds
-        if (program.restSeconds > 0) store.lastRestSeconds = program.restSeconds
-        store.lastSets = program.sets
+        // Only a plain single-exercise program is worth remembering numbers from: a circuit's
+        // shape belongs to the routine, and reopening the create screen on one of its stations
+        // would be a worse guess than leaving the last standalone timer in place.
+        if (!program.isCircuit) {
+            if (program.work == WorkKind.TIMED) store.lastWorkSeconds = program.workSeconds
+            if (program.restSeconds > 0) store.lastRestSeconds = program.restSeconds
+            store.lastSets = program.sets
+        }
         // The store is the one source of cue settings, because every interval after the first is
         // planned when it begins and reads them from there. Planning the first from an argument
         // and the rest from the store meant a program started with explicit settings quietly

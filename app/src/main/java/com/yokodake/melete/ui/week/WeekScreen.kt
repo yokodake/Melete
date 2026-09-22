@@ -59,6 +59,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.BuildConfig
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.PlannedOccurrence
+import com.yokodake.melete.ui.components.CompactTextField
+import com.yokodake.melete.ui.components.NumberField
+import com.yokodake.melete.ui.theme.doneColors
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
@@ -74,6 +77,8 @@ import java.time.LocalDate
 fun WeekRoute(
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit,
+    onAddCircuit: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit = { _, _ -> },
+    onOpenCircuit: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
@@ -97,6 +102,13 @@ fun WeekRoute(
         onClearSampleData = viewModel::clearSampleData,
         onOpenOccurrence = onOpenOccurrence,
         onAddExercise = { date -> onAddExercise(state.weekStart, date) },
+        onAddActivity = viewModel::addActivity,
+        onAddCircuit = { date -> onAddCircuit(state.weekStart, date) },
+        onOpenCircuit = onOpenCircuit,
+        onMoveCircuit = viewModel::moveCircuit,
+        onRemoveCircuit = viewModel::removeCircuit,
+        onDeleteCircuitWithLog = viewModel::deleteCircuitAndLogs,
+        onCircuitRecordedStations = viewModel::circuitRecordedStations,
         bottomBar = bottomBar,
         modifier = modifier,
     )
@@ -121,6 +133,13 @@ fun WeekScreen(
     onClearSampleData: () -> Unit,
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (LocalDate?) -> Unit,
+    onAddActivity: (String, LocalDate?, Int?) -> Unit = { _, _, _ -> },
+    onAddCircuit: (LocalDate?) -> Unit = {},
+    onOpenCircuit: (String) -> Unit = {},
+    onMoveCircuit: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
+    onRemoveCircuit: (String) -> Unit = {},
+    onDeleteCircuitWithLog: (String, Int) -> Unit = { _, _ -> },
+    onCircuitRecordedStations: suspend (String) -> Int = { 0 },
     bottomBar: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -131,6 +150,11 @@ fun WeekScreen(
     var planning by remember { mutableStateOf<PlanAction?>(null) }
     var removing by remember { mutableStateOf<PlannedOccurrence?>(null) }
     var removingSets by remember { mutableIntStateOf(0) }
+    // A LocalDate, or the sentinel for the week's undated area. Null means no dialog is open.
+    var addingActivityOn by remember { mutableStateOf<LocalDate?>(null) }
+    var movingCircuit by remember { mutableStateOf<WeekItem.Circuit?>(null) }
+    var removingCircuit by remember { mutableStateOf<WeekItem.Circuit?>(null) }
+    var removingCircuitStations by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -216,38 +240,57 @@ fun WeekScreen(
                     is WeekRow.SectionHeading -> SectionHeading(
                         title = row.title,
                         subtitle = row.subtitle,
-                        onAdd = { onAddExercise(null) },
+                        onAddExercise = { onAddExercise(null) },
+                        onAddActivity = { addingActivityOn = UndatedSlot },
+                        onAddCircuit = { onAddCircuit(null) },
                     )
 
                     is WeekRow.DayHeading -> DayHeading(
                         row = row,
-                        onAdd = { onAddExercise(row.date) },
+                        onAddExercise = { onAddExercise(row.date) },
+                        onAddActivity = { addingActivityOn = row.date },
+                        onAddCircuit = { onAddCircuit(row.date) },
                     )
 
-                    is WeekRow.Occurrence -> OccurrenceCard(
-                        occurrence = row.occurrence,
-                        onClick = { onOpenOccurrence(row.occurrence.id) },
-                        onMove = {
-                            // Moving carries the log with it, so the dialog has to know whether
-                            // there is one before it can word itself honestly.
-                            scope.launch {
-                                planning = PlanAction(
-                                    occurrence = row.occurrence,
-                                    loggedSets = onLoggedSetCount(row.occurrence.id),
-                                )
-                            }
-                        },
-                        // A duplicate is a fresh plan and never inherits what was logged.
-                        onDuplicate = { onDuplicateOccurrence(row.occurrence.id) },
-                        onReorder = { onReorderOccurrence(row.occurrence.id, it) },
-                        onRemove = {
-                            // Ask the record what a deletion would cost before offering one.
-                            scope.launch {
-                                removingSets = onLoggedSetCount(row.occurrence.id)
-                                removing = row.occurrence
-                            }
-                        },
-                    )
+                    is WeekRow.Item -> when (val item = row.item) {
+                        is WeekItem.Single -> OccurrenceCard(
+                            occurrence = item.occurrence,
+                            onClick = { onOpenOccurrence(item.occurrence.id) },
+                            onMove = {
+                                // Moving carries the log with it, so the dialog has to know
+                                // whether there is one before it can word itself honestly.
+                                scope.launch {
+                                    planning = PlanAction(
+                                        occurrence = item.occurrence,
+                                        loggedSets = onLoggedSetCount(item.occurrence.id),
+                                    )
+                                }
+                            },
+                            // A duplicate is a fresh plan and never inherits what was logged.
+                            onDuplicate = { onDuplicateOccurrence(item.occurrence.id) },
+                            onReorder = { onReorderOccurrence(item.occurrence.id, it) },
+                            onRemove = {
+                                // Ask the record what a deletion would cost before offering one.
+                                scope.launch {
+                                    removingSets = onLoggedSetCount(item.occurrence.id)
+                                    removing = item.occurrence
+                                }
+                            },
+                        )
+
+                        is WeekItem.Circuit -> CircuitCard(
+                            item = item,
+                            onClick = { onOpenCircuit(item.circuit.id) },
+                            onMove = { movingCircuit = item },
+                            onRemove = {
+                                scope.launch {
+                                    removingCircuitStations =
+                                        onCircuitRecordedStations(item.circuit.id)
+                                    removingCircuit = item
+                                }
+                            },
+                        )
+                    }
 
                     is WeekRow.Hint -> Hint(row.text)
                 }
@@ -292,7 +335,63 @@ fun WeekScreen(
             },
         )
     }
+
+    addingActivityOn?.let { slot ->
+        val date = slot.takeIf { it != UndatedSlot }
+        ActivityDialog(
+            date = date,
+            onDismiss = { addingActivityOn = null },
+            onConfirm = { name, minutes ->
+                addingActivityOn = null
+                onAddActivity(name, date, minutes)
+            },
+        )
+    }
+
+    movingCircuit?.let { item ->
+        PlanTargetDialog(
+            title = if (item.recordedStations > 0) {
+                "Move ${item.circuit.name} and its ${item.recordedStations} recorded " +
+                    "${if (item.recordedStations == 1) "exercise" else "exercises"} to"
+            } else {
+                "Move ${item.circuit.name} to"
+            },
+            initial = PlanTarget(state.weekStart, item.circuit.trainingDate),
+            confirmLabel = "Move",
+            today = state.today,
+            allowUnscheduled = item.recordedStations == 0,
+            onConfirm = { target ->
+                movingCircuit = null
+                onMoveCircuit(item.circuit.id, target.weekStart, target.trainingDate)
+            },
+            onDismiss = { movingCircuit = null },
+        )
+    }
+
+    removingCircuit?.let { item ->
+        CircuitRemoveDialog(
+            item = item,
+            recorded = removingCircuitStations,
+            onDismiss = { removingCircuit = null },
+            onRemovePlan = {
+                removingCircuit = null
+                onRemoveCircuit(item.circuit.id)
+            },
+            onDeleteWithLog = {
+                removingCircuit = null
+                onDeleteCircuitWithLog(item.circuit.id, removingCircuitStations)
+            },
+        )
+    }
 }
+
+/**
+ * The stand-in for "the week's undated area" in a nullable-date dialog slot.
+ *
+ * `null` already means "no dialog open", so the undated case needs a value of its own rather than
+ * a second boolean that could disagree with the first.
+ */
+private val UndatedSlot: LocalDate = LocalDate.MIN
 
 /** A move or a copy waiting for somewhere to go. */
 /**
@@ -385,18 +484,62 @@ private fun RemoveDialog(
     )
 }
 
+/**
+ * The one way to put something in a slot of the week.
+ *
+ * Three kinds of thing can go there and they are genuinely different — a movement from the
+ * library, an activity that is only a name and a duration, a saved circuit — so the plus asks
+ * which rather than assuming the commonest and making the others hard to find.
+ */
 @Composable
-private fun AddButton(description: String, onClick: () -> Unit) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.semantics { contentDescription = description },
-    ) {
-        Text("+", style = MaterialTheme.typography.titleLarge)
+private fun AddButton(
+    description: String,
+    onAddExercise: () -> Unit,
+    onAddActivity: () -> Unit,
+    onAddCircuit: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.semantics { contentDescription = description },
+        ) {
+            Text("+", style = MaterialTheme.typography.titleLarge)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Exercise from the library") },
+                onClick = {
+                    expanded = false
+                    onAddExercise()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Other activity") },
+                onClick = {
+                    expanded = false
+                    onAddActivity()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Circuit") },
+                onClick = {
+                    expanded = false
+                    onAddCircuit()
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun SectionHeading(title: String, subtitle: String?, onAdd: () -> Unit) {
+private fun SectionHeading(
+    title: String,
+    subtitle: String?,
+    onAddExercise: () -> Unit,
+    onAddActivity: () -> Unit,
+    onAddCircuit: () -> Unit,
+) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -413,14 +556,24 @@ private fun SectionHeading(title: String, subtitle: String?, onAdd: () -> Unit) 
                     )
                 }
             }
-            AddButton("Add an exercise without a date", onAdd)
+            AddButton(
+                description = "Add something without a date",
+                onAddExercise = onAddExercise,
+                onAddActivity = onAddActivity,
+                onAddCircuit = onAddCircuit,
+            )
         }
         HorizontalDivider()
     }
 }
 
 @Composable
-private fun DayHeading(row: WeekRow.DayHeading, onAdd: () -> Unit) {
+private fun DayHeading(
+    row: WeekRow.DayHeading,
+    onAddExercise: () -> Unit,
+    onAddActivity: () -> Unit,
+    onAddCircuit: () -> Unit,
+) {
     Column {
         Row(
             modifier = Modifier
@@ -443,7 +596,12 @@ private fun DayHeading(row: WeekRow.DayHeading, onAdd: () -> Unit) {
                 Chip("Today", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
             }
             Spacer(modifier = Modifier.weight(1f))
-            AddButton("Add an exercise to ${WeekMath.dayLabel(row.date)}", onAdd)
+            AddButton(
+                description = "Add something to ${WeekMath.dayLabel(row.date)}",
+                onAddExercise = onAddExercise,
+                onAddActivity = onAddActivity,
+                onAddCircuit = onAddCircuit,
+            )
         }
         HorizontalDivider(
             color = if (row.isToday) {
@@ -528,17 +686,26 @@ private fun OccurrenceCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                // What it actually took. The number worth seeing at a glance when looking back
-                // over a week, so it is the one thing on the card set in bold.
-                if (occurrence.state == OccurrenceState.COMPLETED && occurrence.maxLoad != null) {
-                    Text(
-                        text = buildString {
-                            append(trimNumber(occurrence.maxLoad))
-                            occurrence.measurementUnit?.let { append(" ").append(it) }
+                // What it actually took. The numbers worth seeing at a glance when looking back
+                // over a week, so they are the one thing on the card set in bold. Time appears
+                // only once it has been recorded: an estimate is not a thing that happened.
+                if (occurrence.state == OccurrenceState.COMPLETED) {
+                    val done = listOfNotNull(
+                        occurrence.maxLoad?.let { load ->
+                            buildString {
+                                append(trimNumber(load))
+                                occurrence.measurementUnit?.let { append(" ").append(it) }
+                            }
                         },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
+                        occurrence.loggedDurationSeconds?.let(PrescriptionSummary::duration),
                     )
+                    if (done.isNotEmpty()) {
+                        Text(
+                            text = done.joinToString(" · "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
                 occurrence.comment?.let {
                     Text(
@@ -585,6 +752,208 @@ private fun Hint(text: String) {
     )
 }
 
+
+/**
+ * A scheduled circuit: one card for the whole thing, with its stations listed inside it.
+ *
+ * One card because a circuit is one decision — you do the whole thing or you do not — and because
+ * four stations loose in a day would read as four unrelated exercises that happen to be adjacent.
+ * It is not itself a piece of training: the stations are, the card only says they belong together,
+ * and nothing counts it.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CircuitCard(
+    item: WeekItem.Circuit,
+    onClick: () -> Unit,
+    onMove: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ),
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.circuit.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = circuitSummary(item),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (item.completed) {
+                        val colors = doneColors()
+                        Chip("Done", colors.first, colors.second)
+                    }
+                }
+                item.stations.forEach { station ->
+                    Row(
+                        modifier = Modifier.padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CategoryDot(station.category)
+                        Text(
+                            text = station.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (station.hasRecord) {
+                            Text(
+                                text = "✓",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = doneColors().first,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text("Move") },
+                onClick = {
+                    menuOpen = false
+                    onMove()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Remove from the week") },
+                onClick = {
+                    menuOpen = false
+                    onRemove()
+                },
+            )
+        }
+    }
+}
+
+/** The shape of a circuit in one line: how many times round, and what falls between. */
+private fun circuitSummary(item: WeekItem.Circuit): String {
+    val parts = mutableListOf<String>()
+    parts += "${item.circuit.rounds} × ${item.stations.size} exercises"
+    if (item.circuit.transitionSeconds > 0) {
+        parts += "${PrescriptionSummary.duration(item.circuit.transitionSeconds)} between"
+    }
+    if (item.circuit.roundRestSeconds > 0) {
+        parts += "${PrescriptionSummary.duration(item.circuit.roundRestSeconds)} per round"
+    }
+    if (item.recordedStations in 1 until item.stations.size) {
+        parts += "${item.recordedStations} of ${item.stations.size} recorded"
+    }
+    return parts.joinToString(" · ")
+}
+
+/**
+ * Naming an activity that is only a duration.
+ *
+ * Two fields and no library: the point of this path is that a climbing session or a class can be
+ * put in the week in a few seconds, without first deciding whether it deserves a definition. The
+ * minutes are optional, because you often add it before you have done it.
+ */
+@Composable
+private fun ActivityDialog(
+    date: LocalDate?,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int?) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Other activity") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = date?.let { "On ${WeekMath.dayLabel(it)}." }
+                        ?: "Waiting in this week, with no date yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                CompactTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = "What was it",
+                    placeholder = "Outdoor bouldering",
+                    minHeight = 48,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                NumberField(
+                    label = "Minutes (optional)",
+                    value = minutes,
+                    onValueChange = { minutes = it },
+                    modifier = Modifier.fillMaxWidth(0.6f),
+                )
+                Text(
+                    text = "No library entry is created. Use the library for something you will " +
+                        "plan again.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name, minutes.toIntOrNull()) },
+                enabled = name.isNotBlank(),
+            ) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Taking a circuit back out of the week.
+ *
+ * Same rule as a single exercise: a plan can go, and a record can only go by name. The count is
+ * of *exercises* with something recorded, because that is what would be destroyed — the circuit
+ * container itself holds nothing.
+ */
+@Composable
+private fun CircuitRemoveDialog(
+    item: WeekItem.Circuit,
+    recorded: Int,
+    onDismiss: () -> Unit,
+    onRemovePlan: () -> Unit,
+    onDeleteWithLog: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(item.circuit.name) },
+        text = {
+            Text(
+                text = if (recorded > 0) {
+                    "$recorded of its ${item.stations.size} exercises have been recorded. " +
+                        "Removing the circuit would destroy that too."
+                } else {
+                    "Nothing has been recorded here, so removing it loses only the plan."
+                },
+            )
+        },
+        confirmButton = {
+            if (recorded > 0) {
+                TextButton(onClick = onDeleteWithLog) {
+                    Text("Delete it and the $recorded recorded")
+                }
+            } else {
+                TextButton(onClick = onRemovePlan) { Text("Remove from the week") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep it") } },
+    )
+}
 /** Flattened list rows, so that "scroll near today" is a plain list index. */
 sealed interface WeekRow {
     val key: String
@@ -599,8 +968,9 @@ sealed interface WeekRow {
         override val key: String get() = "day-$date"
     }
 
-    data class Occurrence(val occurrence: PlannedOccurrence) : WeekRow {
-        override val key: String get() = "occurrence-${occurrence.id}"
+    /** One card: a standalone exercise, or a whole circuit. */
+    data class Item(val item: WeekItem) : WeekRow {
+        override val key: String get() = item.key
     }
 
     data class Hint(override val key: String, val text: String) : WeekRow
@@ -617,14 +987,14 @@ private fun WeekUiState.toRows(): List<WeekRow> = buildList {
     if (unscheduled.isEmpty()) {
         add(WeekRow.Hint("hint-unscheduled", "Nothing waiting without a date."))
     } else {
-        unscheduled.forEach { add(WeekRow.Occurrence(it)) }
+        unscheduled.forEach { add(WeekRow.Item(it)) }
     }
     days.forEach { day ->
         add(WeekRow.DayHeading(day.date, day.isToday))
         if (day.items.isEmpty()) {
             add(WeekRow.Hint("hint-${day.date}", "Nothing planned."))
         } else {
-            day.items.forEach { add(WeekRow.Occurrence(it)) }
+            day.items.forEach { add(WeekRow.Item(it)) }
         }
     }
 }

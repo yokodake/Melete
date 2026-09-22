@@ -12,6 +12,7 @@ import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.data.OccurrenceDetail
 import com.yokodake.melete.data.PerformedSet
 import com.yokodake.melete.data.PlannedOccurrence
+import com.yokodake.melete.data.OccurrenceLogWrite
 import com.yokodake.melete.data.SetWrite
 import com.yokodake.melete.data.PreviousResult
 import com.yokodake.melete.data.TrainingRepository
@@ -111,6 +112,16 @@ data class SetTable(
     val effort: EffortLevel? = null,
     /** True once the sets have been written, so marking done again corrects rather than doubles. */
     val committed: Boolean = false,
+    /**
+     * How long it took, in whole minutes, as typed.
+     *
+     * Empty is not zero: it means the app should work the number out from the plan, and the grey
+     * value in the field is what it would save. Typing makes the number yours; clearing it hands
+     * the question back.
+     */
+    val durationMinutes: String = "",
+    /** Whether the duration row is on screen. Off by default for anything with a set table. */
+    val showDuration: Boolean = false,
 ) {
     /**
      * The table with its max load read back off the rows.
@@ -186,6 +197,33 @@ data class LoggerUiState(
     val comment: String = "",
     val message: String? = null,
 ) {
+    /**
+     * A duration-only activity: a climbing session, a class, a run.
+     *
+     * There is no set table because there are no sets. What it records is that it happened, how
+     * long it took and how it felt — and that has to be enough, because inventing a set record so
+     * the rest of the app has something to count would be a lie about the training.
+     */
+    val isActivity: Boolean get() = occurrence?.mode == ExerciseMode.ACTIVITY
+
+    /** What the app would save if the duration field is left alone. Null when it cannot tell. */
+    val inferredDurationSeconds: Int? get() = occurrence?.estimatedDurationSeconds
+
+    /** Whole minutes of [inferredDurationSeconds], for showing in grey where the answer goes. */
+    val inferredDurationMinutes: String?
+        get() = inferredDurationSeconds?.let { ((it + 30) / 60).coerceAtLeast(0).toString() }
+
+    /**
+     * The duration that will actually be written, and whether it counts as the user's own number.
+     *
+     * One place decides it, so the grey hint, the saved value and its provenance flag can never
+     * disagree about what the screen was offering.
+     */
+    val resolvedDuration: Pair<Int?, Boolean>
+        get() = table.durationMinutes.toIntOrNull()
+            ?.let { (it * 60) to true }
+            ?: (inferredDurationSeconds to false)
+
     val canConfirm: Boolean
         get() = occurrence != null && !draft.toPayload(
             occurrence.measurementUnit,
@@ -350,8 +388,17 @@ class LoggerViewModel(
             },
             // The plan says how hard this was meant to feel, so that is what the logger starts
             // from; a reopened log shows what it was actually rated.
-            effort = recorded.firstOrNull()?.payload?.effort ?: occurrence.prescription?.effort,
+            effort = recorded.firstOrNull()?.payload?.effort
+                ?: occurrence.loggedEffort
+                ?: occurrence.prescription?.effort,
             committed = recorded.isNotEmpty(),
+            // Only a duration the user typed comes back as text. One that was inferred stays
+            // inferred, so re-saving picks up a better estimate instead of freezing an old one.
+            durationMinutes = occurrence.loggedDurationSeconds
+                ?.takeIf { occurrence.loggedDurationManual }
+                ?.let { ((it + 30) / 60).toString() }
+                .orEmpty(),
+            showDuration = occurrence.loggedDurationManual || occurrence.mode == ExerciseMode.ACTIVITY,
         ).withDeducedMax()
     }
 
@@ -398,6 +445,27 @@ class LoggerViewModel(
 
     fun setTableEffort(effort: EffortLevel?) {
         table.update { it.copy(effort = effort) }
+    }
+
+    /**
+     * Types a duration, in whole minutes.
+     *
+     * Blank is a real state and means "work it out for me", which is why this never substitutes
+     * the inferred value into the field: the moment it did, an untouched estimate would start
+     * looking like something the user had said.
+     */
+    fun setDurationMinutes(value: String) {
+        table.update { it.copy(durationMinutes = value.filter(Char::isDigit).take(4)) }
+    }
+
+    /** Shows or hides the duration row. Hiding it never discards what has been typed. */
+    fun toggleDuration() {
+        table.update { it.copy(showDuration = !it.showDuration) }
+    }
+
+    /** Corrects the name of an activity that was typed in rather than picked from the library. */
+    fun renameActivity(name: String) {
+        viewModelScope.launch { repository.renameOneOffActivity(occurrenceId, name) }
     }
 
     /**
@@ -579,21 +647,39 @@ class LoggerViewModel(
     fun markDone() {
         val state = uiState.value
         val occurrence = state.occurrence ?: return
-        val measured = occurrence.measurementUnit != null
-        val blocker = state.table.blocker(measured)
-        if (blocker != null) {
-            transient.update { it.copy(message = blocker) }
-            return
+        // An activity has no sets to check: that it happened, and roughly how long it took, is the
+        // whole of what it has to say, and a missing duration is still a workout.
+        if (!state.isActivity) {
+            val blocker = state.table.blocker(occurrence.measurementUnit != null)
+            if (blocker != null) {
+                transient.update { it.copy(message = blocker) }
+                return
+            }
         }
-        val rows = state.table.resolved()
+        val sets = if (state.isActivity) {
+            emptyList()
+        } else {
+            state.table.resolved().flatMap { row -> writesFor(occurrence, row) }
+        }
+        val (durationSeconds, durationManual) = state.resolvedDuration
         viewModelScope.launch {
-            repository.replaceSetsForOccurrence(
-                occurrenceId = occurrenceId,
+            // One transaction for the sets, the note, the duration and the state: logging is a
+            // single act, and half of it landing would be a record of a workout that did not
+            // happen that way.
+            repository.saveLogs(
                 trainingDate = state.targetDate,
-                sets = rows.flatMap { row -> writesFor(occurrence, row) },
+                writes = listOf(
+                    OccurrenceLogWrite(
+                        occurrenceId = occurrenceId,
+                        completed = true,
+                        sets = sets,
+                        comment = state.comment,
+                        effort = state.table.effort,
+                        durationSeconds = durationSeconds,
+                        durationManual = durationManual,
+                    )
+                ),
             )
-            repository.setOccurrenceComment(occurrenceId, state.comment)
-            repository.setOccurrenceState(occurrenceId, OccurrenceState.COMPLETED)
             finished.emit(Unit)
         }
     }

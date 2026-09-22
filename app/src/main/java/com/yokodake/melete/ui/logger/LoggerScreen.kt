@@ -173,11 +173,13 @@ fun LoggerScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item {
-                PlannedCard(
-                    occurrence = occurrence,
-                    onEdit = viewModel::openPrescriptionEditor,
-                )
+            if (!(state.isActivity && occurrence.prescription?.targetDurationSeconds == null)) {
+                item {
+                    PlannedCard(
+                        occurrence = occurrence,
+                        onEdit = viewModel::openPrescriptionEditor,
+                    )
+                }
             }
             if (occurrence.trainingDate == null) {
                 item {
@@ -192,6 +194,14 @@ fun LoggerScreen(
                 item { SectionLabel("Previous results") }
                 items(items = state.previousResults, key = { it.trainingDate.toEpochDay() }) {
                     PreviousResultCard(it, occurrence)
+                }
+            }
+            if (state.isActivity && occurrence.isOneOff) {
+                item {
+                    ActivityNameField(
+                        name = occurrence.name,
+                        onRename = viewModel::renameActivity,
+                    )
                 }
             }
             item {
@@ -214,45 +224,55 @@ fun LoggerScreen(
                     )
                 }
             }
-            if (occurrence.measurementUnit != null) {
-                item {
-                    MaxLoadRow(
-                        table = state.table,
-                        unit = occurrence.measurementUnit,
-                        unilateral = occurrence.unilateral,
-                        onMaxLoad = viewModel::setMaxLoad,
-                    )
-                }
-            }
-            item {
-                SetTableHeader(
-                    unit = occurrence.measurementUnit,
-                    unilateral = occurrence.unilateral,
-                )
-            }
-            item {
-                // One item holding the whole table: the gap between sets is then 4dp rather than
-                // the 8dp the page puts between its sections, which is the right relationship —
-                // rows of one table belong closer together than sections of a screen.
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    state.table.rows.forEach { row ->
-                        SetTableRow(
-                            row = row,
+            if (!state.isActivity) {
+                if (occurrence.measurementUnit != null) {
+                    item {
+                        MaxLoadRow(
+                            table = state.table,
                             unit = occurrence.measurementUnit,
                             unilateral = occurrence.unilateral,
-                            onLoad = viewModel::setRowLoad,
-                            onToggle = { viewModel.toggleRow(row.number) },
+                            onMaxLoad = viewModel::setMaxLoad,
                         )
+                    }
+                }
+                item {
+                    SetTableHeader(
+                        unit = occurrence.measurementUnit,
+                        unilateral = occurrence.unilateral,
+                    )
+                }
+                item {
+                    // One item holding the whole table: the gap between sets is then 4dp rather
+                    // than the 8dp the page puts between its sections, which is the right
+                    // relationship — rows of one table belong closer together than sections of a
+                    // screen.
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        state.table.rows.forEach { row ->
+                            SetTableRow(
+                                row = row,
+                                unit = occurrence.measurementUnit,
+                                unilateral = occurrence.unilateral,
+                                onLoad = viewModel::setRowLoad,
+                                onToggle = { viewModel.toggleRow(row.number) },
+                            )
+                        }
+                    }
+                }
+                item {
+                    TextButton(
+                        onClick = viewModel::addRow,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Text("+  Add set")
                     }
                 }
             }
             item {
-                TextButton(
-                    onClick = viewModel::addRow,
-                    modifier = Modifier.padding(top = 4.dp),
-                ) {
-                    Text("+  Add set")
-                }
+                DurationRow(
+                    state = state,
+                    onValueChange = viewModel::setDurationMinutes,
+                    onToggle = viewModel::toggleDuration,
+                )
             }
             item {
                 CommentBox(comment = state.comment, onChange = viewModel::updateComment)
@@ -260,7 +280,9 @@ fun LoggerScreen(
             item {
                 DoneRow(
                     table = state.table,
-                    measured = occurrence.measurementUnit != null,
+                    // An activity has nothing to check: that it happened is the whole claim.
+                    measured = !state.isActivity && occurrence.measurementUnit != null,
+                    blocked = !state.isActivity,
                     onDone = viewModel::markDone,
                 )
             }
@@ -492,7 +514,12 @@ private fun CommentBox(comment: String, onChange: (String) -> Unit) {
  * will not explain itself is the worst of both.
  */
 @Composable
-private fun DoneRow(table: SetTable, measured: Boolean, onDone: () -> Unit) {
+private fun DoneRow(
+    table: SetTable,
+    measured: Boolean,
+    blocked: Boolean,
+    onDone: () -> Unit,
+) {
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Button(
             onClick = onDone,
@@ -500,7 +527,7 @@ private fun DoneRow(table: SetTable, measured: Boolean, onDone: () -> Unit) {
         ) {
             Text(if (table.committed) "Save changes" else "Mark done")
         }
-        table.blocker(measured)?.let {
+        table.blocker(measured).takeIf { blocked }?.let {
             Text(
                 text = it,
                 style = MaterialTheme.typography.bodySmall,
@@ -509,6 +536,86 @@ private fun DoneRow(table: SetTable, measured: Boolean, onDone: () -> Unit) {
             )
         }
     }
+}
+
+/**
+ * How long it took.
+ *
+ * Behind a control for anything with a set table, because most sessions do not need the number
+ * typed and one more field in the logging path is one more thing between you and the next set. An
+ * activity is the exception: its duration is most of what it has to say, so it is simply there.
+ *
+ * An empty field is not zero. The estimate sits in it in grey — that is what will be saved, marked
+ * as inferred — and typing over it makes the number yours. Clearing it hands the question back.
+ */
+@Composable
+private fun DurationRow(
+    state: LoggerUiState,
+    onValueChange: (String) -> Unit,
+    onToggle: () -> Unit,
+) {
+    if (!state.table.showDuration) {
+        TextButton(onClick = onToggle) {
+            Text(
+                state.inferredDurationSeconds
+                    ?.let { "+  Time taken (${PrescriptionSummary.duration(it)})" }
+                    ?: "+  Time taken"
+            )
+        }
+        return
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Time taken",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = if (state.table.durationMinutes.isBlank()) {
+                    state.inferredDurationMinutes
+                        ?.let { "Worked out from the plan" }
+                        ?: "Not known, and not guessed"
+                } else {
+                    "Your own number"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        NumberField(
+            label = "min",
+            value = state.table.durationMinutes,
+            onValueChange = onValueChange,
+            placeholder = state.inferredDurationMinutes,
+            modifier = Modifier.width(110.dp),
+        )
+    }
+}
+
+/**
+ * The name of a one-off activity, editable in place.
+ *
+ * A typed-in activity has no library entry to open and rename, and "Runnign" staring back at you
+ * from the diary for a year is not acceptable. Correcting it also corrects its derived identity,
+ * so two sessions spelled the same way still group together.
+ */
+@Composable
+private fun ActivityNameField(name: String, onRename: (String) -> Unit) {
+    var typed by remember(name) { mutableStateOf(name) }
+    CompactTextField(
+        value = typed,
+        onValueChange = {
+            typed = it
+            onRename(it)
+        },
+        label = "Activity",
+        minHeight = 48,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /** The things you do to a workout now and again, kept out of the way of the things you always do. */

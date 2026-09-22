@@ -26,7 +26,10 @@ import com.yokodake.melete.ui.detail.ExerciseDetailRoute
 import com.yokodake.melete.ui.library.ExerciseEditorRoute
 import com.yokodake.melete.ui.library.LibraryPickerRoute
 import com.yokodake.melete.ui.library.LibraryRoute
+import com.yokodake.melete.ui.circuit.CircuitReviewRoute
 import com.yokodake.melete.ui.logger.LoggerRoute
+import com.yokodake.melete.ui.routine.RoutineEditorRoute
+import com.yokodake.melete.ui.routine.RoutineListRoute
 import com.yokodake.melete.ui.timer.TimerRoute
 import com.yokodake.melete.ui.week.WeekRoute
 import kotlinx.serialization.Serializable
@@ -74,6 +77,31 @@ data class ExerciseDetailDestination(
 data class LoggerDestination(val occurrenceId: String)
 
 /**
+ * The saved circuits: a list to manage, or a picker when a week slot is waiting for one.
+ *
+ * One destination for both, because it is the same list and only the tap differs. A week start of
+ * [NO_TRAINING_DATE] means "just browsing"; anything else is a slot to copy a circuit into.
+ */
+@Serializable
+data class RoutineListDestination(
+    val weekStartEpochDay: Long = NO_TRAINING_DATE,
+    val trainingDateEpochDay: Long = NO_TRAINING_DATE,
+) {
+    val weekStart: LocalDate?
+        get() = weekStartEpochDay.takeIf { it != NO_TRAINING_DATE }?.let(LocalDate::ofEpochDay)
+
+    val trainingDate: LocalDate?
+        get() = trainingDateEpochDay.takeIf { it != NO_TRAINING_DATE }?.let(LocalDate::ofEpochDay)
+}
+
+@Serializable
+data class RoutineEditorDestination(val routineId: String? = null)
+
+/** Logging a whole scheduled circuit in one review. */
+@Serializable
+data class CircuitReviewDestination(val circuitInstanceId: String)
+
+/**
  * The tabs of the app. Focused flows opened from a tab — the picker, the exercise editor, the
  * logger — deliberately hide the bar: they are one task with a back button, not a place to switch
  * away from mid-set.
@@ -119,6 +147,15 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                         )
                     )
                 },
+                onAddCircuit = { weekStart, date ->
+                    navController.navigate(
+                        RoutineListDestination(
+                            weekStartEpochDay = weekStart.toEpochDay(),
+                            trainingDateEpochDay = date?.toEpochDay() ?: NO_TRAINING_DATE,
+                        )
+                    )
+                },
+                onOpenCircuit = { navController.navigate(CircuitReviewDestination(it)) },
                 bottomBar = bottomBar,
             )
         }
@@ -128,12 +165,14 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
                 },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
+                onOpenCircuits = { navController.navigate(RoutineListDestination()) },
                 bottomBar = bottomBar,
             )
         }
         composable<TimerDestination> {
             TimerRoute(
                 onLog = { navController.navigate(LoggerDestination(it)) },
+                onReviewCircuit = { navController.navigate(CircuitReviewDestination(it)) },
                 bottomBar = bottomBar,
             )
         }
@@ -165,6 +204,28 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         }
         composable<LoggerDestination> {
             LoggerRoute(onBack = { navController.popBackStack() })
+        }
+        composable<RoutineListDestination> {
+            RoutineListRoute(
+                onNewRoutine = { navController.navigate(RoutineEditorDestination()) },
+                onEditRoutine = { navController.navigate(RoutineEditorDestination(it)) },
+                onScheduled = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<RoutineEditorDestination> {
+            RoutineEditorRoute(
+                onDone = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<CircuitReviewDestination> {
+            CircuitReviewRoute(
+                onBack = { navController.popBackStack() },
+                // Running it moves to the timer tab, which is where a countdown lives for as long
+                // as it runs; the review stays behind it on the back stack.
+                onStartTimer = { navController.switchTab(TimerDestination) },
+            )
         }
     }
 }

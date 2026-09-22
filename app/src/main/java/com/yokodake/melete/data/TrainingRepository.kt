@@ -1,10 +1,12 @@
 package com.yokodake.melete.data
 
 import androidx.room.withTransaction
+import com.yokodake.melete.core.OneOffActivity
 import com.yokodake.melete.core.Planning
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.dao.ExerciseWithDefaultPrescription
 import com.yokodake.melete.data.dao.OccurrenceWithPrescription
+import com.yokodake.melete.data.dao.SetPayloadRow
 import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.ExerciseEntity
@@ -12,15 +14,25 @@ import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.PrescriptionEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
+import com.yokodake.melete.data.dao.RoutineWithEntries
+import com.yokodake.melete.data.entity.CircuitInstanceEntity
+import com.yokodake.melete.data.entity.RoutineEntity
+import com.yokodake.melete.data.entity.RoutineEntryEntity
 import com.yokodake.melete.data.model.ACTUAL_SET_PAYLOAD_VERSION
 import com.yokodake.melete.data.model.ActualSetJson
 import com.yokodake.melete.data.model.ActualSetPayload
+import com.yokodake.melete.data.model.CIRCUIT_SNAPSHOT_VERSION
+import com.yokodake.melete.data.model.CircuitEntrySnapshot
+import com.yokodake.melete.data.model.CircuitSnapshotJson
+import com.yokodake.melete.data.model.CircuitStructureSnapshot
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PRESCRIPTION_PAYLOAD_VERSION
 import com.yokodake.melete.data.model.PrescriptionJson
 import com.yokodake.melete.data.model.PrescriptionPayload
+import com.yokodake.melete.data.timer.DurationEstimate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -53,11 +65,55 @@ data class PlannedOccurrence(
      */
     /** The heaviest set logged against this placement, when anything was. */
     val maxLoad: Double? = null,
+    /**
+     * How many sets are recorded against it.
+     *
+     * Carried so that reopening a log can show *which* sets happened rather than assuming all of
+     * them did: two rounds of a three-round circuit is a real session, and the review has to come
+     * back saying so.
+     */
+    val loggedSets: Int = 0,
     val state: OccurrenceState,
     val comment: String?,
     val orderIndex: Int,
     val isSampleData: Boolean,
-)
+    /** How long it took, once logged. Absent means unknown, never zero. */
+    val loggedDurationSeconds: Int? = null,
+    /** Whether that number was typed or worked out. */
+    val loggedDurationManual: Boolean = false,
+    /** How hard it was, for work that records no sets at all. */
+    val loggedEffort: EffortLevel? = null,
+    /** An activity typed in by name rather than picked from the library. */
+    val isOneOff: Boolean = false,
+    /** The scheduled circuit this is a station of, when it is one. */
+    val circuitInstanceId: String? = null,
+    val circuitPosition: Int? = null,
+) {
+    /**
+     * How long the plan says this should take, worked out from its shape. Null when there is
+     * nothing to go on — a missing estimate is an answer, not a zero.
+     */
+    val estimatedDurationSeconds: Int?
+        get() = prescription?.plannedDurationSeconds
+            ?: DurationEstimate.forPrescription(mode, unilateral, prescription)
+
+    /**
+     * The duration to show, and whether it is a real record.
+     *
+     * A logged number wins; otherwise the estimate stands in, greyed, as a suggestion. The two are
+     * never confused, because [loggedDurationSeconds] being absent is what says so.
+     */
+    val displayDurationSeconds: Int? get() = loggedDurationSeconds ?: estimatedDurationSeconds
+
+    /**
+     * Whether this occurrence is evidence of training, not just a plan.
+     *
+     * Logged sets are the usual answer, but a duration-only activity records none and is still a
+     * workout that happened, so completion counts too. Everything that protects history —
+     * deletion, unscheduling, retiring a definition — asks this rather than counting sets.
+     */
+    val hasRecord: Boolean get() = state == OccurrenceState.COMPLETED
+}
 
 /** A library entry and its current default prescription. */
 data class LibraryExercise(
@@ -88,6 +144,11 @@ data class ExerciseRemoval(
     val plannedCopies: Int,
     /** Sets ever logged against it, under any copy. */
     val loggedSets: Int,
+    /**
+     * Copies of it that were marked done. A duration-only activity writes no sets, so this is the
+     * only evidence a year of climbing sessions leaves behind.
+     */
+    val completedCopies: Int = 0,
 ) {
     enum class Kind {
         /** Nothing refers to it: created by mistake, never used. */
@@ -102,7 +163,7 @@ data class ExerciseRemoval(
 
     val kind: Kind
         get() = when {
-            loggedSets > 0 -> Kind.LOGGED
+            loggedSets > 0 || completedCopies > 0 -> Kind.LOGGED
             plannedCopies > 0 -> Kind.PLANNED_NEVER_LOGGED
             else -> Kind.UNUSED
         }
@@ -125,6 +186,103 @@ data class ExerciseDraft(
     val description: String?,
     val category: ExerciseCategory?,
     val defaultPrescription: PrescriptionPayload,
+)
+
+
+/** One planned exercise inside a routine, as the editor holds it. */
+data class RoutineEntryDraft(
+    val exerciseId: String,
+    val prescription: PrescriptionPayload?,
+)
+
+/** Everything the routine editor writes. */
+data class RoutineDraft(
+    val name: String,
+    val rounds: Int,
+    val transitionSeconds: Int,
+    val roundRestSeconds: Int,
+    val entries: List<RoutineEntryDraft>,
+)
+
+/** One station of a routine, joined to what the library currently says about the exercise. */
+data class RoutineEntryView(
+    val id: String,
+    val exerciseId: String,
+    val name: String,
+    val mode: ExerciseMode,
+    val unilateral: Boolean,
+    val measurementUnit: String?,
+    val measurementMeaning: MeasurementMeaning?,
+    val category: ExerciseCategory?,
+    /** This station's own copy. Editing it never reaches the library default. */
+    val prescription: PrescriptionPayload?,
+    val orderIndex: Int,
+    /** The library entry it came from is gone, so only the snapshotted name is left. */
+    val definitionMissing: Boolean,
+)
+
+/** A saved routine: a named circuit or superset, ready to be copied into a week. */
+data class Routine(
+    val id: String,
+    val name: String,
+    val rounds: Int,
+    val transitionSeconds: Int,
+    val roundRestSeconds: Int,
+    val structureVersion: Int,
+    val entries: List<RoutineEntryView>,
+)
+
+/** A routine copied into a week, together with the occurrences that are its stations. */
+data class ScheduledCircuit(
+    val id: String,
+    val routineId: String,
+    val name: String,
+    val rounds: Int,
+    val transitionSeconds: Int,
+    val roundRestSeconds: Int,
+    val weekStart: LocalDate,
+    val trainingDate: LocalDate?,
+    val orderIndex: Int,
+    val stations: List<PlannedOccurrence>,
+) {
+    /** A circuit is done when every station of it is. It counts nothing of its own. */
+    val completed: Boolean get() = stations.isNotEmpty() && stations.all { it.hasRecord }
+
+    val anyRecorded: Boolean get() = stations.any { it.hasRecord }
+}
+
+/** A scheduled circuit as the planner sees it: the card, without its stations. */
+data class WeekCircuit(
+    val id: String,
+    val routineId: String,
+    val name: String,
+    val rounds: Int,
+    val transitionSeconds: Int,
+    val roundRestSeconds: Int,
+    val weekStart: LocalDate,
+    val trainingDate: LocalDate?,
+    val orderIndex: Int,
+)
+
+/** What removing a routine would cost. */
+data class RoutineRemoval(val routine: Routine, val scheduledCopies: Int, val recordedCopies: Int)
+
+/**
+ * One occurrence's whole log, about to be written.
+ *
+ * Everything a workout has to say travels together — its sets, its note, its duration and whether
+ * it happened — because logging is one act. A list of these is what makes a circuit's review a
+ * single atomic save rather than one transaction per exercise, half of which could land.
+ */
+data class OccurrenceLogWrite(
+    val occurrenceId: String,
+    val completed: Boolean,
+    val sets: List<SetWrite> = emptyList(),
+    val comment: String? = null,
+    /** Read only where there are no sets to carry it. */
+    val effort: EffortLevel? = null,
+    val durationSeconds: Int? = null,
+    val durationManual: Boolean = false,
 )
 
 /** One performed set. [id] is the identity; the set number on screen is only a position. */
@@ -157,6 +315,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
     private val dao = database.trainingDao()
     private val library = database.libraryDao()
     private val logging = database.loggingDao()
+    private val routines = database.routineDao()
 
     // ---------------------------------------------------------------- week
 
@@ -172,18 +331,15 @@ class TrainingRepository(private val database: MeleteDatabase) {
         logging.observeSetPayloadsInWeek(weekStart.toEpochDay()),
     ) { rows, payloads ->
         // The heaviest set of each workout, so a card that says it is done can say what it took.
-        val heaviest: Map<String, Double> = payloads
-            .mapNotNull { row ->
-                val value = runCatching { ActualSetJson.decode(row.payloadJson) }
-                    .getOrNull()
-                    ?.measurement
-                    ?.value
-                value?.let { row.occurrenceId to it }
-            }
-            .groupBy({ it.first }, { it.second })
-            .mapValues { (_, values) -> values.max() }
+        val heaviest = payloads.heaviestByOccurrence()
+        val counts = payloads.groupingBy { it.occurrenceId }.eachCount()
 
-        rows.map { it.toPlanned(maxLoad = heaviest[it.occurrence.id]) }
+        rows.map {
+            it.toPlanned(
+                maxLoad = heaviest[it.occurrence.id],
+                loggedSets = counts[it.occurrence.id] ?: 0,
+            )
+        }
     }
 
     /** Every placement of one exercise, including those whose definition has been retired. */
@@ -309,6 +465,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 exercise = exercise,
                 plannedCopies = library.countOccurrencesOf(exerciseId),
                 loggedSets = library.countSetsOf(exerciseId),
+                completedCopies = library.countCompletedOccurrencesOf(exerciseId),
             )
         }
 
@@ -326,7 +483,11 @@ class TrainingRepository(private val database: MeleteDatabase) {
      */
     suspend fun removeExercise(exerciseId: String): ExerciseRemoval.Outcome =
         database.withTransaction {
-            if (library.countSetsOf(exerciseId) > 0) {
+            // Either kind of evidence outranks a plan: a logged set, or a completed copy that
+            // never had sets to log because it was an activity.
+            if (library.countSetsOf(exerciseId) > 0 ||
+                library.countCompletedOccurrencesOf(exerciseId) > 0
+            ) {
                 library.markExerciseDeleted(exerciseId, System.currentTimeMillis())
                 return@withTransaction ExerciseRemoval.Outcome.RETIRED
             }
@@ -453,7 +614,9 @@ class TrainingRepository(private val database: MeleteDatabase) {
     ): Boolean = database.withTransaction {
         val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction false
         val loggedSets = logging.countSetsForOccurrence(occurrenceId)
-        if (trainingDate == null && loggedSets > 0) return@withTransaction false
+        // Work that happened happened on a day, whether it left sets behind or only a duration.
+        val trained = loggedSets > 0 || occurrence.state == OccurrenceState.COMPLETED
+        if (trainingDate == null && trained) return@withTransaction false
         dao.updateOccurrence(
             occurrence.copy(
                 weekStartEpochDay = weekStart.toEpochDay(),
@@ -590,10 +753,19 @@ class TrainingRepository(private val database: MeleteDatabase) {
         }
     }
 
-    /** Only possible while nothing has been logged; the database enforces that with RESTRICT. */
+    /**
+     * Only possible while nothing has been recorded.
+     *
+     * Logged sets are the usual guard and the database enforces them with RESTRICT, but an
+     * activity marked done has no sets and is still a record of training — so completion is
+     * refused here too, rather than letting a year of climbing sessions be tidied away.
+     */
     suspend fun deleteOccurrenceIfEmpty(occurrenceId: String): Boolean =
         database.withTransaction {
-            if (logging.countSetsForOccurrence(occurrenceId) > 0) {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction false
+            if (logging.countSetsForOccurrence(occurrenceId) > 0 ||
+                occurrence.state == OccurrenceState.COMPLETED
+            ) {
                 false
             } else {
                 dao.deleteOccurrence(occurrenceId)
@@ -639,50 +811,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
         set.id
     }
 
-    /**
-     * Writes a whole workout at once, replacing anything previously written for it.
-     *
-     * Logging is a single act: the table is a draft until the workout is marked done, and then it
-     * becomes the record in one transaction. Replacing rather than appending is what makes marking
-     * done a second time a correction instead of a duplication — the user edits the same table and
-     * presses the same button, and the record ends up saying what the table says.
-     *
-     * The occurrence is planted on [trainingDate] if it had no date, exactly as logging a single
-     * set used to do: work that happened belongs to the day it happened on.
-     */
-    suspend fun replaceSetsForOccurrence(
-        occurrenceId: String,
-        trainingDate: LocalDate,
-        sets: List<SetWrite>,
-    ) {
-        database.withTransaction {
-            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
-            if (occurrence.trainingDateEpochDay == null) {
-                assignOccurrenceDate(occurrenceId, trainingDate)
-            }
-            val session = ensureSession(trainingDate)
-            logging.deleteSetsForOccurrence(occurrenceId)
-            val now = System.currentTimeMillis()
-            sets.forEachIndexed { index, write ->
-                logging.insertSet(
-                    ActualSetEntity(
-                        id = UUID.randomUUID().toString(),
-                        occurrenceId = occurrenceId,
-                        sessionId = session.id,
-                        exerciseId = occurrence.exerciseId,
-                        trainingDateEpochDay = trainingDate.toEpochDay(),
-                        prescriptionId = occurrence.prescriptionId,
-                        orderIndex = index,
-                        side = write.side,
-                        payloadVersion = ACTUAL_SET_PAYLOAD_VERSION,
-                        payloadJson = ActualSetJson.encode(write.payload),
-                        recordedAtEpochMs = now,
-                    )
-                )
-            }
-        }
-    }
-
     /** Corrects an already recorded set. History is editable; snapshots are not. */
     suspend fun updateSet(setId: String, payload: ActualSetPayload, side: BodySide?) {
         database.withTransaction {
@@ -710,6 +838,525 @@ class TrainingRepository(private val database: MeleteDatabase) {
         logging.insertSession(session)
         return session
     }
+
+    // ------------------------------------------------ activities and time
+
+    /**
+     * Plans, or records, an activity that is only a duration: an outdoor session, a class, a run.
+     *
+     * It creates an *occurrence* and nothing else. No library row is written, because going for a
+     * run once should not leave an entry behind that you then have to tidy up; the exercise id is
+     * derived from the name instead, so two runs called the same thing already group together in
+     * history and could be promoted to a real definition later without rewriting anything.
+     */
+    suspend fun createOneOffActivity(
+        name: String,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+        plannedDurationSeconds: Int? = null,
+    ): String = database.withTransaction {
+        val trimmed = name.trim().ifBlank { "Activity" }
+        val now = System.currentTimeMillis()
+        val prescription = newPrescriptionRow(
+            PrescriptionPayload(sets = 1, targetDurationSeconds = plannedDurationSeconds),
+            now,
+        )
+        library.insertPrescription(prescription)
+        val occurrence = ExerciseOccurrenceEntity(
+            id = UUID.randomUUID().toString(),
+            weekStartEpochDay = weekStart.toEpochDay(),
+            trainingDateEpochDay = trainingDate?.toEpochDay(),
+            exerciseId = OneOffActivity.exerciseIdFor(trimmed),
+            exerciseNameSnapshot = trimmed,
+            modeSnapshot = ExerciseMode.ACTIVITY,
+            unilateralSnapshot = false,
+            measurementUnitSnapshot = null,
+            measurementMeaningSnapshot = null,
+            categorySnapshot = ExerciseCategory.OPEN,
+            prescriptionId = prescription.id,
+            orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
+            state = OccurrenceState.PLANNED,
+            comment = null,
+            createdAtEpochMs = now,
+            isSampleData = false,
+            isOneOff = true,
+        )
+        dao.insertOccurrences(listOf(occurrence))
+        occurrence.id
+    }
+
+    /** Corrects the name of a one-off, keeping its derived identity in step with it. */
+    suspend fun renameOneOffActivity(occurrenceId: String, name: String) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            if (!occurrence.isOneOff) return@withTransaction
+            val trimmed = name.trim().ifBlank { return@withTransaction }
+            dao.updateOccurrence(
+                occurrence.copy(
+                    exerciseNameSnapshot = trimmed,
+                    exerciseId = OneOffActivity.exerciseIdFor(trimmed),
+                )
+            )
+        }
+    }
+
+    /**
+     * Records how long something took.
+     *
+     * [manual] is the provenance, not a formatting hint: an inferred value that has been saved is
+     * still what this workout says it took, so changing a default or a formula later must leave it
+     * alone. Passing null clears the record and hands the question back to the estimate.
+     */
+    suspend fun setLoggedDuration(occurrenceId: String, seconds: Int?, manual: Boolean) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            dao.updateOccurrence(
+                occurrence.copy(
+                    loggedDurationSeconds = seconds?.coerceAtLeast(0),
+                    loggedDurationManual = seconds != null && manual,
+                )
+            )
+        }
+    }
+
+    /**
+     * Writes whole workouts, atomically.
+     *
+     * One occurrence or twenty, it is a single transaction: a circuit review that half-landed
+     * would be a record of training that did not happen that way. Replacing rather than appending
+     * is what makes saving a second time a correction instead of a duplication.
+     *
+     * A station that is not ticked has its sets cleared and drops back to planned, so unticking
+     * says "this did not happen" as plainly as ticking says it did. A skip the user set on purpose
+     * is left alone.
+     */
+    suspend fun saveLogs(trainingDate: LocalDate, writes: List<OccurrenceLogWrite>) {
+        if (writes.isEmpty()) return
+        database.withTransaction {
+            val session = ensureSession(trainingDate)
+            val now = System.currentTimeMillis()
+            writes.forEach { write ->
+                val occurrence = dao.getOccurrence(write.occurrenceId) ?: return@forEach
+                logging.deleteSetsForOccurrence(write.occurrenceId)
+                write.sets.forEachIndexed { index, set ->
+                    logging.insertSet(
+                        ActualSetEntity(
+                            id = UUID.randomUUID().toString(),
+                            occurrenceId = write.occurrenceId,
+                            sessionId = session.id,
+                            exerciseId = occurrence.exerciseId,
+                            trainingDateEpochDay = trainingDate.toEpochDay(),
+                            prescriptionId = occurrence.prescriptionId,
+                            orderIndex = index,
+                            side = set.side,
+                            payloadVersion = ACTUAL_SET_PAYLOAD_VERSION,
+                            payloadJson = ActualSetJson.encode(set.payload),
+                            recordedAtEpochMs = now,
+                        )
+                    )
+                }
+                val state = when {
+                    write.completed -> OccurrenceState.COMPLETED
+                    occurrence.state == OccurrenceState.COMPLETED -> OccurrenceState.PLANNED
+                    else -> occurrence.state
+                }
+                // Work that happened belongs to the day it happened on, and a placement always
+                // sits in the week of its own date -- so the two move together or not at all.
+                val moved = occurrence.trainingDateEpochDay != trainingDate.toEpochDay()
+                val weekStart = WeekMath.weekStartOf(trainingDate)
+                dao.updateOccurrence(
+                    occurrence.copy(
+                        trainingDateEpochDay = trainingDate.toEpochDay(),
+                        weekStartEpochDay = weekStart.toEpochDay(),
+                        orderIndex = if (moved) {
+                            dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate.toEpochDay())
+                        } else {
+                            occurrence.orderIndex
+                        },
+                        state = state,
+                        comment = write.comment?.takeIf { it.isNotBlank() },
+                        loggedEffort = write.effort,
+                        loggedDurationSeconds = write.durationSeconds?.coerceAtLeast(0),
+                        loggedDurationManual = write.durationSeconds != null && write.durationManual,
+                    )
+                )
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ routines
+
+    /**
+     * Saved routines, joined live to the library so a renamed exercise reads correctly in the
+     * editor. Each station's prescription is the routine's own copy and is never re-read from the
+     * library default.
+     */
+    fun observeRoutines(): Flow<List<Routine>> =
+        combine(routines.observeRoutines(), library.observeExercises()) { rows, exercises ->
+            val byId = exercises.associateBy { it.exercise.id }
+            rows.map { it.toRoutine(byId) }
+        }
+
+    fun observeRoutine(id: String): Flow<Routine?> =
+        combine(routines.observeRoutine(id), library.observeExercises()) { row, exercises ->
+            row?.toRoutine(exercises.associateBy { it.exercise.id })
+        }
+
+    suspend fun getRoutine(id: String): Routine? = database.withTransaction {
+        val row = routines.getRoutine(id) ?: return@withTransaction null
+        val exercises = row.entries
+            .mapNotNull { library.getExerciseWithDefault(it.entry.exerciseId) }
+            .associateBy { it.exercise.id }
+        row.toRoutine(exercises)
+    }
+
+    suspend fun createRoutine(draft: RoutineDraft): String = database.withTransaction {
+        val now = System.currentTimeMillis()
+        val routine = RoutineEntity(
+            id = UUID.randomUUID().toString(),
+            name = draft.name.trim().ifBlank { "Circuit" },
+            rounds = draft.rounds.coerceAtLeast(1),
+            transitionSeconds = draft.transitionSeconds.coerceAtLeast(0),
+            roundRestSeconds = draft.roundRestSeconds.coerceAtLeast(0),
+            structureVersion = 1,
+            createdAtEpochMs = now,
+        )
+        routines.insertRoutine(routine)
+        writeRoutineEntries(routine.id, draft.entries, now)
+        routine.id
+    }
+
+    /**
+     * Replaces a routine's stations. Every entry gets a fresh prescription row, so a scheduled
+     * copy keeps pointing at what it was given and the library default is never touched.
+     */
+    suspend fun updateRoutine(id: String, draft: RoutineDraft) {
+        database.withTransaction {
+            val existing = routines.getRoutine(id)?.routine ?: return@withTransaction
+            val now = System.currentTimeMillis()
+            val superseded = routines.entryPrescriptionIdsOf(id)
+            routines.deleteEntriesOf(id)
+            routines.updateRoutine(
+                existing.copy(
+                    name = draft.name.trim().ifBlank { existing.name },
+                    rounds = draft.rounds.coerceAtLeast(1),
+                    transitionSeconds = draft.transitionSeconds.coerceAtLeast(0),
+                    roundRestSeconds = draft.roundRestSeconds.coerceAtLeast(0),
+                    structureVersion = existing.structureVersion + 1,
+                )
+            )
+            writeRoutineEntries(id, draft.entries, now)
+            // Only rows nothing points at any more actually go; a scheduled copy holds its own.
+            superseded.forEach { library.deletePrescriptionIfUnused(it) }
+        }
+    }
+
+    /** A second copy of a routine, to vary without disturbing the original. */
+    suspend fun duplicateRoutine(id: String): String? = database.withTransaction {
+        val source = routines.getRoutine(id) ?: return@withTransaction null
+        createRoutine(
+            RoutineDraft(
+                name = source.routine.name + " copy",
+                rounds = source.routine.rounds,
+                transitionSeconds = source.routine.transitionSeconds,
+                roundRestSeconds = source.routine.roundRestSeconds,
+                entries = source.orderedEntries.map { row ->
+                    RoutineEntryDraft(
+                        exerciseId = row.entry.exerciseId,
+                        prescription = row.prescription?.payload(),
+                    )
+                },
+            )
+        )
+    }
+
+    suspend fun routineRemovalImpact(id: String): RoutineRemoval? = database.withTransaction {
+        val routine = getRoutine(id) ?: return@withTransaction null
+        val instances = routines.instanceIdsOf(id)
+        val recorded = instances.count { instanceId -> circuitHasRecord(instanceId) }
+        RoutineRemoval(routine, scheduledCopies = instances.size, recordedCopies = recorded)
+    }
+
+    /**
+     * Removes a routine. Scheduled copies are untouched either way: they are real occurrences and
+     * real logs, and a template going away is a statement about what you plan next.
+     *
+     * A routine nothing was ever cut from is deleted outright; one that has been scheduled becomes
+     * a tombstone, because its id is what a circuit log points at.
+     */
+    suspend fun removeRoutine(id: String): Boolean = database.withTransaction {
+        val existing = routines.getRoutine(id) ?: return@withTransaction false
+        if (routines.countInstancesOf(id) > 0) {
+            routines.markRoutineDeleted(id, System.currentTimeMillis())
+            return@withTransaction true
+        }
+        val prescriptions = routines.entryPrescriptionIdsOf(id)
+        routines.deleteEntriesOf(id)
+        routines.deleteRoutine(existing.routine.id)
+        prescriptions.forEach { library.deletePrescriptionIfUnused(it) }
+        true
+    }
+
+    private suspend fun writeRoutineEntries(
+        routineId: String,
+        entries: List<RoutineEntryDraft>,
+        now: Long,
+    ) {
+        val rows = entries.mapIndexed { index, draft ->
+            val prescription = draft.prescription?.let { newPrescriptionRow(it, now) }
+            prescription?.let { library.insertPrescription(it) }
+            RoutineEntryEntity(
+                id = UUID.randomUUID().toString(),
+                routineId = routineId,
+                orderIndex = index,
+                exerciseId = draft.exerciseId,
+                exerciseNameSnapshot =
+                    library.getExerciseWithDefault(draft.exerciseId)?.exercise?.name.orEmpty(),
+                prescriptionId = prescription?.id,
+            )
+        }
+        routines.insertEntries(rows)
+    }
+
+    private fun RoutineWithEntries.toRoutine(
+        exercises: Map<String, ExerciseWithDefaultPrescription>,
+    ) = Routine(
+        id = routine.id,
+        name = routine.name,
+        rounds = routine.rounds,
+        transitionSeconds = routine.transitionSeconds,
+        roundRestSeconds = routine.roundRestSeconds,
+        structureVersion = routine.structureVersion,
+        entries = orderedEntries.map { row ->
+            val definition = exercises[row.entry.exerciseId]?.exercise
+            RoutineEntryView(
+                id = row.entry.id,
+                exerciseId = row.entry.exerciseId,
+                name = definition?.name ?: row.entry.exerciseNameSnapshot,
+                mode = definition?.mode ?: ExerciseMode.REPETITIONS,
+                unilateral = definition?.unilateral == true,
+                measurementUnit = definition?.measurementUnit,
+                measurementMeaning = definition?.measurementMeaning,
+                category = definition?.category,
+                prescription = row.prescription?.payload(),
+                orderIndex = row.entry.orderIndex,
+                definitionMissing = definition == null,
+            )
+        },
+    )
+
+    // ------------------------------------------------------------ circuits
+
+    /** Every scheduled circuit of one week, without its stations. */
+    fun observeWeekCircuits(weekStart: LocalDate): Flow<List<WeekCircuit>> =
+        dao.observeCircuitsInWeek(weekStart.toEpochDay()).map { rows ->
+            rows.map { it.toWeekCircuit() }
+        }
+
+    private fun CircuitInstanceEntity.toWeekCircuit() = WeekCircuit(
+        id = id,
+        routineId = routineId,
+        name = routineNameSnapshot,
+        rounds = rounds,
+        transitionSeconds = transitionSeconds,
+        roundRestSeconds = roundRestSeconds,
+        weekStart = LocalDate.ofEpochDay(weekStartEpochDay),
+        trainingDate = trainingDateEpochDay?.let(LocalDate::ofEpochDay),
+        orderIndex = orderIndex,
+    )
+
+    /** One scheduled circuit and the occurrences that are its stations. */
+    fun observeScheduledCircuit(circuitInstanceId: String): Flow<ScheduledCircuit?> = combine(
+        dao.observeCircuit(circuitInstanceId),
+        dao.observeCircuitStations(circuitInstanceId),
+        logging.observeSetPayloadsForCircuit(circuitInstanceId),
+    ) { circuit, stations, payloads ->
+        circuit?.let { row ->
+            val heaviest = payloads.heaviestByOccurrence()
+            val counts = payloads.groupingBy { it.occurrenceId }.eachCount()
+            row.toScheduledCircuit(
+                stations.map {
+                    it.toPlanned(
+                        maxLoad = heaviest[it.occurrence.id],
+                        loggedSets = counts[it.occurrence.id] ?: 0,
+                    )
+                }
+            )
+        }
+    }
+
+    /**
+     * Copies a routine into a week: the circuit container, plus one real exercise occurrence per
+     * station with its own prescription copy.
+     *
+     * The stations are ordinary occurrences on purpose. That is what makes a circuit loggable
+     * without ever running the timer, and what keeps the completed-workout count honest — the
+     * container is not one of them and contributes nothing.
+     */
+    suspend fun scheduleRoutine(
+        routineId: String,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+    ): String? = database.withTransaction {
+        val source = routines.getRoutine(routineId) ?: return@withTransaction null
+        val now = System.currentTimeMillis()
+        val circuitId = UUID.randomUUID().toString()
+        val base = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+        val snapshots = mutableListOf<CircuitEntrySnapshot>()
+        val occurrences = source.orderedEntries.mapIndexed { position, row ->
+            val definition = library.getExerciseWithDefault(row.entry.exerciseId)?.exercise
+            val payload = row.prescription?.payload()
+            val copy = row.prescription?.let {
+                PrescriptionEntity(
+                    id = UUID.randomUUID().toString(),
+                    payloadVersion = it.payloadVersion,
+                    payloadJson = it.payloadJson,
+                    createdAtEpochMs = now,
+                    isSampleData = false,
+                )
+            }
+            copy?.let { library.insertPrescription(it) }
+            snapshots += CircuitEntrySnapshot(
+                position = position,
+                exerciseId = row.entry.exerciseId,
+                exerciseName = definition?.name ?: row.entry.exerciseNameSnapshot,
+                mode = definition?.mode ?: ExerciseMode.REPETITIONS,
+                unilateral = definition?.unilateral == true,
+                prescription = payload,
+            )
+            ExerciseOccurrenceEntity(
+                id = UUID.randomUUID().toString(),
+                weekStartEpochDay = weekStart.toEpochDay(),
+                trainingDateEpochDay = trainingDate?.toEpochDay(),
+                exerciseId = row.entry.exerciseId,
+                exerciseNameSnapshot = definition?.name ?: row.entry.exerciseNameSnapshot,
+                modeSnapshot = definition?.mode ?: ExerciseMode.REPETITIONS,
+                unilateralSnapshot = definition?.unilateral == true,
+                measurementUnitSnapshot = definition?.measurementUnit,
+                measurementMeaningSnapshot = definition?.measurementMeaning,
+                categorySnapshot = definition?.category,
+                prescriptionId = copy?.id,
+                orderIndex = base + position,
+                state = OccurrenceState.PLANNED,
+                comment = null,
+                createdAtEpochMs = now,
+                isSampleData = false,
+                circuitInstanceId = circuitId,
+                circuitPosition = position,
+            )
+        }
+        dao.insertCircuit(
+            CircuitInstanceEntity(
+                id = circuitId,
+                routineId = routineId,
+                routineNameSnapshot = source.routine.name,
+                structureVersion = source.routine.structureVersion,
+                structureSnapshotJson = CircuitSnapshotJson.encode(
+                    CircuitStructureSnapshot(
+                        routineId = routineId,
+                        routineName = source.routine.name,
+                        structureVersion = source.routine.structureVersion,
+                        rounds = source.routine.rounds,
+                        transitionSeconds = source.routine.transitionSeconds,
+                        roundRestSeconds = source.routine.roundRestSeconds,
+                        entries = snapshots,
+                    )
+                ),
+                weekStartEpochDay = weekStart.toEpochDay(),
+                trainingDateEpochDay = trainingDate?.toEpochDay(),
+                orderIndex = base,
+                rounds = source.routine.rounds,
+                transitionSeconds = source.routine.transitionSeconds,
+                roundRestSeconds = source.routine.roundRestSeconds,
+                createdAtEpochMs = now,
+            )
+        )
+        dao.insertOccurrences(occurrences)
+        circuitId
+    }
+
+    /** Moves a scheduled circuit, and every station of it, together. */
+    suspend fun moveCircuit(
+        circuitInstanceId: String,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+    ): Boolean = database.withTransaction {
+        val circuit = dao.getCircuit(circuitInstanceId) ?: return@withTransaction false
+        val stations = dao.circuitStations(circuitInstanceId)
+        if (trainingDate == null && circuitHasRecord(circuitInstanceId)) {
+            return@withTransaction false
+        }
+        val base = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+        dao.updateCircuit(
+            circuit.copy(
+                weekStartEpochDay = weekStart.toEpochDay(),
+                trainingDateEpochDay = trainingDate?.toEpochDay(),
+                orderIndex = base,
+            )
+        )
+        stations.forEachIndexed { index, station ->
+            dao.updateOccurrence(
+                station.copy(
+                    weekStartEpochDay = weekStart.toEpochDay(),
+                    trainingDateEpochDay = trainingDate?.toEpochDay(),
+                    orderIndex = base + index,
+                )
+            )
+        }
+        if (trainingDate != null) {
+            val session = ensureSession(trainingDate)
+            stations.forEach { logging.repointSets(it.id, trainingDate.toEpochDay(), session.id) }
+        }
+        true
+    }
+
+    /** Takes a scheduled circuit back out of the week, refusing once anything was recorded. */
+    suspend fun deleteCircuitIfEmpty(circuitInstanceId: String): Boolean =
+        database.withTransaction {
+            if (circuitHasRecord(circuitInstanceId)) return@withTransaction false
+            dao.circuitStations(circuitInstanceId).forEach { dao.deleteOccurrence(it.id) }
+            dao.deleteCircuit(circuitInstanceId)
+            true
+        }
+
+    /** Deletes a scheduled circuit together with everything logged against its stations. */
+    suspend fun deleteCircuitAndLogs(circuitInstanceId: String) {
+        database.withTransaction {
+            dao.circuitStations(circuitInstanceId).forEach { station ->
+                logging.deleteSetsForOccurrence(station.id)
+                dao.deleteOccurrence(station.id)
+            }
+            dao.deleteCircuit(circuitInstanceId)
+        }
+    }
+
+    /** How many stations of a circuit carry evidence, for saying what a deletion would cost. */
+    suspend fun circuitRecordedStations(circuitInstanceId: String): Int =
+        dao.circuitStations(circuitInstanceId).count {
+            it.state == OccurrenceState.COMPLETED || logging.countSetsForOccurrence(it.id) > 0
+        }
+
+    private suspend fun circuitHasRecord(circuitInstanceId: String): Boolean =
+        dao.circuitStations(circuitInstanceId).any {
+            it.state == OccurrenceState.COMPLETED || logging.countSetsForOccurrence(it.id) > 0
+        }
+
+    private fun CircuitInstanceEntity.toScheduledCircuit(stations: List<PlannedOccurrence>) =
+        ScheduledCircuit(
+            id = id,
+            routineId = routineId,
+            name = routineNameSnapshot,
+            rounds = rounds,
+            transitionSeconds = transitionSeconds,
+            roundRestSeconds = roundRestSeconds,
+            weekStart = LocalDate.ofEpochDay(weekStartEpochDay),
+            trainingDate = trainingDateEpochDay?.let(LocalDate::ofEpochDay),
+            orderIndex = orderIndex,
+            stations = stations,
+        )
+
+    private fun PrescriptionEntity.payload(): PrescriptionPayload? =
+        runCatching { PrescriptionJson.decode(payloadJson) }.getOrNull()
 
     // ------------------------------------------------------- sample data
 
@@ -751,6 +1398,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
 
 private fun OccurrenceWithPrescription.toPlanned(
     maxLoad: Double? = null,
+    loggedSets: Int = 0,
 ): PlannedOccurrence {
     val payload: PrescriptionPayload? = prescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
@@ -770,10 +1418,17 @@ private fun OccurrenceWithPrescription.toPlanned(
         prescription = payload,
         prescriptionUnreadable = prescription != null && payload == null,
         maxLoad = maxLoad,
+        loggedSets = loggedSets,
         state = occurrence.state,
         comment = occurrence.comment,
         orderIndex = occurrence.orderIndex,
         isSampleData = occurrence.isSampleData,
+        loggedDurationSeconds = occurrence.loggedDurationSeconds,
+        loggedDurationManual = occurrence.loggedDurationManual,
+        loggedEffort = occurrence.loggedEffort,
+        isOneOff = occurrence.isOneOff,
+        circuitInstanceId = occurrence.circuitInstanceId,
+        circuitPosition = occurrence.circuitPosition,
     )
 }
 
@@ -793,6 +1448,21 @@ private fun ExerciseWithDefaultPrescription.toLibraryExercise() = LibraryExercis
     },
     isSampleData = exercise.isSampleData,
 )
+
+/**
+ * The heaviest set of each occurrence.
+ *
+ * The load lives inside the JSON payload rather than in a column, so this cannot be a `MAX()` and
+ * is worked out after decoding. Cheap enough: a week holds a few dozen sets, and it only feeds a
+ * label.
+ */
+private fun List<SetPayloadRow>.heaviestByOccurrence(): Map<String, Double> = this
+    .mapNotNull { row ->
+        runCatching { ActualSetJson.decode(row.payloadJson) }
+            .getOrNull()?.measurement?.value?.let { row.occurrenceId to it }
+    }
+    .groupBy({ it.first }, { it.second })
+    .mapValues { (_, values) -> values.max() }
 
 private fun ActualSetEntity.toPerformed() = PerformedSet(
     id = id,

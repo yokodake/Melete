@@ -49,7 +49,17 @@ object PrescriptionSummary {
         mode: ExerciseMode,
         unilateral: Boolean,
     ): String {
+        val repeater = prescription.repeater
         val target = when {
+            // A repeater is the shape of one set, so it is what a set is described as.
+            repeater != null ->
+                "${repeater.repsPerSet} × ${duration(repeater.workSecondsPerRep)}" +
+                    if (repeater.restSecondsBetweenReps > 0) {
+                        "/${duration(repeater.restSecondsBetweenReps)}"
+                    } else {
+                        ""
+                    }
+
             prescription.targetReps != null -> "${prescription.targetReps}"
             prescription.targetDurationSeconds != null -> duration(prescription.targetDurationSeconds)
             else -> null
