@@ -382,13 +382,6 @@ private fun LibraryRow(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    if (exercise.isSampleData) {
-                        Chip(
-                            text = "SAMPLE",
-                            container = MaterialTheme.colorScheme.tertiaryContainer,
-                            content = MaterialTheme.colorScheme.onTertiaryContainer,
-                        )
-                    }
                 }
                 Text(
                     text = PrescriptionSummary.formatDefault(exercise),
@@ -448,7 +441,6 @@ private fun previewExercise(
     seconds: Int? = null,
     unit: String? = "kg",
     retired: Boolean = false,
-    sample: Boolean = false,
 ) = LibraryExercise(
     id = name,
     name = name,
@@ -465,7 +457,6 @@ private fun previewExercise(
         targetDurationSeconds = seconds,
         restSeconds = 180,
     ),
-    isSampleData = sample,
     deletedAtEpochMs = if (retired) 1_700_000_000_000 else null,
 )
 
@@ -475,7 +466,7 @@ private val previewLibrary = listOf(
     previewExercise("Couch stretch", ExerciseCategory.FLEXIBILITY, sets = 2, reps = null, seconds = 90, unit = null),
     previewExercise("Dumbbell row", ExerciseCategory.STRENGTH_CONDITIONING),
     previewExercise("Max hangs 20 mm", ExerciseCategory.STRENGTH_CONDITIONING, sets = 5, reps = null, seconds = 10),
-    previewExercise("Pullups", ExerciseCategory.STRENGTH_CONDITIONING, sets = 4, reps = 4, unit= "kg", sample=true),
+    previewExercise("Pullups", ExerciseCategory.STRENGTH_CONDITIONING, sets = 4, reps = 4, unit= "kg", ),
 )
 
 @Preview(name = "Library · populated", showBackground = true, heightDp = 760)

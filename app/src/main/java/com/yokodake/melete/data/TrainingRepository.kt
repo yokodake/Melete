@@ -76,7 +76,6 @@ data class PlannedOccurrence(
     val state: OccurrenceState,
     val comment: String?,
     val orderIndex: Int,
-    val isSampleData: Boolean,
     /** How long it took, once logged. Absent means unknown, never zero. */
     val loggedDurationSeconds: Int? = null,
     /** Whether that number was typed or worked out. */
@@ -127,7 +126,6 @@ data class LibraryExercise(
     val description: String?,
     val category: ExerciseCategory?,
     val defaultPrescription: PrescriptionPayload?,
-    val isSampleData: Boolean,
     /** Retired from the library, but still the anchor for everything that refers to it. */
     val deletedAtEpochMs: Long? = null,
 )
@@ -403,7 +401,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
             category = draft.category,
             defaultPrescriptionId = prescription.id,
             createdAtEpochMs = now,
-            isSampleData = false,
         )
         library.insertPrescription(prescription)
         library.insertExercise(exercise)
@@ -531,7 +528,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 payloadVersion = it.payloadVersion,
                 payloadJson = it.payloadJson,
                 createdAtEpochMs = now,
-                isSampleData = false,
             )
         }
         copy?.let { library.insertPrescription(it) }
@@ -551,7 +547,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
             state = OccurrenceState.PLANNED,
             comment = null,
             createdAtEpochMs = now,
-            isSampleData = false,
         )
         dao.insertOccurrences(listOf(occurrence))
         occurrence.id
@@ -674,7 +669,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     payloadVersion = it.payloadVersion,
                     payloadJson = it.payloadJson,
                     createdAtEpochMs = now,
-                    isSampleData = false,
                 )
             }
         prescriptionCopy?.let { library.insertPrescription(it) }
@@ -878,7 +872,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
             state = OccurrenceState.PLANNED,
             comment = null,
             createdAtEpochMs = now,
-            isSampleData = false,
             isOneOff = true,
         )
         dao.insertOccurrences(listOf(occurrence))
@@ -1212,7 +1205,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     payloadVersion = it.payloadVersion,
                     payloadJson = it.payloadJson,
                     createdAtEpochMs = now,
-                    isSampleData = false,
                 )
             }
             copy?.let { library.insertPrescription(it) }
@@ -1240,7 +1232,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 state = OccurrenceState.PLANNED,
                 comment = null,
                 createdAtEpochMs = now,
-                isSampleData = false,
                 circuitInstanceId = circuitId,
                 circuitPosition = position,
             )
@@ -1358,41 +1349,11 @@ class TrainingRepository(private val database: MeleteDatabase) {
     private fun PrescriptionEntity.payload(): PrescriptionPayload? =
         runCatching { PrescriptionJson.decode(payloadJson) }.getOrNull()
 
-    // ------------------------------------------------------- sample data
-
-    val sampleDataPresent: Flow<Boolean> =
-        dao.observeSampleOccurrenceCount().map { it > 0 }
-
-    /**
-     * Inserts explicitly marked development data for [weekStart]. Only ever called from an
-     * explicit debug action: sample rows are never inserted on launch and never mixed into real
-     * records without the flag that makes them removable again.
-     */
-    suspend fun seedSampleWeek(weekStart: LocalDate) {
-        val sample = DevSampleData.build(weekStart)
-        database.withTransaction {
-            dao.insertPrescriptions(sample.prescriptions)
-            dao.insertExercises(sample.exercises)
-            dao.insertOccurrences(sample.occurrences)
-        }
-    }
-
-    suspend fun clearSampleData() {
-        database.withTransaction {
-            // Children first: actual sets and occurrences reference rows with ON DELETE RESTRICT.
-            dao.deleteSampleActualSets()
-            dao.deleteSampleOccurrences()
-            dao.deleteSampleExercises()
-            dao.deleteSamplePrescriptions()
-        }
-    }
-
     private fun newPrescriptionRow(payload: PrescriptionPayload, now: Long) = PrescriptionEntity(
         id = UUID.randomUUID().toString(),
         payloadVersion = PRESCRIPTION_PAYLOAD_VERSION,
         payloadJson = PrescriptionJson.encode(payload),
         createdAtEpochMs = now,
-        isSampleData = false,
     )
 }
 
@@ -1422,7 +1383,6 @@ private fun OccurrenceWithPrescription.toPlanned(
         state = occurrence.state,
         comment = occurrence.comment,
         orderIndex = occurrence.orderIndex,
-        isSampleData = occurrence.isSampleData,
         loggedDurationSeconds = occurrence.loggedDurationSeconds,
         loggedDurationManual = occurrence.loggedDurationManual,
         loggedEffort = occurrence.loggedEffort,
@@ -1446,7 +1406,6 @@ private fun ExerciseWithDefaultPrescription.toLibraryExercise() = LibraryExercis
     defaultPrescription = defaultPrescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
     },
-    isSampleData = exercise.isSampleData,
 )
 
 /**

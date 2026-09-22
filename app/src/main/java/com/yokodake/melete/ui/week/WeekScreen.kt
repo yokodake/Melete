@@ -56,7 +56,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.yokodake.melete.BuildConfig
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.ui.components.CompactTextField
@@ -98,8 +97,6 @@ fun WeekRoute(
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
         onCurrentWeek = viewModel::showCurrentWeek,
-        onSeedSampleData = viewModel::seedSampleData,
-        onClearSampleData = viewModel::clearSampleData,
         onOpenOccurrence = onOpenOccurrence,
         onAddExercise = { date -> onAddExercise(state.weekStart, date) },
         onAddActivity = viewModel::addActivity,
@@ -129,8 +126,6 @@ fun WeekScreen(
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onCurrentWeek: () -> Unit,
-    onSeedSampleData: () -> Unit,
-    onClearSampleData: () -> Unit,
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (LocalDate?) -> Unit,
     onAddActivity: (String, LocalDate?, Int?) -> Unit = { _, _, _ -> },
@@ -212,13 +207,6 @@ fun WeekScreen(
                         modifier = Modifier.semantics { contentDescription = "Next week" },
                     ) {
                         Text("›", style = MaterialTheme.typography.headlineMedium)
-                    }
-                    if (BuildConfig.DEBUG) {
-                        DeveloperMenu(
-                            sampleDataPresent = state.sampleDataPresent,
-                            onSeedSampleData = onSeedSampleData,
-                            onClearSampleData = onClearSampleData,
-                        )
                     }
                 },
             )
@@ -404,45 +392,6 @@ private data class PlanAction(
     val loggedSets: Int = 0,
 )
 
-@Composable
-private fun DeveloperMenu(
-    sampleDataPresent: Boolean,
-    onSeedSampleData: () -> Unit,
-    onClearSampleData: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    IconButton(
-        onClick = { expanded = true },
-        modifier = Modifier.semantics { contentDescription = "Developer actions" },
-    ) {
-        Text("⋮", style = MaterialTheme.typography.titleLarge)
-    }
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        DropdownMenuItem(
-            text = { Text("Insert sample data in this week") },
-            onClick = {
-                expanded = false
-                onSeedSampleData()
-            },
-        )
-        DropdownMenuItem(
-            text = { Text("Remove all sample data") },
-            enabled = sampleDataPresent,
-            onClick = {
-                expanded = false
-                onClearSampleData()
-            },
-        )
-    }
-}
-
-/**
- * What removing a placement would actually destroy, said before it happens.
- *
- * With nothing logged this is an ordinary confirmation. With sets recorded against it there is no
- * quiet option: the dialog names how many, and the only button that removes them says so. History
- * never leaves through a yes that did not mention it.
- */
 @Composable
 private fun RemoveDialog(
     occurrence: PlannedOccurrence,
@@ -660,13 +609,6 @@ private fun OccurrenceCard(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f),
                     )
-                    if (occurrence.isSampleData) {
-                        Chip(
-                            text = "SAMPLE",
-                            container = MaterialTheme.colorScheme.tertiaryContainer,
-                            content = MaterialTheme.colorScheme.onTertiaryContainer,
-                        )
-                    }
                     when (occurrence.state) {
                         OccurrenceState.PLANNED -> Unit
                         OccurrenceState.COMPLETED -> {
@@ -1032,7 +974,6 @@ private fun WeekScreenPreview() {
         state = OccurrenceState.PLANNED,
         comment = null,
         orderIndex = 0,
-        isSampleData = true,
     )
 
     MeleteTheme {
@@ -1045,13 +986,10 @@ private fun WeekScreenPreview() {
                     sample("Back squat", monday.plusDays(1)),
                     sample("Dumbbell row", monday.plusDays(2), unilateral = true),
                 ),
-                sampleDataPresent = true,
             ),
             onPreviousWeek = {},
             onNextWeek = {},
             onCurrentWeek = {},
-            onSeedSampleData = {},
-            onClearSampleData = {},
             onOpenOccurrence = {},
             onAddExercise = {},
         )
@@ -1087,7 +1025,6 @@ private fun BusyWeekPreview() {
         state = state,
         comment = null,
         orderIndex = order,
-        isSampleData = false,
     )
 
     MeleteTheme {
@@ -1111,13 +1048,10 @@ private fun BusyWeekPreview() {
                     item("Couch stretch", monday.plusDays(2), ExerciseCategory.FLEXIBILITY, order = 1),
                     item("very long name of thing Deadlift", monday.plusDays(4), ExerciseCategory.STRENGTH_CONDITIONING, state= OccurrenceState.COMPLETED),
                 ),
-                sampleDataPresent = false,
             ),
             onPreviousWeek = {},
             onNextWeek = {},
             onCurrentWeek = {},
-            onSeedSampleData = {},
-            onClearSampleData = {},
             onOpenOccurrence = {},
             onAddExercise = {},
         )
@@ -1184,7 +1118,6 @@ private fun RemoveLoggedPreview() {
                 state = OccurrenceState.COMPLETED,
                 comment = null,
                 orderIndex = 0,
-                isSampleData = false,
             ),
             loggedSets = 4,
             onDismiss = {},

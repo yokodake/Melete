@@ -28,7 +28,8 @@ the two ever disagree, the code and the first half win.
 | 5B — daily notes, metrics, export and restore | not started |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **6**. Prescription payload version **3**, actual-set payload version **2**, circuit
+Schema version **1**, and one schema only until phase 6 — see *No migration chain* below.
+Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
 ## The week
@@ -186,10 +187,9 @@ com.yokodake.melete
   core/OneOffActivity.kt    derived, stable identity for a typed-in activity
   ui/Navigation.kt          type-safe routes + NavHost
   data/
-    MeleteDatabase.kt       Room database v5, exportSchema = true, explicit migrations only
+    MeleteDatabase.kt       Room database v1, exportSchema = true, debug-only destructive reset
     MeleteConverters.kt     enum <-> String converters (stored names are part of the format)
     TrainingRepository.kt   week, library, scheduling, logging, activities, routines, circuits
-    DevSampleData.kt        explicitly marked development data
     dao/TrainingDao.kt      TrainingDao, LibraryDao, LoggingDao, RoutineDao
     entity/Entities.kt      ExerciseEntity, PrescriptionEntity, ExerciseOccurrenceEntity,
                             TrainingSessionEntity, ActualSetEntity, RoutineEntity,
@@ -272,9 +272,19 @@ com.yokodake.melete
 - **Removing a routine never touches a scheduled copy.** Those are real occurrences and real logs;
   a template going away is a statement about what you plan next. A routine that has been scheduled
   becomes a tombstone, because its id is what a circuit log points at.
-- **No destructive migration.** `MeleteDatabase.build()` registers `MIGRATIONS` explicitly and has
-  no `fallbackToDestructiveMigration`. Schemas are exported to `app/schemas/`.
-- **Sample data is flagged and removable**, debug-only, never seeded on launch.
+- **No migration chain, until phase 6.** The app has never been installed by anyone but its
+  author, and the record is disposable until the first real training block, so the five migrations
+  that carried the schema from v1 to v6 were ceremony — two hundred lines and six tests proving
+  that upgrades work for data nobody would mind losing. They are gone, the schema is back to
+  version 1, and `MeleteDatabase.build()` applies `fallbackToDestructiveMigration` **in debug
+  builds only**: a schema change now costs a wipe and a re-seed, which takes seconds. The release
+  build has no fallback and still fails loudly, because that is the build trained against and a
+  silent wipe of a real diary is the outcome worth crashing to avoid. Phase 6 reverses this: the
+  record becomes the baseline, the fallback comes out, and migrations are required again.
+- **No sample data.** `DevSampleData`, the `isSampleData` column on four entities, its DAO delete
+  queries, the debug menu and the SAMPLE chips are all gone. Seeding a library is the importer's
+  job, and a flag threaded through the schema to mark rows as disposable stopped earning its keep
+  the moment the whole database became disposable.
 - **Manual DI.** `AppContainer` on the `Application`.
 - **Text chevrons instead of Material icons.** `material-icons-core` is frozen at 1.7.8 and is not
   part of the current Compose BOM, so navigation uses `‹` / `›` / `⋮` / `+` glyphs with
@@ -477,16 +487,34 @@ an open *lifting* session now reads as climbing — so the library is worth a gl
 **Applied to the real record and verified**: `user_version` 5 to 6, `integrity_check` ok, all five
 exercises and seven occurrences renamed with none lost, against a backup taken immediately before.
 
+Then a clear-out (2026-09-23), once the record was confirmed disposable until October:
+
+- **The migration chain went**, with its six tests and six exported schemas. See *No migration
+  chain* above for what replaced it.
+- **The old per-set logging path went.** The sixth round replaced it with the draft table and left
+  it behind: `SetEntryBar` (a hundred-line composable), `PerformedSetRow`, `displayNumber`,
+  `SetDraft` and its saved-state persistence, `confirmSet`, `undoLastSet`, `editSet`. None of it
+  had a caller — a whole second logging mechanism sitting beside the real one, waiting to be
+  helpfully reconnected.
+- **Sample data went**, along with the `isSampleData` column and everything that read it.
+- `TrainingPersistenceTest` was rewritten to write through the repository rather than seed, which
+  makes it exercise the path the app actually takes.
+
+**4,662 lines deleted against 868 added.** 144 unit tests pass, down from 152 because
+`SetDraftTest` tested a class that no longer exists.
+
 **Still owed on the phone** — everything in *What still needs a phone* from section 1 onwards. The
-instrumented suite last ran green against the timer and circuit work, not against any of the
-changes in these two rounds.
+instrumented suite has not run since the timer and circuit work; it is now 49 tests rather than 54,
+the migration suite having gone.
 
 ## Known limitations
 
 - **Nothing in phase 5A or the timer extensions has been run on a device.** Everything above was
   checked by unit test, compiler and schema export only.
 - **The logger's draft is lost if you leave without marking done.** Ticks, loads, the duration and
-  the note are held in memory until the one write. Draft persistence is deferred by design.
+  the note are held in memory until the one write. Draft persistence is deferred by design — and
+  `SetDraft`, the `SavedStateHandle` plumbing that used to persist the *old* per-set draft, has
+  been deleted rather than left lying next to the table it no longer feeds.
 - **The circuit review's draft is likewise in memory**, and is seeded once when the screen opens.
 - **A one-off cannot be promoted to a library entry** from the UI. The identity is already stable
   and derived from the name, so the promotion is a later convenience rather than a migration.
@@ -519,7 +547,6 @@ changes in these two rounds.
   must never be able to touch what was logged.
 - The library detail screen has no *Start the timer* button; only a planned copy in a week does.
 - Superseded prescription rows are kept forever and never garbage collected.
-- Sample data is inserted into the week on screen; inserting twice creates duplicates by design.
 - `today` is computed when the UI state is built, so an app left open across midnight keeps the old
   highlight until the state is rebuilt.
 - The month abbreviation in week labels comes from the device locale. Unit tests pin `Locale.US`.

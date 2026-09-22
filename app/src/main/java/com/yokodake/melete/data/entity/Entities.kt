@@ -28,7 +28,6 @@ data class ExerciseEntity(
     /** The exercise's default prescription, stored separately from its identity. */
     val defaultPrescriptionId: String?,
     val createdAtEpochMs: Long,
-    val isSampleData: Boolean = false,
     /**
      * What the movement is and how to do it. Reference material, not part of the training record:
      * it is read live rather than snapshotted, so correcting an explanation corrects it
@@ -62,7 +61,6 @@ data class PrescriptionEntity(
     val payloadVersion: Int,
     val payloadJson: String,
     val createdAtEpochMs: Long,
-    val isSampleData: Boolean = false,
 )
 
 /** Explicit state of a planned occurrence. Zero actuals on its own never means "skipped". */
@@ -121,7 +119,6 @@ data class ExerciseOccurrenceEntity(
     /** Comments belong to the occurrence, not to a set and not to the library exercise. */
     val comment: String?,
     val createdAtEpochMs: Long,
-    val isSampleData: Boolean = false,
     /**
      * The category as it stood when this copy was placed in the week. Snapshotted like the other
      * identity fields, so re-categorising a library entry cannot silently recolour history.

@@ -48,7 +48,6 @@ data class WeekUiState(
     val weekLabel: String,
     val unscheduled: List<WeekItem>,
     val days: List<DaySection>,
-    val sampleDataPresent: Boolean,
 ) {
     val isCurrentWeek: Boolean get() = WeekMath.contains(weekStart, today)
 
@@ -66,7 +65,6 @@ data class WeekUiState(
             today: LocalDate,
             occurrences: List<PlannedOccurrence>,
             circuits: List<WeekCircuit> = emptyList(),
-            sampleDataPresent: Boolean = false,
         ): WeekUiState {
             val stationsByCircuit = occurrences
                 .filter { it.circuitInstanceId != null }
@@ -103,7 +101,6 @@ data class WeekUiState(
                         items = itemsFor(date),
                     )
                 },
-                sampleDataPresent = sampleDataPresent,
             )
         }
     }
