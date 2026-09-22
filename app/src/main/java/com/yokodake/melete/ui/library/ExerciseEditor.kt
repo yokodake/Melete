@@ -1,6 +1,8 @@
 package com.yokodake.melete.ui.library
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -133,15 +135,22 @@ fun ExerciseEditorScreen(
 
             HorizontalDivider()
             Text("How is a set measured?", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Wrapped, because four chips do not fit across a phone and a row that scrolls
+            // sideways hides the one you have not thought of.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ModeChip("Repetitions", ExerciseMode.REPETITIONS, state.mode, onModeChange)
                 ModeChip("Timed sets", ExerciseMode.DURATION, state.mode, onModeChange)
+                ModeChip("Repeaters", ExerciseMode.REPEATERS, state.mode, onModeChange)
                 ModeChip("Activity", ExerciseMode.ACTIVITY, state.mode, onModeChange)
             }
             Text(
                 text = when (state.mode) {
                     ExerciseMode.REPETITIONS -> "Counted reps, e.g. a squat."
                     ExerciseMode.DURATION -> "Timed sets, e.g. a hang or a stretch."
+                    ExerciseMode.REPEATERS ->
+                        "Timed sets made of pulses, e.g. hangboard repeaters: so many short " +
+                            "efforts inside one set, with a short rest between them."
+
                     ExerciseMode.ACTIVITY -> "Duration only, no set structure."
                 },
                 style = MaterialTheme.typography.bodySmall,

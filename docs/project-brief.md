@@ -34,7 +34,9 @@ ceremonies and warm-up-specific machinery.
 Exercises are created in the app. No individual exercise is hardcoded in Kotlin. The generic
 creation form covers:
 
-- Name; mode: repetitions, duration, or duration-only activity.
+- Name; mode: repetitions, timed sets, repeaters, or duration-only activity. The mode decides
+  which numbers a plan carries: a repeater states its pulses and has no set length, a timed set
+  states a length and has no pulses.
 - Optional numeric measurement with a unit (initially kg). No measurement is valid (stretch,
   bodyweight).
 - Unilateral flag — unilateral sets are labelled *per side* and executed left, switch, right.

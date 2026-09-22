@@ -71,7 +71,7 @@ data class RoutineEditorUiState(
                 transitionSeconds = transitionSeconds.toIntOrNull() ?: 0,
                 roundRestSeconds = roundRestSeconds.toIntOrNull() ?: 0,
                 stations = stations.map {
-                    StationPlan(it.name, it.mode, it.unilateral, it.form.toPayload())
+                    StationPlan(it.name, it.mode, it.unilateral, it.form.toPayload(it.mode))
                 },
             ).estimatedSeconds()
         }
@@ -81,7 +81,7 @@ data class RoutineEditorUiState(
         rounds = rounds.toIntOrNull() ?: 1,
         transitionSeconds = transitionSeconds.toIntOrNull() ?: 0,
         roundRestSeconds = roundRestSeconds.toIntOrNull() ?: 0,
-        entries = stations.map { RoutineEntryDraft(it.exerciseId, it.form.toPayload()) },
+        entries = stations.map { RoutineEntryDraft(it.exerciseId, it.form.toPayload(it.mode)) },
     )
 }
 

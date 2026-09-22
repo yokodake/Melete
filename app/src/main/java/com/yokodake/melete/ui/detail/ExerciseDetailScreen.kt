@@ -368,6 +368,7 @@ private fun facts(state: ExerciseDetailUiState): String {
     parts += when (state.mode) {
         ExerciseMode.REPETITIONS -> "counted reps"
         ExerciseMode.DURATION -> "timed sets"
+        ExerciseMode.REPEATERS -> "repeaters"
         ExerciseMode.ACTIVITY -> "duration only"
     }
     if (state.unilateral) parts += "left and right separately"

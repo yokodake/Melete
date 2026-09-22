@@ -98,8 +98,13 @@ class TimerController(
         }
     }
 
-    /** How many sets the last program had, so the create screen opens on a familiar number. */
+    /** The shape of the last hand-built program, so the create screen opens on familiar numbers. */
     val lastSets: Int get() = store.lastSets
+    val lastUnilateral: Boolean get() = store.lastUnilateral
+    val lastSideSwitchSeconds: Int get() = store.lastSideSwitchSeconds
+    val lastRepeaterReps: Int get() = store.lastRepeaterReps
+    val lastRepeaterWorkSeconds: Int get() = store.lastRepeaterWorkSeconds
+    val lastRepeaterRestSeconds: Int get() = store.lastRepeaterRestSeconds
 
     fun lastDurationSeconds(phase: TimerPhase): Int =
         // A preparation has a fixed length, so there is nothing remembered about it; asking
@@ -138,9 +143,19 @@ class TimerController(
         // shape belongs to the routine, and reopening the create screen on one of its stations
         // would be a worse guess than leaving the last standalone timer in place.
         if (!program.isCircuit) {
-            if (program.work == WorkKind.TIMED) store.lastWorkSeconds = program.workSeconds
+            val entry = program.entry
+            if (entry.work == WorkKind.TIMED && entry.workSeconds > 0) {
+                store.lastWorkSeconds = entry.workSeconds
+            }
             if (program.restSeconds > 0) store.lastRestSeconds = program.restSeconds
             store.lastSets = program.sets
+            store.lastUnilateral = entry.unilateral
+            if (entry.unilateral) store.lastSideSwitchSeconds = entry.sideSwitchSeconds
+            entry.repeater?.let {
+                store.lastRepeaterReps = it.repsPerSet
+                store.lastRepeaterWorkSeconds = it.workSecondsPerRep
+                store.lastRepeaterRestSeconds = it.restSecondsBetweenReps
+            }
         }
         // The store is the one source of cue settings, because every interval after the first is
         // planned when it begins and reads them from there. Planning the first from an argument

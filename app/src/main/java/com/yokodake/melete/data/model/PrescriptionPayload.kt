@@ -17,6 +17,16 @@ enum class ExerciseMode {
     /** Timed sets of a discrete exercise, e.g. a hang or a stretch. */
     DURATION,
 
+    /**
+     * Timed sets made of pulses: so many short efforts inside one set, e.g. hangboard repeaters.
+     *
+     * A kind of exercise rather than a switch on a timed one, because it is a different movement
+     * to plan, to run and to read back. Six sevens on and threes off is not "a 57-second hang",
+     * and a hang is not a repeater with one rep — asking which of the two you are creating is a
+     * clearer question than asking for a duration and then taking it away again.
+     */
+    REPEATERS,
+
     /** Duration-only activity with no set structure, e.g. a mobility flow or a climbing session. */
     ACTIVITY,
 }
@@ -66,7 +76,11 @@ data class PrescriptionPayload(
      * zero is a real answer and means the sides run back to back.
      */
     val sideSwitchSeconds: Int? = null,
-    /** v3. Present when one timed set is a series of pulses rather than one interval. */
+    /**
+     * v3. The pulse shape of one set. Present exactly when the exercise's mode is
+     * [ExerciseMode.REPEATERS]; the mode is what decides, so a payload cannot claim to be both a
+     * plain timed set and a series of efforts.
+     */
     val repeater: RepeaterPrescription? = null,
 ) {
     init {

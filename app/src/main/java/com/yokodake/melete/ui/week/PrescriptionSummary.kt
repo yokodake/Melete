@@ -66,6 +66,7 @@ object PrescriptionSummary {
         }
         // A duration-only activity has no set structure to show.
         if (mode == ExerciseMode.ACTIVITY) return target ?: "Duration not set"
+        if (mode == ExerciseMode.REPEATERS && repeater == null) return "Repeaters not set up"
         val base = if (target == null) {
             "${prescription.sets} sets"
         } else {

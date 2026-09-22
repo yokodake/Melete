@@ -22,7 +22,6 @@ import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.timer.PrescriptionProgram
 import com.yokodake.melete.data.timer.StationPlan
-import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.ui.CircuitReviewDestination
 import com.yokodake.melete.ui.components.trimNumber
@@ -79,8 +78,6 @@ data class CircuitReviewUiState(
     val targetDate: LocalDate = LocalDate.now(),
     val today: LocalDate = LocalDate.now(),
     val message: String? = null,
-    /** Non-null while the user is being asked whether to call off a countdown already running. */
-    val replacePrompt: String? = null,
 ) {
     val committed: Boolean get() = stations.any { it.occurrence.hasRecord }
 
@@ -109,7 +106,6 @@ data class CircuitReviewUiState(
  */
 class CircuitReviewViewModel(
     private val repository: TrainingRepository,
-    private val timer: TimerController,
     savedStateHandle: SavedStateHandle,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
@@ -134,7 +130,6 @@ class CircuitReviewViewModel(
     private data class Transient(
         val targetDate: LocalDate? = null,
         val message: String? = null,
-        val replacePrompt: String? = null,
     )
 
     val uiState: StateFlow<CircuitReviewUiState> = combine(
@@ -162,7 +157,6 @@ class CircuitReviewViewModel(
                 ?: today,
             today = today,
             message = extras.message,
-            replacePrompt = extras.replacePrompt,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -205,38 +199,6 @@ class CircuitReviewViewModel(
     private fun durationShares(circuit: ScheduledCircuit): List<Int> =
         if (circuit.stations.isEmpty()) emptyList()
         else programOf(circuit).estimatedSecondsByEntry()
-
-    /** The program to run, so the review screen can offer to start the circuit. */
-    fun timerProgram(): TimerProgram? = uiState.value.circuit?.let(::programOf)
-
-    /**
-     * Offers to run the circuit.
-     *
-     * There is one timer at a time by design, so replacing a countdown someone is in the middle of
-     * is a decision rather than a side effect of pressing a button on another screen.
-     */
-    fun requestStartTimer(onStarted: () -> Unit) {
-        val active = timer.state.value.currentExerciseLabel
-            ?.takeIf { timer.hasActiveProgram }
-        if (active == null && !timer.hasActiveProgram) {
-            startTimer(onStarted)
-        } else {
-            transient.update { it.copy(replacePrompt = active ?: "a countdown") }
-        }
-    }
-
-    fun confirmStartTimer(onStarted: () -> Unit) {
-        transient.update { it.copy(replacePrompt = null) }
-        startTimer(onStarted)
-    }
-
-    fun dismissReplacePrompt() = transient.update { it.copy(replacePrompt = null) }
-
-    private fun startTimer(onStarted: () -> Unit) {
-        val program = timerProgram() ?: return
-        timer.start(program)
-        onStarted()
-    }
 
     /**
      * Builds one station's table from its plan and from whatever is already recorded.
@@ -396,8 +358,14 @@ class CircuitReviewViewModel(
         val occurrence = station.occurrence
         fun payload(load: String) = ActualSetPayload(
             reps = occurrence.prescription?.targetReps,
-            durationSeconds = occurrence.prescription?.targetDurationSeconds
-                ?.takeIf { occurrence.mode == ExerciseMode.DURATION },
+            durationSeconds = when (occurrence.mode) {
+                ExerciseMode.DURATION -> occurrence.prescription?.targetDurationSeconds
+                // A repeater set's length is its pulses, not a number anyone typed.
+                ExerciseMode.REPEATERS ->
+                    occurrence.prescription?.repeater?.toSpec()?.sequenceSeconds
+
+                else -> null
+            },
             measurement = load.toDoubleOrNull()?.let { value ->
                 occurrence.measurementUnit?.let { unit ->
                     Measurement(
@@ -430,7 +398,6 @@ class CircuitReviewViewModel(
                     as MeleteApplication
                 CircuitReviewViewModel(
                     application.container.trainingRepository,
-                    application.container.timerController,
                     createSavedStateHandle(),
                 )
             }

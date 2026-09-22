@@ -720,7 +720,7 @@ class LoggerViewModel(
         val occurrence = uiState.value.occurrence ?: return
         val form = transient.value.prescriptionEditor ?: return
         viewModelScope.launch {
-            repository.updateOccurrencePrescription(occurrenceId, form.toPayload())
+            repository.updateOccurrencePrescription(occurrenceId, form.toPayload(occurrence.mode))
             transient.update { it.copy(prescriptionEditor = null) }
         }
     }
@@ -763,4 +763,6 @@ class LoggerViewModel(
 
 /** True when the exercise records a duration rather than repetitions. */
 val ExerciseMode.isTimed: Boolean
-    get() = this == ExerciseMode.DURATION || this == ExerciseMode.ACTIVITY
+    get() = this == ExerciseMode.DURATION ||
+        this == ExerciseMode.ACTIVITY ||
+        this == ExerciseMode.REPEATERS

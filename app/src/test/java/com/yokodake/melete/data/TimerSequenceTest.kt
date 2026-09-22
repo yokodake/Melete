@@ -456,7 +456,7 @@ class TimerSequenceTest {
         )
         assertEquals(
             536,
-            DurationEstimate.forPrescription(ExerciseMode.DURATION, unilateral = false, plan),
+            DurationEstimate.forPrescription(ExerciseMode.REPEATERS, unilateral = false, plan),
         )
     }
 

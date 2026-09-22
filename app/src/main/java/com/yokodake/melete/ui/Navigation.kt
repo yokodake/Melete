@@ -26,6 +26,7 @@ import com.yokodake.melete.ui.detail.ExerciseDetailRoute
 import com.yokodake.melete.ui.library.ExerciseEditorRoute
 import com.yokodake.melete.ui.library.LibraryPickerRoute
 import com.yokodake.melete.ui.library.LibraryRoute
+import com.yokodake.melete.ui.circuit.CircuitDetailRoute
 import com.yokodake.melete.ui.circuit.CircuitReviewRoute
 import com.yokodake.melete.ui.logger.LoggerRoute
 import com.yokodake.melete.ui.routine.RoutineEditorRoute
@@ -97,6 +98,15 @@ data class RoutineListDestination(
 @Serializable
 data class RoutineEditorDestination(val routineId: String? = null)
 
+/**
+ * What a scheduled circuit is, and the two things to do with it.
+ *
+ * The counterpart of [ExerciseDetailDestination]: a circuit opens as information, not as a form,
+ * for exactly the same reason an exercise does.
+ */
+@Serializable
+data class CircuitDetailDestination(val circuitInstanceId: String)
+
 /** Logging a whole scheduled circuit in one review. */
 @Serializable
 data class CircuitReviewDestination(val circuitInstanceId: String)
@@ -155,7 +165,7 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                         )
                     )
                 },
-                onOpenCircuit = { navController.navigate(CircuitReviewDestination(it)) },
+                onOpenCircuit = { navController.navigate(CircuitDetailDestination(it)) },
                 bottomBar = bottomBar,
             )
         }
@@ -219,13 +229,17 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable<CircuitReviewDestination> {
-            CircuitReviewRoute(
+        composable<CircuitDetailDestination> {
+            CircuitDetailRoute(
+                onLog = { navController.navigate(CircuitReviewDestination(it)) },
+                // Starting a countdown moves to the timer tab, which is where it lives for as
+                // long as it runs; the circuit stays behind it on the back stack.
+                onOpenTimer = { navController.switchTab(TimerDestination) },
                 onBack = { navController.popBackStack() },
-                // Running it moves to the timer tab, which is where a countdown lives for as long
-                // as it runs; the review stays behind it on the back stack.
-                onStartTimer = { navController.switchTab(TimerDestination) },
             )
+        }
+        composable<CircuitReviewDestination> {
+            CircuitReviewRoute(onBack = { navController.popBackStack() })
         }
     }
 }

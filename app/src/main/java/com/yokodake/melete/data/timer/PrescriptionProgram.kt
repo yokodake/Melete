@@ -24,8 +24,12 @@ object PrescriptionProgram {
     ): TimerEntry {
         val sets = (prescription?.sets ?: 1).coerceIn(1, 99)
         val rest = prescription?.restSeconds?.takeIf { it > 0 } ?: fallbackRestSeconds
-        val timed = mode == ExerciseMode.DURATION || mode == ExerciseMode.ACTIVITY
-        val repeater = prescription?.repeater?.takeIf { timed }?.toSpec()
+        val timed = mode == ExerciseMode.DURATION ||
+            mode == ExerciseMode.ACTIVITY ||
+            mode == ExerciseMode.REPEATERS
+        val repeater = prescription?.repeater
+            ?.takeIf { mode == ExerciseMode.REPEATERS }
+            ?.toSpec()
         val workSeconds = prescription?.targetDurationSeconds?.takeIf { timed && it > 0 }
         val switch = prescription?.sideSwitchSeconds
             ?.coerceAtLeast(0)
@@ -174,7 +178,8 @@ object DurationEstimate {
         if (mode == ExerciseMode.ACTIVITY) return prescription.targetDurationSeconds
         val hasLength = prescription.repeater != null ||
             (prescription.targetDurationSeconds ?: 0) > 0
-        if (mode == ExerciseMode.DURATION && !hasLength) return null
+        val timed = mode == ExerciseMode.DURATION || mode == ExerciseMode.REPEATERS
+        if (timed && !hasLength) return null
         return PrescriptionProgram
             .of(label = null, mode = mode, unilateral = unilateral, prescription = prescription)
             .estimatedSeconds()

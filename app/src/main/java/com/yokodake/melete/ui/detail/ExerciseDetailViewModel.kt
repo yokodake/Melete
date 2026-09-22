@@ -336,7 +336,7 @@ class ExerciseDetailViewModel(
     fun savePrescription() {
         val state = uiState.value
         val form = transient.value.prescriptionEditor ?: return
-        val payload = form.toPayload()
+        val payload = form.toPayload(state.mode)
         viewModelScope.launch {
             val occurrenceId = state.occurrenceId
             if (occurrenceId != null) {
