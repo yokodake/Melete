@@ -3,6 +3,7 @@ package com.yokodake.melete.ui
 import com.yokodake.melete.core.OneOffActivity
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
@@ -189,6 +190,42 @@ class DurationLoggingTest {
         // A repeater states its per-rep length, so a set length would be the same question twice.
         assertNull(repeaters.targetDurationSeconds)
         assertEquals(RepeaterPrescription(6, 7, 3), repeaters.repeater)
+    }
+
+    @Test
+    fun `an activity keeps its length and effort and nothing a set would have`() {
+        // Everything filled in, as if the exercise had been timed sets before becoming an activity.
+        val form = PrescriptionFormState(
+            sets = "3",
+            targetReps = "8",
+            targetDurationSeconds = "10",
+            restSeconds = "60",
+            effort = EffortLevel.HARD,
+            activityMinutes = "45",
+            plannedDurationMinutes = "20",
+            sideSwitchSeconds = "15",
+            repeaterReps = "6",
+            repeaterWorkSeconds = "7",
+        )
+        assertEquals(
+            PrescriptionPayload(sets = 1, targetDurationSeconds = 45 * 60, effort = EffortLevel.HARD),
+            form.toPayload(ExerciseMode.ACTIVITY),
+        )
+    }
+
+    @Test
+    fun `an activity is typed in minutes and a set in seconds from the same stored length`() {
+        val form = PrescriptionFormState.from(PrescriptionPayload(sets = 1, targetDurationSeconds = 2700))
+        assertEquals("45", form.activityMinutes)
+        assertEquals(2700, form.toPayload(ExerciseMode.ACTIVITY).targetDurationSeconds)
+        // Switched to timed sets, the same number reads back in the unit a set is asked in.
+        assertEquals("2700", form.targetDurationSeconds)
+    }
+
+    @Test
+    fun `an activity with no minutes has no length rather than a zero one`() {
+        assertNull(PrescriptionFormState(activityMinutes = "").toPayload(ExerciseMode.ACTIVITY).targetDurationSeconds)
+        assertNull(PrescriptionFormState(activityMinutes = "0").toPayload(ExerciseMode.ACTIVITY).targetDurationSeconds)
     }
 
     @Test

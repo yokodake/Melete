@@ -45,7 +45,8 @@ import com.yokodake.melete.ui.components.PrescriptionFormState
 
 @Composable
 fun ExerciseEditorRoute(
-    onDone: () -> Unit,
+    /** Called after saving, with the new exercise's id, or null when an existing one was edited. */
+    onDone: (createdId: String?) -> Unit,
     onBack: () -> Unit,
     viewModel: ExerciseEditorViewModel = viewModel(factory = ExerciseEditorViewModel.Factory),
 ) {
@@ -151,37 +152,41 @@ fun ExerciseEditorScreen(
                 label = "How is a set measured?",
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Unilateral", style = MaterialTheme.typography.bodyLarge)
+            // Sides and a load belong to sets. An activity has neither, so it is not asked — and
+            // the view model saves them cleared whatever these fields held before the switch.
+            if (state.mode.hasSetStructure) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Unilateral", style = MaterialTheme.typography.bodyLarge)
+                    }
+                    Switch(checked = state.unilateral, onCheckedChange = onUnilateralChange)
                 }
-                Switch(checked = state.unilateral, onCheckedChange = onUnilateralChange)
-            }
 
-            HorizontalDivider()
-            Text("Measurement", style = MaterialTheme.typography.titleSmall)
-            CompactTextField(
-                value = state.unit,
-                onValueChange = onUnitChange,
-                label = "Unit (empty for none)",
-                placeholder = "kg",
-                supportingText = "",
-                minHeight = 48,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (state.unit.isNotBlank()) {
-                ChoiceField(
-                    value = state.meaning,
-                    options = MeasurementMeaning.entries,
-                    optionLabel = MeasurementMeaning::label,
-                    onSelect = onMeaningChange,
-                    label = "What the number means",
+                HorizontalDivider()
+                Text("Measurement", style = MaterialTheme.typography.titleSmall)
+                CompactTextField(
+                    value = state.unit,
+                    onValueChange = onUnitChange,
+                    label = "Unit (empty for none)",
+                    placeholder = "kg",
+                    supportingText = "",
+                    minHeight = 48,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (state.unit.isNotBlank()) {
+                    ChoiceField(
+                        value = state.meaning,
+                        options = MeasurementMeaning.entries,
+                        optionLabel = MeasurementMeaning::label,
+                        onSelect = onMeaningChange,
+                        label = "What the number means",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
 
             HorizontalDivider()

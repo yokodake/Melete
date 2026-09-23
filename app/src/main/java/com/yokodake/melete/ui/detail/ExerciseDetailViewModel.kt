@@ -117,22 +117,8 @@ data class ExerciseDetailUiState(
         get() {
             val program = timerProgram ?: return null
             val parts = buildList {
-                if (unilateral) {
-                    add(
-                        "both sides, " +
-                            PrescriptionSummary.duration(program.entry.sideSwitchSeconds) +
-                            " to switch"
-                    )
-                }
-                program.entry.repeater?.let {
-                    add(
-                        "${it.repsPerSet} reps of " +
-                            PrescriptionSummary.duration(it.workSecondsPerRep) +
-                            " with " + PrescriptionSummary.duration(it.restSecondsBetweenReps)
-                    )
-                }
                 plannedDurationSeconds?.let {
-                    add("about ${PrescriptionSummary.duration(it)} in all")
+                    add("~ ${PrescriptionSummary.duration(it)} total")
                 }
             }
             return parts.takeIf { it.isNotEmpty() }?.joinToString(" \u00b7 ")

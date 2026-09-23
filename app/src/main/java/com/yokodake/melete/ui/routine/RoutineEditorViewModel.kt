@@ -16,12 +16,14 @@ import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.timer.PrescriptionProgram
 import com.yokodake.melete.data.timer.StationPlan
+import com.yokodake.melete.ui.CREATED_EXERCISE_ID
 import com.yokodake.melete.ui.RoutineEditorDestination
 import com.yokodake.melete.ui.components.PrescriptionFormState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -94,7 +96,7 @@ data class RoutineEditorUiState(
  */
 class RoutineEditorViewModel(
     private val repository: TrainingRepository,
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val routineId: String? =
@@ -132,6 +134,17 @@ class RoutineEditorViewModel(
         )
 
     init {
+        // An exercise created from the picker comes back here as an id on this screen's saved
+        // state, and becomes the next station — that is what the detour was for. Cleared once
+        // used, so returning to this screen later does not add it a second time.
+        viewModelScope.launch {
+            savedStateHandle.getStateFlow<String?>(CREATED_EXERCISE_ID, null)
+                .filterNotNull()
+                .collect { createdId ->
+                    savedStateHandle[CREATED_EXERCISE_ID] = null
+                    repository.getLibraryExercise(createdId)?.let(::addStation)
+                }
+        }
         val id = routineId
         if (id == null) {
             form.update { it.copy(loaded = true) }
@@ -171,6 +184,15 @@ class RoutineEditorViewModel(
     fun openPicker() = form.update { it.copy(picking = true) }
 
     fun dismissPicker() = form.update { it.copy(picking = false) }
+
+    /**
+     * Leaves the picker to create an exercise. The picker closes rather than waiting underneath,
+     * because the new exercise is added as a station on return and there is nothing left to pick.
+     */
+    fun createExercise(onOpenEditor: () -> Unit) {
+        dismissPicker()
+        onOpenEditor()
+    }
 
     /**
      * Adds a station, seeded from the library default.

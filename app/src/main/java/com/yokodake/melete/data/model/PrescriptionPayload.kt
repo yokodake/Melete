@@ -12,7 +12,7 @@ const val PRESCRIPTION_PAYLOAD_VERSION: Int = 3
 /** How the app asks for a performed set. */
 enum class ExerciseMode(val label: String) {
     /** Countable repetitions, e.g. a squat. */
-    REPETITIONS("Repetitions"),
+    REPETITIONS("Reps"),
 
     /** Timed sets of a discrete exercise, e.g. a hang or a stretch. */
     DURATION("Timed sets"),
@@ -28,7 +28,9 @@ enum class ExerciseMode(val label: String) {
     REPEATERS("Repeaters"),
 
     /** Duration-only activity with no set structure, e.g. a mobility flow or a climbing session. */
-    ACTIVITY("Activity"),
+    ACTIVITY("Activity");
+
+    val hasSetStructure get() = this != ExerciseMode.ACTIVITY
 }
 
 /** What a numeric measurement means. These are different quantities and must never be merged. */
@@ -63,7 +65,6 @@ data class PrescriptionPayload(
     val measurement: Measurement? = null,
     /** Target effort on the five-point verbal scale. Replaced the numeric `rpe` field in v2. */
     val effort: EffortLevel? = null,
-    val rir: Int? = null,
     /**
      * v3. How long the whole exercise is expected to take, rests included.
      *

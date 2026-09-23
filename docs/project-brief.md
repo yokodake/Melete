@@ -44,7 +44,7 @@ creation form covers:
   strength and conditioning, flexibility, other activity. Each carries a colour, shown as a dot
   before the name. Absent is a valid answer.
 - Default prescription: sets, target reps or duration, rest, side-switch rest, an optional repeater
-  shape, optional RPE or RIR, and an optional planned duration. It deliberately fixes no load: the
+  shape, an optional target effort, and an optional planned duration. It deliberately fixes no load: the
   weight is what the day decides and what the logger records.
 
 Exercise identity and its default prescription are distinct in storage but may share one screen.
@@ -89,7 +89,8 @@ app structure, not a generic framework.
 6. Named fields have canonical meanings and units. Added load and assistance must never silently
    become the same quantity. Payload/export versions and metric definitions are kept. No arbitrary
    schema designer.
-7. RPE/RIR are optional in prescriptions and actuals. Absence is stored as absence, never as zero.
+7. Effort is optional in prescriptions and actuals, on the five-point verbal scale; there is
+   no RIR. Absence is stored as absence, never as zero.
 8. Exercise comments belong to the exercise **occurrence**, not to each set and not to the library
    definition.
 9. The training local date is persisted separately from event timestamps, so travel or logging past
