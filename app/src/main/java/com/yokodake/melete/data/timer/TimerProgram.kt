@@ -538,9 +538,18 @@ object ProgramSequencer {
         val step = steps.getOrNull(index) ?: return false
         if (step.phase != TimerPhase.WORK || step.untimed) return false
         val previous = steps.getOrNull(index - 1) ?: return true
-        if (step.repIndex != null && previous.repIndex != null && previous.sameBlockAs(step)) {
-            return false
-        }
+        if (continuesPulses(steps, index)) return false
         return !(previous.phase.isRest && previous.seconds >= TimerProgram.PREPARE_SECONDS)
+    }
+
+    /**
+     * True for a pulse that follows another pulse of the same side of the same set — the one place
+     * a preparation is never inserted, whether the sequence got there or the user skipped there.
+     */
+    fun continuesPulses(steps: List<TimerStep>, index: Int): Boolean {
+        val step = steps.getOrNull(index) ?: return false
+        if (step.phase != TimerPhase.WORK || step.repIndex == null) return false
+        val previous = steps.getOrNull(index - 1) ?: return false
+        return previous.repIndex != null && previous.sameBlockAs(step)
     }
 }

@@ -495,4 +495,99 @@ class TimerSequenceTest {
         )
         assertEquals(5, program.entry.sideSwitchSeconds)
     }
+
+    // ------------------------------------------------------------ skipping
+
+    /** Presses next and nothing else, from the start to the end, recording what is landed on. */
+    private fun skipThrough(program: TimerProgram, limit: Int = 500): List<String> {
+        val seen = mutableListOf<String>()
+        var now = 1_000L
+        var state = TimerTransitions.startProgram(id(), program, settings, now)
+        repeat(limit) {
+            seen += describe(state)
+            if (state is TimerState.Finished) return seen
+            now += 100
+            state = TimerTransitions.next(state, settings, now, id())
+        }
+        return seen
+    }
+
+    /** The work intervals and waits of a list of lines, preparation and rests left out. */
+    private fun workOf(lines: List<String>) =
+        lines.filter { it.startsWith("work") || it.startsWith("reps") }
+
+    @Test
+    fun `skipping the preparation of a single set starts the set rather than ending the program`() {
+        val program = TimerProgram(sets = 1, work = WorkKind.TIMED, workSeconds = 10)
+        var state = TimerTransitions.startProgram(id(), program, settings, 1_000)
+        assertEquals("prepare set1 5s", describe(state))
+        state = TimerTransitions.next(state, settings, 1_500, id())
+        assertEquals("work set1 10s", describe(state))
+    }
+
+    @Test
+    fun `skipping a rest lands on the preparation, and skipping that starts the set`() {
+        val program = TimerProgram(sets = 2, work = WorkKind.TIMED, workSeconds = 10, restSeconds = 60)
+        var state: TimerState = TimerTransitions.startProgram(id(), program, settings, 1_000)
+        state = TimerTransitions.next(state, settings, 1_100, id())
+        state = TimerTransitions.next(state, settings, 1_200, id())
+        assertEquals("rest set1 60s", describe(state))
+        state = TimerTransitions.next(state, settings, 1_300, id())
+        assertEquals("prepare set2 5s", describe(state))
+        state = TimerTransitions.next(state, settings, 1_400, id())
+        // Not the end: the second set is what the preparation was for.
+        assertEquals("work set2 10s", describe(state))
+    }
+
+    @Test
+    fun `skipping a paused preparation starts the set too`() {
+        val program = TimerProgram(sets = 1, work = WorkKind.TIMED, workSeconds = 10)
+        val preparing = TimerTransitions.startProgram(id(), program, settings, 1_000) as TimerState.Running
+        val paused = TimerTransitions.pause(preparing, 2_000)
+        assertEquals("work set1 10s", describe(TimerTransitions.next(paused, settings, 3_000, id())))
+    }
+
+    @Test
+    fun `skipping between pulses never inserts a preparation`() {
+        val lines = skipThrough(repeaters)
+        assertEquals(
+            listOf(
+                "prepare set1 rep1 5s",
+                "work set1 rep1 7s",
+                "rep_rest set1 rep1 3s",
+                // Straight into the next pulse, as the sequence itself would.
+                "work set1 rep2 7s",
+            ),
+            lines.take(4),
+        )
+        // Only the boundaries of a set are prepared for: the start of each of the three sets.
+        assertEquals(3, lines.count { it.startsWith("prepare") })
+    }
+
+    @Test
+    fun `pressing only next visits every piece of work exactly once, whatever the shape`() {
+        val shapes = mapOf(
+            "one timed set" to TimerProgram(sets = 1, work = WorkKind.TIMED, workSeconds = 10),
+            "timed sets" to TimerProgram(sets = 3, work = WorkKind.TIMED, workSeconds = 10, restSeconds = 60),
+            "reps" to TimerProgram(sets = 3, work = WorkKind.REPS, workReps = 8, restSeconds = 60),
+            "unilateral" to TimerProgram(
+                sets = 2, work = WorkKind.TIMED, workSeconds = 10, restSeconds = 60, unilateral = true,
+            ),
+            "unilateral, no switch" to TimerProgram(
+                sets = 2, work = WorkKind.TIMED, workSeconds = 10, unilateral = true, sideSwitchSeconds = 0,
+            ),
+            "repeaters" to repeaters,
+            "unilateral repeaters" to TimerProgram(
+                sets = 2, work = WorkKind.TIMED, restSeconds = 120, unilateral = true,
+                repeater = RepeaterSpec(repsPerSet = 3, workSecondsPerRep = 7, restSecondsBetweenReps = 3),
+            ),
+            "circuit" to circuit,
+        )
+        shapes.forEach { (name, program) ->
+            val skipped = skipThrough(program)
+            assertEquals("$name ends", true, skipped.last().startsWith("finished"))
+            // The same work, in the same order, as letting every interval run out.
+            assertEquals(name, workOf(walk(program)), workOf(skipped))
+        }
+    }
 }
