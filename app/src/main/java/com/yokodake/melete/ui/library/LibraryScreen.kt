@@ -57,6 +57,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.ExerciseRemoval
 import com.yokodake.melete.data.LibraryExercise
+import com.yokodake.melete.data.Routine
+import com.yokodake.melete.ui.routine.RoutineRow
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.Chip
 import com.yokodake.melete.ui.week.PrescriptionSummary
@@ -96,31 +98,50 @@ fun LibraryRoute(
         onCancelRemove = viewModel::cancelRemoval,
         onRowClick = onOpenExercise,
         onNewExercise = onNewExercise,
-        onOpenCircuits = onOpenCircuits,
+        // Circuits are made of library exercises and are edited the same way, so this is where
+        // they belong; they are not a fourth tab, because they are used far less often.
+        headerAction = "Circuits" to onOpenCircuits,
         onBack = null,
         bottomBar = bottomBar,
     )
 }
 
-/** The library as a picker: choosing an exercise copies it into the chosen slot of the week. */
+/**
+ * The library as a picker: choosing an exercise or a circuit copies it into the chosen slot of the
+ * week. Exercises first, because they are what is added most; circuits one tap away in the header,
+ * and the button at the bottom always creates whichever kind is on screen.
+ */
 @Composable
 fun LibraryPickerRoute(
     onScheduled: () -> Unit,
     onNewExercise: () -> Unit,
+    onNewCircuit: () -> Unit,
     onOpenExercise: (String) -> Unit,
+    onEditCircuit: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: LibraryPickerViewModel = viewModel(factory = LibraryPickerViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val circuits = state.view == PickerView.CIRCUITS
     LibraryScreen(
         title = "Add to",
         subtitle = state.targetLabel,
         exercises = state.exercises,
-        emptyMessage = "The library is empty. Create an exercise to get started — " +
-            "nothing is built in.",
+        circuits = state.circuits.takeIf { circuits },
+        emptyMessage = if (circuits) {
+            "No circuits yet. A circuit is an order of library exercises you run round, with " +
+                "its own rests."
+        } else {
+            "The library is empty. Create an exercise to get started."
+        },
         onRowClick = { viewModel.schedule(it, onScheduled) },
+        onCircuitClick = { viewModel.scheduleCircuit(it, onScheduled) },
         onSecondaryAction = onOpenExercise to "Open",
-        onNewExercise = onNewExercise,
+        onCircuitSecondaryAction = onEditCircuit to "Edit",
+        // Names the view you would switch *to*, so the button says what pressing it does.
+        headerAction = (if (circuits) "Exercises" else "Circuits") to viewModel::toggleView,
+        newLabel = if (circuits) "New circuit" else "New exercise",
+        onNewExercise = if (circuits) onNewCircuit else onNewExercise,
         onBack = onBack,
     )
 }
@@ -133,9 +154,15 @@ fun LibraryScreen(
     exercises: List<LibraryExercise>,
     emptyMessage: String,
     onRowClick: (String) -> Unit,
+    /** Creates whichever kind of thing the screen is listing; [newLabel] says which. */
     onNewExercise: () -> Unit,
     onBack: (() -> Unit)?,
     onSecondaryAction: Pair<(String) -> Unit, String>? = null,
+    newLabel: String = "New exercise",
+    /** Listed instead of [exercises] when not null: the picker's circuit view. */
+    circuits: List<Routine>? = null,
+    onCircuitClick: (String) -> Unit = {},
+    onCircuitSecondaryAction: Pair<(String) -> Unit, String>? = null,
     query: String? = null,
     onQueryChange: (String) -> Unit = {},
     message: String? = null,
@@ -148,8 +175,8 @@ fun LibraryScreen(
     onAskRemove: (LibraryExercise) -> Unit = {},
     onConfirmRemove: () -> Unit = {},
     onCancelRemove: () -> Unit = {},
-    /** Null in the picker: choosing a circuit for a slot is a different flow from browsing them. */
-    onOpenCircuits: (() -> Unit)? = null,
+    /** A text button at the right of the header: a label and what it does. */
+    headerAction: Pair<String, () -> Unit>? = null,
     bottomBar: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -189,12 +216,9 @@ fun LibraryScreen(
                         }
                     }
                 },
-                // Circuits are made of library exercises and are edited the same way, so this is
-                // where they belong; they are not a fourth tab, because they are used far less
-                // often than the three that are.
                 actions = {
-                    if (onOpenCircuits != null) {
-                        TextButton(onClick = onOpenCircuits) { Text("Circuits") }
+                    headerAction?.let { (label, action) ->
+                        TextButton(onClick = action) { Text(label) }
                     }
                 },
             )
@@ -202,7 +226,7 @@ fun LibraryScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onNewExercise,
-                text = { Text("New exercise") },
+                text = { Text(newLabel) },
                 icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
             )
         },
@@ -233,7 +257,7 @@ fun LibraryScreen(
                     )
                 }
             }
-            if (exercises.isEmpty()) {
+            if ((circuits ?: exercises).isEmpty()) {
                 item {
                     Text(
                         text = emptyMessage,
@@ -242,7 +266,17 @@ fun LibraryScreen(
                     )
                 }
             }
-            items(items = exercises, key = { it.id }) { exercise ->
+            if (circuits != null) {
+                items(items = circuits, key = { it.id }) { circuit ->
+                    RoutineRow(
+                        routine = circuit,
+                        onClick = { onCircuitClick(circuit.id) },
+                        secondaryAction = onCircuitSecondaryAction?.let { (action, label) ->
+                            { action(circuit.id) } to label
+                        },
+                    )
+                }
+            } else items(items = exercises, key = { it.id }) { exercise ->
                 LibraryRow(
                     exercise = exercise,
                     onClick = { onRowClick(exercise.id) },

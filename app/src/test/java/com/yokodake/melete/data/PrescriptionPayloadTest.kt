@@ -20,7 +20,6 @@ class PrescriptionPayloadTest {
             restSeconds = 90,
             measurement = Measurement(22.5, "kg", MeasurementMeaning.TOTAL_LOAD),
             effort = EffortLevel.HARD,
-            rir = 2,
         )
         assertEquals(payload, PrescriptionJson.decode(PrescriptionJson.encode(payload)))
     }
@@ -30,7 +29,6 @@ class PrescriptionPayloadTest {
         val payload = PrescriptionPayload(sets = 2, targetDurationSeconds = 90)
         val decoded = PrescriptionJson.decode(PrescriptionJson.encode(payload))
         assertNull(decoded.effort)
-        assertNull(decoded.rir)
         assertNull(decoded.restSeconds)
         assertNull(decoded.measurement)
         assertNull(decoded.targetReps)

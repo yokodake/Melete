@@ -157,4 +157,5 @@ should be picked up whenever the surrounding screen is next open.
   routine editor lists the library and nothing else, so building a circuit around a movement you
   have not defined yet means leaving the editor, creating it, and coming back to start again. It
   needs the same *New exercise* route the library picker has, returning to the circuit with the
-  new exercise added.
+  new exercise added. **Done 2026-09-23:** the dialog has *+ New exercise*; saving the editor
+  hands the new id back through the circuit editor's saved state and it becomes the next station.

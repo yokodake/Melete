@@ -64,6 +64,12 @@ data class LibraryPickerDestination(
 data class ExerciseEditorDestination(val exerciseId: String? = null)
 
 /**
+ * The saved-state key the exercise editor leaves on the screen below it when it has just created
+ * an exercise, holding the new id.
+ */
+const val CREATED_EXERCISE_ID = "createdExerciseId"
+
+/**
  * What an exercise *is*, before anything is asked of the user. One destination serves both the
  * planned copy in a week and the library entry behind it, because the page is the same page —
  * only what you can do from it differs.
@@ -77,23 +83,9 @@ data class ExerciseDetailDestination(
 @Serializable
 data class LoggerDestination(val occurrenceId: String)
 
-/**
- * The saved circuits: a list to manage, or a picker when a week slot is waiting for one.
- *
- * One destination for both, because it is the same list and only the tap differs. A week start of
- * [NO_TRAINING_DATE] means "just browsing"; anything else is a slot to copy a circuit into.
- */
+/** The saved circuits, as a list to manage. Adding one to a week goes through the library picker. */
 @Serializable
-data class RoutineListDestination(
-    val weekStartEpochDay: Long = NO_TRAINING_DATE,
-    val trainingDateEpochDay: Long = NO_TRAINING_DATE,
-) {
-    val weekStart: LocalDate?
-        get() = weekStartEpochDay.takeIf { it != NO_TRAINING_DATE }?.let(LocalDate::ofEpochDay)
-
-    val trainingDate: LocalDate?
-        get() = trainingDateEpochDay.takeIf { it != NO_TRAINING_DATE }?.let(LocalDate::ofEpochDay)
-}
+data object RoutineListDestination
 
 @Serializable
 data class RoutineEditorDestination(val routineId: String? = null)
@@ -157,14 +149,6 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                         )
                     )
                 },
-                onAddCircuit = { weekStart, date ->
-                    navController.navigate(
-                        RoutineListDestination(
-                            weekStartEpochDay = weekStart.toEpochDay(),
-                            trainingDateEpochDay = date?.toEpochDay() ?: NO_TRAINING_DATE,
-                        )
-                    )
-                },
                 onOpenCircuit = { navController.navigate(CircuitDetailDestination(it)) },
                 bottomBar = bottomBar,
             )
@@ -175,7 +159,7 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
                 },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
-                onOpenCircuits = { navController.navigate(RoutineListDestination()) },
+                onOpenCircuits = { navController.navigate(RoutineListDestination) },
                 bottomBar = bottomBar,
             )
         }
@@ -190,15 +174,26 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
             LibraryPickerRoute(
                 onScheduled = { navController.popBackStack() },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
+                onNewCircuit = { navController.navigate(RoutineEditorDestination()) },
                 onOpenExercise = {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
                 },
+                onEditCircuit = { navController.navigate(RoutineEditorDestination(it)) },
                 onBack = { navController.popBackStack() },
             )
         }
         composable<ExerciseEditorDestination> {
             ExerciseEditorRoute(
-                onDone = { navController.popBackStack() },
+                onDone = { createdId ->
+                    // Handed back to whoever opened the editor, so a screen that asked for a new
+                    // exercise can use it straight away. Screens that did not ask never read it.
+                    if (createdId != null) {
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(CREATED_EXERCISE_ID, createdId)
+                    }
+                    navController.popBackStack()
+                },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -219,12 +214,12 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
             RoutineListRoute(
                 onNewRoutine = { navController.navigate(RoutineEditorDestination()) },
                 onEditRoutine = { navController.navigate(RoutineEditorDestination(it)) },
-                onScheduled = { navController.popBackStack() },
                 onBack = { navController.popBackStack() },
             )
         }
         composable<RoutineEditorDestination> {
             RoutineEditorRoute(
+                onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
                 onDone = { navController.popBackStack() },
                 onBack = { navController.popBackStack() },
             )

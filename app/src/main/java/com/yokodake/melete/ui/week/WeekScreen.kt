@@ -76,7 +76,6 @@ import java.time.LocalDate
 fun WeekRoute(
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit,
-    onAddCircuit: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit = { _, _ -> },
     onOpenCircuit: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
@@ -100,7 +99,6 @@ fun WeekRoute(
         onOpenOccurrence = onOpenOccurrence,
         onAddExercise = { date -> onAddExercise(state.weekStart, date) },
         onAddActivity = viewModel::addActivity,
-        onAddCircuit = { date -> onAddCircuit(state.weekStart, date) },
         onOpenCircuit = onOpenCircuit,
         onMoveCircuit = viewModel::moveCircuit,
         onRemoveCircuit = viewModel::removeCircuit,
@@ -129,7 +127,6 @@ fun WeekScreen(
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (LocalDate?) -> Unit,
     onAddActivity: (String, LocalDate?, Int?) -> Unit = { _, _, _ -> },
-    onAddCircuit: (LocalDate?) -> Unit = {},
     onOpenCircuit: (String) -> Unit = {},
     onMoveCircuit: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
     onRemoveCircuit: (String) -> Unit = {},
@@ -230,14 +227,12 @@ fun WeekScreen(
                         subtitle = row.subtitle,
                         onAddExercise = { onAddExercise(null) },
                         onAddActivity = { addingActivityOn = UndatedSlot },
-                        onAddCircuit = { onAddCircuit(null) },
                     )
 
                     is WeekRow.DayHeading -> DayHeading(
                         row = row,
                         onAddExercise = { onAddExercise(row.date) },
                         onAddActivity = { addingActivityOn = row.date },
-                        onAddCircuit = { onAddCircuit(row.date) },
                     )
 
                     is WeekRow.Item -> when (val item = row.item) {
@@ -436,16 +431,15 @@ private fun RemoveDialog(
 /**
  * The one way to put something in a slot of the week.
  *
- * Three kinds of thing can go there and they are genuinely different — a movement from the
- * library, an activity that is only a name and a duration, a saved circuit — so the plus asks
- * which rather than assuming the commonest and making the others hard to find.
+ * Two kinds of thing can go there and they are genuinely different — something saved in the
+ * library, exercise or circuit, and an activity that is only a name and a duration — so the plus
+ * asks which rather than assuming the commonest and making the other hard to find.
  */
 @Composable
 private fun AddButton(
     description: String,
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
-    onAddCircuit: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -456,8 +450,10 @@ private fun AddButton(
             Text("+", style = MaterialTheme.typography.titleLarge)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            // Exercises and circuits both: the picker lists either, so the plus does not have to
+            // ask which kind of saved thing before you have seen what there is.
             DropdownMenuItem(
-                text = { Text("Exercise from the library") },
+                text = { Text("From library") },
                 onClick = {
                     expanded = false
                     onAddExercise()
@@ -470,13 +466,6 @@ private fun AddButton(
                     onAddActivity()
                 },
             )
-            DropdownMenuItem(
-                text = { Text("Circuit") },
-                onClick = {
-                    expanded = false
-                    onAddCircuit()
-                },
-            )
         }
     }
 }
@@ -487,7 +476,6 @@ private fun SectionHeading(
     subtitle: String?,
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
-    onAddCircuit: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -509,7 +497,6 @@ private fun SectionHeading(
                 description = "Add something without a date",
                 onAddExercise = onAddExercise,
                 onAddActivity = onAddActivity,
-                onAddCircuit = onAddCircuit,
             )
         }
         HorizontalDivider()
@@ -521,7 +508,6 @@ private fun DayHeading(
     row: WeekRow.DayHeading,
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
-    onAddCircuit: () -> Unit,
 ) {
     Column {
         Row(
@@ -549,7 +535,6 @@ private fun DayHeading(
                 description = "Add something to ${WeekMath.dayLabel(row.date)}",
                 onAddExercise = onAddExercise,
                 onAddActivity = onAddActivity,
-                onAddCircuit = onAddCircuit,
             )
         }
         HorizontalDivider(
@@ -838,12 +823,6 @@ private fun ActivityDialog(
                     onValueChange = { minutes = it },
                     modifier = Modifier.fillMaxWidth(0.6f),
                 )
-                Text(
-                    text = "No library entry is created. Use the library for something you will " +
-                        "plan again.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         },
         confirmButton = {
@@ -968,7 +947,6 @@ private fun WeekScreenPreview() {
             targetReps = 8,
             restSeconds = 90,
             measurement = Measurement(22.5, "kg", MeasurementMeaning.TOTAL_LOAD),
-            rir = 2,
         ),
         prescriptionUnreadable = false,
         state = OccurrenceState.PLANNED,

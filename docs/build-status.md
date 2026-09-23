@@ -37,12 +37,18 @@ structure snapshot version **1**.
 One vertical list: the week's unscheduled items on top, then Monday to Sunday. Today is
 highlighted and the list opens near it. Previous/next week and a *Today* action.
 
-Each day's `+` offers three things, because three genuinely different things can go in a slot:
+Each day's `+` offers two things:
 
-- **an exercise from the library**, which copies the definition and its prescription into the slot;
-- **an other activity**, typed in by name with optional minutes — no library entry is created;
-- **a circuit**, which copies a saved routine in as a container plus one real occurrence per
-  station.
+- **From library** opens the picker for that slot. It lists exercises by default; *Circuits* at
+  the right of its header switches to saved circuits and becomes *Exercises* to switch back, and
+  the bottom button creates whichever kind is on screen (*New exercise* / *New circuit*). An
+  exercise copies its definition and prescription into the slot; a circuit copies in as a
+  container plus one real occurrence per station. The slot is fixed for the life of the picker,
+  across switching views and detours to create something.
+- **Other activity**, typed in by name with optional minutes — no library entry is created.
+
+The circuit list reached from the Library tab is for managing circuits only; it no longer
+schedules them.
 
 A card is tapped to open what it is, and long-pressed for its menu: move to any week and day (or
 back to unscheduled), duplicate, nudge up and down within its slot, remove. A circuit is one card
@@ -61,7 +67,7 @@ happened. The stronger answer exists and names what it would destroy.
   length, a timed set states a length and has no pulses. Neither can quietly hold the other's
   numbers, because `PrescriptionFormState.toPayload` takes the mode as an argument.
 - **A prescription** fixes the shape of the work: sets, target reps or duration or pulses, rest,
-  side-switch rest, target effort or RIR, and an optional planned duration. It deliberately does
+  side-switch rest, target effort, and an optional planned duration. It deliberately does
   not fix a load.
 - **A one-off activity** is an occurrence with no library row. Its exercise id is derived from its
   name (`core/OneOffActivity`), so two sessions called the same thing already group in history and
@@ -83,7 +89,8 @@ the same gesture as making one and the button says *Save changes*.
 
 - Load is per set, with an L/R pair for unilateral work and a max-load fallback that fills rows
   saying nothing of their own but never overrides one that does.
-- Effort is the optional five-point verbal scale. RIR stays a planning field.
+- Effort is the optional five-point verbal scale, in plans and in logs alike. RIR was removed
+  (2026-09-23): one way to say how hard is enough, and a stored `rir` is now ignored on read.
 - **Time taken** sits behind a control (and is simply present for an activity). Empty is not zero:
   the estimate shows in grey and is what will be saved, marked *inferred*; typing makes the number
   the user's own; clearing hands the question back. Saved history is never recomputed when a

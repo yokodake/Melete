@@ -48,26 +48,20 @@ import com.yokodake.melete.data.timer.StationPlan
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
 /**
- * The saved circuits.
- *
- * Opened from the library it is a list to manage; opened from a day's plus it is a picker, and a
- * tap copies the circuit into that slot. The rows are identical either way, because they answer
- * the same question — what is this circuit, and how long does it take.
+ * The saved circuits, as a list to manage. Putting one in a week is the library picker's job, in
+ * its circuit view, so there is one way to add something to a day rather than two.
  */
 @Composable
 fun RoutineListRoute(
     onNewRoutine: () -> Unit,
     onEditRoutine: (String) -> Unit,
-    onScheduled: () -> Unit,
     onBack: () -> Unit,
     viewModel: RoutineListViewModel = viewModel(factory = RoutineListViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     RoutineListScreen(
         state = state,
-        onRowClick = { id ->
-            if (state.picking) viewModel.schedule(id, onScheduled) else onEditRoutine(id)
-        },
+        onRowClick = onEditRoutine,
         onEdit = onEditRoutine,
         onDuplicate = viewModel::duplicate,
         onAskRemove = viewModel::askToRemove,
@@ -109,17 +103,7 @@ fun RoutineListScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
-                title = {
-                    Column {
-                        Text(
-                            text = if (state.picking) "Add a circuit to" else "Circuits",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        state.target?.let {
-                            Text(it.label, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                },
+                title = { Text("Circuits", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
@@ -198,21 +182,32 @@ fun RoutineListScreen(
     }
 }
 
+/**
+ * One saved circuit: its name, its length and its order.
+ *
+ * With a [secondaryAction] it is a picker row — a tap chooses it and the button beside it does the
+ * one other thing, as an exercise row does in the same picker. Without one, a long press offers
+ * managing it.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RoutineRow(
+internal fun RoutineRow(
     routine: Routine,
     onClick: () -> Unit,
-    onEdit: () -> Unit,
-    onDuplicate: () -> Unit,
-    onRemove: () -> Unit,
+    onEdit: () -> Unit = {},
+    onDuplicate: () -> Unit = {},
+    onRemove: () -> Unit = {},
+    secondaryAction: Pair<() -> Unit, String>? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Box {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { if (secondaryAction == null) menuOpen = true },
+                ),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             ),
@@ -230,6 +225,9 @@ private fun RoutineRow(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    secondaryAction?.let { (action, label) ->
+                        TextButton(onClick = action) { Text(label) }
+                    }
                 }
                 Text(
                     text = "${routine.rounds} rounds · " +

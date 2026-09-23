@@ -53,6 +53,7 @@ import com.yokodake.melete.ui.week.PrescriptionSummary
  */
 @Composable
 fun RoutineEditorRoute(
+    onNewExercise: () -> Unit,
     onDone: () -> Unit,
     onBack: () -> Unit,
     viewModel: RoutineEditorViewModel = viewModel(factory = RoutineEditorViewModel.Factory),
@@ -67,6 +68,7 @@ fun RoutineEditorRoute(
         onAddStation = viewModel::openPicker,
         onPickStation = viewModel::addStation,
         onDismissPicker = viewModel::dismissPicker,
+        onNewExercise = { viewModel.createExercise(onNewExercise) },
         onToggleStation = viewModel::toggleStation,
         onMoveStation = viewModel::moveStation,
         onRemoveStation = viewModel::removeStation,
@@ -87,6 +89,7 @@ fun RoutineEditorScreen(
     onAddStation: () -> Unit,
     onPickStation: (com.yokodake.melete.data.LibraryExercise) -> Unit,
     onDismissPicker: () -> Unit,
+    onNewExercise: () -> Unit,
     onToggleStation: (Int) -> Unit,
     onMoveStation: (Int, Int) -> Unit,
     onRemoveStation: (Int) -> Unit,
@@ -152,13 +155,13 @@ fun RoutineEditorScreen(
                         modifier = Modifier.weight(1f),
                     )
                     NumberField(
-                        label = "switch",
+                        label = "switch (s)",
                         value = state.transitionSeconds,
                         onValueChange = onTransition,
                         modifier = Modifier.weight(1f),
                     )
                     NumberField(
-                        label = "Rest",
+                        label = "Rest (s)",
                         value = state.roundRestSeconds,
                         onValueChange = onRoundRest,
                         modifier = Modifier.weight(1f),
@@ -199,7 +202,7 @@ fun RoutineEditorScreen(
             title = { Text("Add an exercise") },
             text = {
                 if (state.library.isEmpty()) {
-                    Text("The library is empty. Create an exercise first.")
+                    Text("The library is empty.")
                 } else {
                     LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
                         items(items = state.library, key = { it.id }) { exercise ->
@@ -218,7 +221,11 @@ fun RoutineEditorScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = onDismissPicker) { Text("Close") } },
+            // The exercise you want is often the one not written yet. Creating it here adds it
+            // as the next station on the way back, rather than costing a trip to the library and
+            // a second trip through this picker.
+            dismissButton = { TextButton(onClick = onDismissPicker) { Text("Close") } },
+            confirmButton = { TextButton(onClick = onNewExercise) { Text("+  New exercise") } },
         )
     }
 }

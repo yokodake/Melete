@@ -150,29 +150,37 @@ fun ExerciseDetailScreen(
             }
 
             Section("Description")
-            Text(
-                text = state.description
-                    ?: when {
-                        state.isOneOff ->
-                            "An activity you typed in, so there is no library entry behind it. " +
-                                "Create one in the library if it is something you will plan again."
+            val description = state.description?.takeIf { it.isNotBlank() }
+            val notes = state.notes?.takeIf { it.isNotBlank() }
+            // Why there is no explanation, when that needs saying. A missing description with
+            // variation notes underneath is not an empty section, so it gets no apology.
+            val absence = when {
+                description != null -> null
+                state.isOneOff ->
+                    "An activity you typed in, so there is no library entry behind it. " +
+                        "Create one in the library if it is something you will plan again."
 
-                        state.definitionMissing ->
-                            "The library entry this came from no longer exists, so there is " +
-                                "nothing left to explain it. What was planned and what was " +
-                                "logged are intact."
+                state.definitionMissing ->
+                    "The library entry this came from no longer exists, so there is " +
+                        "nothing left to explain it. What was planned and what was " +
+                        "logged are intact."
 
-                        else -> "No explanation written yet."
+                notes != null -> null
+                else -> "No explanation written yet."
+            }
+            (description ?: absence)?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (description == null) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
                     },
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (state.description == null) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-            )
+                )
+            }
 
-            state.notes?.let {
+            notes?.let {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodyMedium,
@@ -201,12 +209,14 @@ fun ExerciseDetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
-                        state.timerShapeLine?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
+                        if (state.mode.hasSetStructure) {
+                            state.timerShapeLine?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
                         }
                     }
                     // The numbers are edited where they are shown, rather than through a button
@@ -346,13 +356,13 @@ private fun Section(title: String) {
 private fun facts(state: ExerciseDetailUiState): String {
     val parts = mutableListOf<String>()
     parts += when (state.mode) {
-        ExerciseMode.REPETITIONS -> "counted reps"
-        ExerciseMode.DURATION -> "timed sets"
+        ExerciseMode.REPETITIONS -> "reps"
+        ExerciseMode.DURATION -> "timed"
         ExerciseMode.REPEATERS -> "repeaters"
-        ExerciseMode.ACTIVITY -> "duration only"
+        ExerciseMode.ACTIVITY -> "activity"
     }
-    if (state.unilateral) parts += "left and right separately"
-    state.measurementUnit?.let { parts += "logged in $it" }
+    if (state.unilateral) parts += "unilateral"
+//    state.measurementUnit?.let { parts += "logged in $it" }
     state.category?.let { parts += it.label.lowercase() }
     return parts.joinToString(" · ")
 }

@@ -38,9 +38,9 @@ object PrescriptionSummary {
         val parts = mutableListOf<String>()
         parts += volume(prescription, mode, unilateral)
         prescription.measurement?.let { parts += measurement(it) }
-        prescription.restSeconds?.let { parts += "rest ${duration(it)}" }
+        if (mode.hasSetStructure)
+            prescription.restSeconds?.let { parts += "rest ${duration(it)}" }
         prescription.effort?.let { parts += it.label.lowercase() }
-        prescription.rir?.let { parts += "$it RIR" }
         return parts.joinToString(" · ")
     }
 

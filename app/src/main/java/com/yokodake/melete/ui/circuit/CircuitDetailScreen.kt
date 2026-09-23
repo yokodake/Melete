@@ -255,7 +255,7 @@ private fun restLine(state: CircuitDetailUiState): String {
             add("${PrescriptionSummary.duration(circuit.roundRestSeconds)} set rest")
         }
     }
-    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "Straight through, no rests"
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "no rest for the wicked"
 }
 
 @Composable

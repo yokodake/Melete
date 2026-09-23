@@ -88,28 +88,39 @@ class ExerciseEditorViewModel(
 
     fun setPrescription(value: PrescriptionFormState) = _uiState.update { it.copy(prescription = value) }
 
-    fun save(onSaved: () -> Unit) {
+    /** Saves, then reports the new exercise's id — or null when an existing one was edited. */
+    fun save(onSaved: (createdId: String?) -> Unit) {
         val state = _uiState.value
         if (!state.canSave) return
-        val unit = state.unit.trim().takeIf { it.isNotBlank() }
+        // Held in the form while the mode or the switch is flipped back and forth, so nothing
+        // typed is lost; dropped here, so the exercise is never saved carrying numbers it does not
+        // use — an activity with sides or a load, a two-handed hang with a side-switch time.
+        val sets = state.mode.hasSetStructure
+        val unilateral = sets && state.unilateral
+        val unit = state.unit.trim().takeIf { sets && it.isNotBlank() }
+        val prescription = state.prescription.toPayload(state.mode)
         val draft = ExerciseDraft(
             name = state.name,
             mode = state.mode,
-            unilateral = state.unilateral,
+            unilateral = unilateral,
             measurementUnit = unit,
             measurementMeaning = unit?.let { state.meaning },
             notes = state.notes,
             description = state.description,
             category = state.category,
-            defaultPrescription = state.prescription.toPayload(state.mode),
+            defaultPrescription = if (unilateral) {
+                prescription
+            } else {
+                prescription.copy(sideSwitchSeconds = null)
+            },
         )
         viewModelScope.launch {
             if (state.exerciseId == null) {
-                repository.createExercise(draft)
+                onSaved(repository.createExercise(draft))
             } else {
                 repository.updateExercise(state.exerciseId, draft)
+                onSaved(null)
             }
-            onSaved()
         }
     }
 

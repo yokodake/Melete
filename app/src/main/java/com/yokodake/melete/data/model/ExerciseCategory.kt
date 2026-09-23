@@ -19,11 +19,11 @@ enum class ExerciseCategory(val label: String, val shortLabel: String = label) {
     BOARD_CLIMBING("Board climbing", "BRD"),
 
     /** Climbing to a prescription: Mileage, movement, intervals, a circuit on the wall. */
-    STRUCTURED_CLIMBING("Structured climbing", "Training"),
+    STRUCTURED_CLIMBING("Structured climbing", "STRUC"),
 
     /** Fingers specifically — hangs, repeaters, no-hangs. Kept apart from general strength
      * because it is the tissue that decides how often you can train at all. */
-    FINGER_TRAINING("Finger training", "FGR"),
+    FINGER_TRAINING("Finger training", "FNGR"),
 
     /** Strength and conditioning: lifts, pulls, core, everything off the wall. */
     STRENGTH_CONDITIONING("Strength & Conditioning", "S&C"),
