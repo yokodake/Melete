@@ -360,7 +360,11 @@ class TimerProgramTest {
 
     @Test
     fun `skipping past the last interval ends the program`() {
-        val last = TimerTransitions.startProgram(id(), TimerProgram.work(10), settings, 1_000)
+        val preparing = TimerTransitions.startProgram(id(), TimerProgram.work(10), settings, 1_000)
+        // Skipping the preparation starts the one interval; skipping that is past the end. This
+        // used to assert "finished" straight from the preparation, which was the bug itself.
+        val last = forward(preparing)
+        assertEquals("work set1 10s", describe(last))
         assertEquals("finished 1", describe(forward(last)))
     }
 

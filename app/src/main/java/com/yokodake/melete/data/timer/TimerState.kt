@@ -399,6 +399,15 @@ object TimerTransitions {
         nextRunId: String,
     ): TimerState {
         val interval = intervalOf(state) ?: return state
+        // A preparation is not a step: it is a lead-in that already points at the step it leads
+        // into. Skipping it therefore starts that step. Stepping past it instead threw away the
+        // set it was for — and on a single set, the whole program.
+        if (interval.phase == TimerPhase.PREPARE) {
+            return enterStep(
+                nextRunId, interval.program, interval.stepIndex, settings, nowElapsedMs,
+                prepare = false,
+            )
+        }
         return goToStep(interval, interval.stepIndex + 1, settings, nowElapsedMs, nextRunId)
     }
 
@@ -436,6 +445,9 @@ object TimerTransitions {
      * Landing on a set this way always gets the preparation countdown, whichever direction you
      * came from: you pressed a button, so the set is about to start on your say-so rather than
      * flowing out of a rest that gave you time to get ready.
+     *
+     * Except between the pulses of a repeater, for the same reason the sequence never prepares
+     * there: five seconds in the middle of a set of sevens-on-threes-off is not the protocol.
      */
     private fun goToStep(
         interval: Interval,
@@ -454,8 +466,10 @@ object TimerTransitions {
                 setsCompleted = program.sets,
             )
         }
+        val target = stepIndex.coerceAtLeast(0)
         return enterStep(
-            nextRunId, program, stepIndex.coerceAtLeast(0), settings, nowElapsedMs, prepare = true,
+            nextRunId, program, target, settings, nowElapsedMs,
+            prepare = !ProgramSequencer.continuesPulses(program.steps, target),
         )
     }
 
