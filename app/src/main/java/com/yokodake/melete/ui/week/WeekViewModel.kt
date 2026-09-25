@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.NudgeResult
+import com.yokodake.melete.data.PlanItemRef
 import com.yokodake.melete.data.TrainingRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,24 +108,6 @@ class WeekViewModel(
         }
     }
 
-    /**
-     * Moves a placement to any week, on a day or into that week's unscheduled area.
-     *
-     * Anything logged against it moves too: once it has been trained the card is a record, and a
-     * record's date is the day the work happened. The one thing that cannot be done is making
-     * trained work unscheduled, which the repository refuses.
-     */
-    fun moveOccurrence(occurrenceId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
-        viewModelScope.launch {
-            val moved = repository.moveOccurrence(occurrenceId, weekStart, trainingDate)
-            _message.value = when {
-                !moved -> "Logged training needs a date."
-                trainingDate == null -> "Moved to unscheduled"
-                else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
-            }
-        }
-    }
-
     /** Makes another copy of a placement, waiting in this week's unscheduled area. */
     fun duplicateOccurrence(occurrenceId: String) {
         viewModelScope.launch {
@@ -132,8 +116,16 @@ class WeekViewModel(
         }
     }
 
-    fun reorderOccurrence(occurrenceId: String, delta: Int) {
-        viewModelScope.launch { repository.reorderOccurrence(occurrenceId, delta) }
+    /**
+     * Nudges a card one place up or down, into the neighbouring day at the edge of its own. Only
+     * a refusal is worth a word: a card at the very top or bottom of the week simply stays.
+     */
+    fun nudge(item: PlanItemRef, delta: Int) {
+        viewModelScope.launch {
+            if (repository.nudge(item, delta) == NudgeResult.NEEDS_A_DAY) {
+                _message.value = "Logged training needs a date."
+            }
+        }
     }
 
     // --------------------------------------------------- activities and circuits
@@ -171,17 +163,6 @@ class WeekViewModel(
         }
     }
 
-    fun moveCircuit(circuitId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
-        viewModelScope.launch {
-            val moved = repository.moveCircuit(circuitId, weekStart, trainingDate)
-            _message.value = when {
-                !moved -> "Logged training needs a date."
-                trainingDate == null -> "Moved to unscheduled"
-                else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
-            }
-        }
-    }
-
     /** How many stations of a circuit carry evidence, so a deletion can say what it would cost. */
     suspend fun circuitRecordedStations(circuitId: String): Int =
         repository.circuitRecordedStations(circuitId)
@@ -204,18 +185,6 @@ class WeekViewModel(
     }
 
     // ------------------------------------------------------------- modules
-
-    /** Moves a module and the members still with it. Trained work is refused "unscheduled". */
-    fun moveModule(moduleInstanceId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
-        viewModelScope.launch {
-            val moved = repository.moveModule(moduleInstanceId, weekStart, trainingDate)
-            _message.value = when {
-                !moved -> "Logged training needs a date."
-                trainingDate == null -> "Moved to unscheduled"
-                else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
-            }
-        }
-    }
 
     /** Dissolves the group; every member stays where it is. */
     fun ungroupModule(moduleInstanceId: String) {

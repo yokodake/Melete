@@ -22,8 +22,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import com.yokodake.melete.ui.components.Chip
 import com.yokodake.melete.ui.components.trimNumber
-import com.yokodake.melete.ui.components.PlanTarget
-import com.yokodake.melete.ui.components.PlanTargetDialog
 import kotlinx.coroutines.launch
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -45,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.PlanItemKind
+import com.yokodake.melete.data.PlanItemRef
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.ui.components.CompactTextField
 import com.yokodake.melete.ui.components.NumberField
@@ -92,9 +93,8 @@ fun WeekRoute(
         onRemoveOccurrence = viewModel::removeOccurrence,
         onDeleteWithLog = viewModel::deleteOccurrenceAndLog,
         onLoggedSetCount = viewModel::loggedSetCount,
-        onMoveOccurrence = viewModel::moveOccurrence,
         onDuplicateOccurrence = viewModel::duplicateOccurrence,
-        onReorderOccurrence = viewModel::reorderOccurrence,
+        onNudge = viewModel::nudge,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
         onCurrentWeek = viewModel::showCurrentWeek,
@@ -102,13 +102,11 @@ fun WeekRoute(
         onAddExercise = { date -> onAddExercise(state.weekStart, date) },
         onAddActivity = viewModel::addActivity,
         onOpenCircuit = onOpenCircuit,
-        onMoveCircuit = viewModel::moveCircuit,
         onRemoveCircuit = viewModel::removeCircuit,
         onDeleteCircuitWithLog = viewModel::deleteCircuitAndLogs,
         onCircuitRecordedStations = viewModel::circuitRecordedStations,
         onTakeOutOfModule = viewModel::takeOutOfModule,
         onTakeCircuitOutOfModule = viewModel::takeCircuitOutOfModule,
-        onMoveModule = viewModel::moveModule,
         onUngroupModule = viewModel::ungroupModule,
         onRemoveModule = viewModel::removeModule,
         onDeleteModuleWithLog = viewModel::deleteModuleAndLogs,
@@ -127,9 +125,9 @@ fun WeekScreen(
     onRemoveOccurrence: (String) -> Unit = {},
     onDeleteWithLog: (String, Int) -> Unit = { _, _ -> },
     onLoggedSetCount: suspend (String) -> Int = { 0 },
-    onMoveOccurrence: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
     onDuplicateOccurrence: (String) -> Unit = {},
-    onReorderOccurrence: (String, Int) -> Unit = { _, _ -> },
+    /** Moves a card one place, crossing into the next day at an edge. Offered in edit mode. */
+    onNudge: (PlanItemRef, Int) -> Unit = { _, _ -> },
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onCurrentWeek: () -> Unit,
@@ -137,13 +135,11 @@ fun WeekScreen(
     onAddExercise: (LocalDate?) -> Unit,
     onAddActivity: (String, LocalDate?, Int?) -> Unit = { _, _, _ -> },
     onOpenCircuit: (String) -> Unit = {},
-    onMoveCircuit: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
     onRemoveCircuit: (String) -> Unit = {},
     onDeleteCircuitWithLog: (String, Int) -> Unit = { _, _ -> },
     onCircuitRecordedStations: suspend (String) -> Int = { 0 },
     onTakeOutOfModule: (String) -> Unit = {},
     onTakeCircuitOutOfModule: (String) -> Unit = {},
-    onMoveModule: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
     onUngroupModule: (String) -> Unit = {},
     onRemoveModule: (String) -> Unit = {},
     onDeleteModuleWithLog: (String, Int) -> Unit = { _, _ -> },
@@ -155,15 +151,14 @@ fun WeekScreen(
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var planning by remember { mutableStateOf<PlanAction?>(null) }
     var removing by remember { mutableStateOf<PlannedOccurrence?>(null) }
     var removingSets by remember { mutableIntStateOf(0) }
     // A LocalDate, or the sentinel for the week's undated area. Null means no dialog is open.
     var addingActivityOn by remember { mutableStateOf<LocalDate?>(null) }
-    var movingCircuit by remember { mutableStateOf<WeekItem.Circuit?>(null) }
     var removingCircuit by remember { mutableStateOf<WeekItem.Circuit?>(null) }
     var removingCircuitStations by remember { mutableIntStateOf(0) }
-    var movingModule by remember { mutableStateOf<WeekItem.Module?>(null) }
+    // Survives rotation and a trip into an exercise and back, so reorganising is not interrupted.
+    var editing by rememberSaveable { mutableStateOf(false) }
     var removingModule by remember { mutableStateOf<WeekItem.Module?>(null) }
     var removingModuleRecorded by remember { mutableIntStateOf(0) }
 
@@ -177,19 +172,8 @@ fun WeekScreen(
             is WeekItem.Single -> OccurrenceCard(
                 occurrence = item.occurrence,
                 onClick = { onOpenOccurrence(item.occurrence.id) },
-                onMove = {
-                    // Moving carries the log with it, so the dialog has to know whether there is
-                    // one before it can word itself honestly.
-                    scope.launch {
-                        planning = PlanAction(
-                            occurrence = item.occurrence,
-                            loggedSets = onLoggedSetCount(item.occurrence.id),
-                        )
-                    }
-                },
                 // A duplicate is a fresh plan and never inherits what was logged.
                 onDuplicate = { onDuplicateOccurrence(item.occurrence.id) },
-                onReorder = { onReorderOccurrence(item.occurrence.id, it) },
                 onRemove = {
                     // Ask the record what a deletion would cost before offering one.
                     scope.launch {
@@ -203,7 +187,6 @@ fun WeekScreen(
             is WeekItem.Circuit -> CircuitCard(
                 item = item,
                 onClick = { onOpenCircuit(item.circuit.id) },
-                onMove = { movingCircuit = item },
                 onRemove = {
                     scope.launch {
                         removingCircuitStations = onCircuitRecordedStations(item.circuit.id)
@@ -215,7 +198,6 @@ fun WeekScreen(
 
             is WeekItem.Module -> ModuleCard(
                 item = item,
-                onMove = { movingModule = item },
                 onUngroup = { onUngroupModule(item.module.id) },
                 onRemove = {
                     scope.launch {
@@ -276,6 +258,12 @@ fun WeekScreen(
                     }
                 },
                 actions = {
+                    // Reorganising is a mode you enter on purpose, so cards only move when you
+                    // have said that is what you are doing — never from a stray tap while
+                    // reading the week.
+                    TextButton(onClick = { editing = !editing }) {
+                        Text(if (editing) "Done" else "Edit")
+                    }
                     if (!state.isCurrentWeek) {
                         TextButton(onClick = onCurrentWeek) { Text("Today") }
                     }
@@ -315,31 +303,19 @@ fun WeekScreen(
                         onAddActivity = { addingActivityOn = row.date },
                     )
 
-                    is WeekRow.Item -> ItemCard(row.item, inModule = false)
+                    is WeekRow.Item -> if (editing) {
+                        NudgeRow(
+                            onUp = { onNudge(row.item.ref(), -1) },
+                            onDown = { onNudge(row.item.ref(), 1) },
+                        ) { ItemCard(row.item, inModule = false) }
+                    } else {
+                        ItemCard(row.item, inModule = false)
+                    }
 
                     is WeekRow.Hint -> Hint(row.text)
                 }
             }
         }
-    }
-
-    planning?.let { action ->
-        val occurrence = action.occurrence
-        PlanTargetDialog(
-            title = "Move ${occurrence.name}",
-            supportingText = "Its logs will move to the selected date.".takeIf { action.loggedSets > 0 },
-            initial = PlanTarget(state.weekStart, occurrence.trainingDate),
-            confirmLabel = "Move",
-            today = state.today,
-            // Trained work belongs to a day, so "anytime this week" is not on offer for it —
-            // including an activity marked done, which has no sets to count.
-            allowUnscheduled = action.loggedSets == 0 && !occurrence.hasRecord,
-            onConfirm = { target ->
-                planning = null
-                onMoveOccurrence(occurrence.id, target.weekStart, target.trainingDate)
-            },
-            onDismiss = { planning = null },
-        )
     }
 
     removing?.let { occurrence ->
@@ -367,38 +343,6 @@ fun WeekScreen(
                 addingActivityOn = null
                 onAddActivity(name, date, minutes)
             },
-        )
-    }
-
-    movingCircuit?.let { item ->
-        PlanTargetDialog(
-            title = "Move ${item.circuit.name}",
-            supportingText = "Its logs will move to the selected date.".takeIf { item.recordedStations > 0 },
-            initial = PlanTarget(state.weekStart, item.circuit.trainingDate),
-            confirmLabel = "Move",
-            today = state.today,
-            allowUnscheduled = item.recordedStations == 0,
-            onConfirm = { target ->
-                movingCircuit = null
-                onMoveCircuit(item.circuit.id, target.weekStart, target.trainingDate)
-            },
-            onDismiss = { movingCircuit = null },
-        )
-    }
-
-    movingModule?.let { item ->
-        PlanTargetDialog(
-            title = "Move ${item.module.name}",
-            supportingText = "Its logs will move to the selected date.".takeIf { item.recordedExercises > 0 },
-            initial = PlanTarget(state.weekStart, item.module.trainingDate),
-            confirmLabel = "Move",
-            today = state.today,
-            allowUnscheduled = item.recordedExercises == 0,
-            onConfirm = { target ->
-                movingModule = null
-                onMoveModule(item.module.id, target.weekStart, target.trainingDate)
-            },
-            onDismiss = { movingModule = null },
         )
     }
 
@@ -465,17 +409,6 @@ fun WeekScreen(
  * a second boolean that could disagree with the first.
  */
 private val UndatedSlot: LocalDate = LocalDate.MIN
-
-/** A move or a copy waiting for somewhere to go. */
-/**
- * A move waiting on a destination.
- *
- * [loggedSets] is what it would carry with it, counted when the dialog opens.
- */
-private data class PlanAction(
-    val occurrence: PlannedOccurrence,
-    val loggedSets: Int = 0,
-)
 
 @Composable
 private fun RemoveDialog(
@@ -652,9 +585,7 @@ private fun DayHeading(
 private fun OccurrenceCard(
     occurrence: PlannedOccurrence,
     onClick: () -> Unit,
-    onMove: () -> Unit = {},
     onDuplicate: () -> Unit = {},
-    onReorder: (Int) -> Unit = {},
     onRemove: () -> Unit,
     /** Set only for a module member: leaves the group and stays where it is. */
     onTakeOut: (() -> Unit)? = null,
@@ -743,20 +674,8 @@ private fun OccurrenceCard(
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
             DropdownMenuItem(
-                text = { Text("Move to…") },
-                onClick = { menuExpanded = false; onMove() },
-            )
-            DropdownMenuItem(
                 text = { Text("Duplicate") },
                 onClick = { menuExpanded = false; onDuplicate() },
-            )
-            DropdownMenuItem(
-                text = { Text("Move up") },
-                onClick = { menuExpanded = false; onReorder(-1) },
-            )
-            DropdownMenuItem(
-                text = { Text("Move down") },
-                onClick = { menuExpanded = false; onReorder(1) },
             )
             onTakeOut?.let { takeOut ->
                 DropdownMenuItem(
@@ -798,7 +717,6 @@ private fun Hint(text: String) {
 private fun CircuitCard(
     item: WeekItem.Circuit,
     onClick: () -> Unit,
-    onMove: () -> Unit,
     onRemove: () -> Unit,
     /** Set only for a module member: leaves the group and stays where it is. */
     onTakeOut: (() -> Unit)? = null,
@@ -845,13 +763,6 @@ private fun CircuitCard(
             }
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(
-                text = { Text("Move to…") },
-                onClick = {
-                    menuOpen = false
-                    onMove()
-                },
-            )
             onTakeOut?.let { takeOut ->
                 DropdownMenuItem(
                     text = { Text("Take out of module") },
@@ -882,7 +793,6 @@ private fun CircuitCard(
 @Composable
 private fun ModuleCard(
     item: WeekItem.Module,
-    onMove: () -> Unit,
     onUngroup: () -> Unit,
     onRemove: () -> Unit,
     member: @Composable (WeekItem) -> Unit,
@@ -918,10 +828,6 @@ private fun ModuleCard(
                     ) { Text("⋮", style = MaterialTheme.typography.titleMedium) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("Move to…") },
-                            onClick = { menuOpen = false; onMove() },
-                        )
-                        DropdownMenuItem(
                             text = { Text("Ungroup") },
                             onClick = { menuOpen = false; onUngroup() },
                         )
@@ -942,6 +848,34 @@ private fun ModuleCard(
 }
 
 /** The shape of a circuit in one line: how many times round, and what falls between. */
+/**
+ * A card with the edit-mode arrows beside it. Up past the top of a day carries it into the day
+ * above, down past the bottom into the day below — the arrows never stop at a day's edge.
+ */
+@Composable
+private fun NudgeRow(onUp: () -> Unit, onDown: () -> Unit, card: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.weight(1f)) { card() }
+        Column {
+            IconButton(
+                onClick = onUp,
+                modifier = Modifier.semantics { contentDescription = "Move up" },
+            ) { Text("↑", style = MaterialTheme.typography.titleMedium) }
+            IconButton(
+                onClick = onDown,
+                modifier = Modifier.semantics { contentDescription = "Move down" },
+            ) { Text("↓", style = MaterialTheme.typography.titleMedium) }
+        }
+    }
+}
+
+/** The card of the week an item stands for, for moving it as a whole. */
+private fun WeekItem.ref(): PlanItemRef = when (this) {
+    is WeekItem.Single -> PlanItemRef(PlanItemKind.EXERCISE, occurrence.id)
+    is WeekItem.Circuit -> PlanItemRef(PlanItemKind.CIRCUIT, circuit.id)
+    is WeekItem.Module -> PlanItemRef(PlanItemKind.MODULE, module.id)
+}
+
 /**
  * The circuit in one line, as the library lists it: rounds and the stations in order, plus how
  * much of it has been logged when that is some but not all.
@@ -1114,7 +1048,6 @@ private fun WeekScreenPreview() {
         category = category,
         trainingDate = date,
         weekStart = monday,
-        prescriptionId = null,
         prescription = PrescriptionPayload(
             sets = 4,
             targetReps = 8,
@@ -1170,7 +1103,6 @@ private fun BusyWeekPreview() {
         category = category,
         trainingDate = date,
         weekStart = monday,
-        prescriptionId = null,
         prescription = PrescriptionPayload(sets = 4, targetReps = 6, restSeconds = 180),
         prescriptionUnreadable = false,
         state = state,
@@ -1223,10 +1155,7 @@ private fun WeekMenuPreview() {
         Surface(tonalElevation = 3.dp) {
             Column {
                 listOf(
-                    "Move to…",
                     "Duplicate",
-                    "Move up",
-                    "Move down",
                 ).forEach {
                     Text(
                         text = it,
@@ -1263,7 +1192,6 @@ private fun RemoveLoggedPreview() {
                 category = ExerciseCategory.STRENGTH_CONDITIONING,
                 trainingDate = monday,
                 weekStart = monday,
-                prescriptionId = null,
                 prescription = PrescriptionPayload(sets = 4, targetReps = 5),
                 prescriptionUnreadable = false,
                 state = OccurrenceState.COMPLETED,

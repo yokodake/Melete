@@ -20,7 +20,6 @@ import com.yokodake.melete.data.entity.ExerciseVariationEntity
 import com.yokodake.melete.data.entity.ModuleEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.ModuleInstanceEntity
-import com.yokodake.melete.data.entity.PrescriptionEntity
 import com.yokodake.melete.data.entity.RoutineEntity
 import com.yokodake.melete.data.entity.RoutineEntryEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
@@ -48,7 +47,6 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
 @Database(
     entities = [
         ExerciseEntity::class,
-        PrescriptionEntity::class,
         ExerciseOccurrenceEntity::class,
         TrainingSessionEntity::class,
         ActualSetEntity::class,
@@ -60,7 +58,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         ModuleEntryEntity::class,
         ModuleInstanceEntity::class,
     ],
-    version = 4,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)

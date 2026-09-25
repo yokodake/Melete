@@ -25,8 +25,11 @@ data class ExerciseEntity(
     val unilateral: Boolean,
     /** Free variation notes: grip, board, tempo, shoe. Never required. */
     val notes: String?,
-    /** The exercise's default prescription, stored separately from its identity. */
-    val defaultPrescriptionId: String?,
+    /**
+     * The default plan, as its JSON payload; absent means none. Held on its owner rather than in a table of
+     * its own: every copy is its own text, so copying is copying and nothing is left behind.
+     */
+    val defaultPrescriptionJson: String?,
     val createdAtEpochMs: Long,
     /**
      * What the movement is and how to do it. Reference material, not part of the training record:
@@ -45,22 +48,6 @@ data class ExerciseEntity(
      * *library*, which is a statement about what you plan to do next, not about what you did.
      */
     val deletedAtEpochMs: Long? = null,
-)
-
-/**
- * A prescription value record. Both an exercise's default and a scheduled copy point at one of
- * these; scheduling copies the payload into a new row, so editing a template cannot reach back
- * into work that is already planned or logged.
- *
- * Rows are never mutated in place. Changing a prescription writes a new row and repoints its
- * owner, which keeps an actual set's reference pointing at what was really planned at the time.
- */
-@Entity(tableName = "prescriptions")
-data class PrescriptionEntity(
-    @PrimaryKey val id: String,
-    val payloadVersion: Int,
-    val payloadJson: String,
-    val createdAtEpochMs: Long,
 )
 
 /** Explicit state of a planned occurrence. Zero actuals on its own never means "skipped". */
@@ -86,19 +73,10 @@ enum class BodySide {
  */
 @Entity(
     tableName = "exercise_occurrences",
-    foreignKeys = [
-        ForeignKey(
-            entity = PrescriptionEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["prescriptionId"],
-            onDelete = ForeignKey.RESTRICT,
-        )
-    ],
     indices = [
         Index("weekStartEpochDay"),
         Index("trainingDateEpochDay"),
         Index("exerciseId"),
-        Index("prescriptionId"),
     ],
 )
 data class ExerciseOccurrenceEntity(
@@ -113,7 +91,11 @@ data class ExerciseOccurrenceEntity(
     val unilateralSnapshot: Boolean,
     val measurementUnitSnapshot: String?,
     val measurementMeaningSnapshot: MeasurementMeaning?,
-    val prescriptionId: String?,
+    /**
+     * This copy's plan, as its JSON payload; absent means none. Held on its owner rather than in a table of
+     * its own: every copy is its own text, so copying is copying and nothing is left behind.
+     */
+    val prescriptionJson: String?,
     val orderIndex: Int,
     val state: OccurrenceState,
     /** Comments belong to the occurrence, not to a set and not to the library exercise. */
@@ -220,14 +202,8 @@ data class RoutineEntity(
             childColumns = ["routineId"],
             onDelete = ForeignKey.CASCADE,
         ),
-        ForeignKey(
-            entity = PrescriptionEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["prescriptionId"],
-            onDelete = ForeignKey.RESTRICT,
-        ),
     ],
-    indices = [Index("routineId"), Index("prescriptionId"), Index("exerciseId")],
+    indices = [Index("routineId"), Index("exerciseId")],
 )
 data class RoutineEntryEntity(
     @PrimaryKey val id: String,
@@ -237,7 +213,11 @@ data class RoutineEntryEntity(
     val exerciseId: String,
     /** So a retired library entry still leaves the routine readable. */
     val exerciseNameSnapshot: String,
-    val prescriptionId: String?,
+    /**
+     * This station's own plan, as its JSON payload; absent means none. Held on its owner rather than in a table of
+     * its own: every copy is its own text, so copying is copying and nothing is left behind.
+     */
+    val prescriptionJson: String?,
 )
 
 /**
@@ -292,17 +272,11 @@ data class CircuitInstanceEntity(
             childColumns = ["exerciseId"],
             onDelete = ForeignKey.CASCADE,
         ),
-        ForeignKey(
-            entity = PrescriptionEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["prescriptionId"],
-            onDelete = ForeignKey.RESTRICT,
-        ),
     ],
     indices = [
-        // One exercise cannot have two variations answering to the same chip.
-        Index(value = ["exerciseId", "tag"], unique = true),
-        Index("prescriptionId"),
+        // Unique among the *active* variations only, which the repository enforces: a retired
+        // variation keeps its tag for history, and must not stop the tag being used again.
+        Index(value = ["exerciseId", "tag"]),
     ],
 )
 data class ExerciseVariationEntity(
@@ -312,9 +286,18 @@ data class ExerciseVariationEntity(
     val tag: String,
     /** How this variation is done, when that differs: loads, tempo, a sequence within the set. */
     val notes: String?,
-    val prescriptionId: String?,
+    /**
+     * This variation's plan, as its JSON payload; absent means none. Held on its owner rather than in a table of
+     * its own: every copy is its own text, so copying is copying and nothing is left behind.
+     */
+    val prescriptionJson: String?,
     val orderIndex: Int,
     val createdAtEpochMs: Long,
+    /**
+     * Retired rather than deleted once anything refers to it, exactly as an exercise is: it stops
+     * being offered, and past copies can still show what it was.
+     */
+    val deletedAtEpochMs: Long? = null,
 )
 
 /**
@@ -350,14 +333,8 @@ data class ModuleEntity(
             childColumns = ["moduleId"],
             onDelete = ForeignKey.CASCADE,
         ),
-        ForeignKey(
-            entity = PrescriptionEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["prescriptionId"],
-            onDelete = ForeignKey.RESTRICT,
-        ),
     ],
-    indices = [Index("moduleId"), Index("prescriptionId"), Index("exerciseId"), Index("routineId")],
+    indices = [Index("moduleId"), Index("exerciseId"), Index("routineId")],
 )
 data class ModuleEntryEntity(
     @PrimaryKey val id: String,
@@ -370,7 +347,7 @@ data class ModuleEntryEntity(
     val variationId: String? = null,
     val variationTagSnapshot: String? = null,
     /** This entry's own copy of the plan. Editing it reaches neither the library nor the week. */
-    val prescriptionId: String? = null,
+    val prescriptionJson: String? = null,
     val routineId: String? = null,
     val routineNameSnapshot: String? = null,
 )
@@ -417,9 +394,9 @@ data class TrainingSessionEntity(
  * A set that was actually performed.
  *
  * Identity is [id] alone: it never depends on the set number shown on screen, so reordering,
- * inserting or deleting a set cannot rewrite which record a correction lands on. [prescriptionId]
- * is an optional reference — an unplanned set is perfectly valid — and the payload is independent
- * of whatever was planned, so four planned sets and six performed sets need no special case.
+ * inserting or deleting a set cannot rewrite which record a correction lands on. The payload is
+ * independent of whatever was planned, so four planned sets and six performed sets need no special
+ * case; what was planned is the occurrence's.
  */
 @Entity(
     tableName = "actual_sets",
@@ -436,17 +413,10 @@ data class TrainingSessionEntity(
             childColumns = ["sessionId"],
             onDelete = ForeignKey.RESTRICT,
         ),
-        ForeignKey(
-            entity = PrescriptionEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["prescriptionId"],
-            onDelete = ForeignKey.RESTRICT,
-        ),
     ],
     indices = [
         Index("occurrenceId"),
         Index("sessionId"),
-        Index("prescriptionId"),
         Index("exerciseId"),
         Index("trainingDateEpochDay"),
     ],
@@ -459,8 +429,6 @@ data class ActualSetEntity(
     val exerciseId: String,
     /** The local training date this set is filed under, persisted independently of [recordedAtEpochMs]. */
     val trainingDateEpochDay: Long,
-    /** What this set was performed against, when it was planned at all. */
-    val prescriptionId: String?,
     val orderIndex: Int,
     val side: BodySide?,
     val payloadVersion: Int,

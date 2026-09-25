@@ -235,7 +235,7 @@ class ExerciseDetailViewModel(
                 ?: DurationEstimate.forPrescription(mode, unilateral, prescription),
             loggedDurationSeconds = occurrence?.loggedDurationSeconds,
             loggedDurationManual = occurrence?.loggedDurationManual == true,
-            variations = library?.variations.orEmpty(),
+            variations = library?.activeVariations.orEmpty(),
             variationTag = occurrence?.variationTag,
             variationNotes = occurrence?.variationId
                 ?.let { id -> library?.variations?.firstOrNull { it.id == id } }

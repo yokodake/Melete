@@ -28,7 +28,7 @@ the two ever disagree, the code and the first half win.
 | 5B — daily notes, metrics, export and restore | not started |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **4**, and one schema only until phase 6 — see *No migration chain* below.
+Schema version **6**, and one schema only until phase 6 — see *No migration chain* below.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -57,8 +57,15 @@ rather than stacking one on the other. Editing an existing exercise or circuit n
 switch.
 
 A card is tapped to open what it is, and long-pressed for its menu: move to any week and day (or
-back to unscheduled), duplicate, nudge up and down within its slot, remove. A circuit is one card
-with its stations listed inside it, and moves, removes and completes as a unit. A copy cut from a
+back to unscheduled), duplicate, remove. A circuit is one card and moves, removes and completes as
+a unit.
+
+**Edit mode** (*Edit* / *Done* in the week's header) puts ↑ ↓ beside every card. Only top-level
+cards — a standalone exercise, a whole circuit, a whole module — take a place in a day's order;
+what is inside a circuit or module keeps its own. Up past the top of a day lands at the bottom of
+the day before, and above Monday in the week's unscheduled area; down past the bottom lands at the
+top of the next day. Crossing a day is a real move: logged sets go with it, and trained work is
+refused the unscheduled area. A copy cut from a
 variation carries the variation's tag as a chip beside its name.
 
 A **module** is an outlined group under its name, holding the ordinary cards of its members —
@@ -279,10 +286,12 @@ com.yokodake.melete
   document with `payloadVersion` alongside it. Absent values are `null`, never `0`. Decoding uses
   `ignoreUnknownKeys`. A measurement carries `value`, `unit` and an explicit `meaning`, so added
   load and assistance can never collapse into one quantity.
-- **Prescriptions are value rows, copied on scheduling.** An exercise, a routine station and a
-  scheduled occurrence each point at their own row. Editing never mutates a shared row: it inserts
-  a *new* `prescriptions` row and repoints its owner, so an actual set keeps pointing at what was
-  really planned when it was performed. Superseded rows are kept.
+- **A plan lives on its owner.** An exercise's default, a variation, a circuit station, a module
+  entry and a scheduled copy each hold their own plan as a JSON column (`prescriptionJson`,
+  `defaultPrescriptionJson`). Scheduling copies the text, so nothing is shared, nothing needs
+  cleaning up, and editing one copy cannot reach another. Logged sets carry no reference to a plan:
+  what was planned is the occurrence's. (Until schema 6 plans lived in a `prescriptions` table of
+  never-mutated rows that owners and sets pointed at; deleting an owner left its rows behind.)
 - **Occurrences snapshot their template.** Name, mode, unilateral flag, measurement unit and
   meaning, category. `exerciseId` is lineage only and carries **no** foreign key, so a renamed or
   deleted library entry cannot rewrite or delete history.
@@ -588,14 +597,13 @@ the migration suite having gone.
 - A countdown's labels are snapshotted names, deliberately not live links: a timer reaching zero
   must never be able to touch what was logged.
 - The library detail screen has no *Start the timer* button; only a planned copy in a week does.
-- Superseded prescription rows are kept forever and never garbage collected.
 - `today` is computed when the UI state is built, so an app left open across midnight keeps the old
   highlight until the state is rebuilt.
 - The month abbreviation in week labels comes from the device locale. Unit tests pin `Locale.US`.
 - No diary, export or dashboard yet; those tables and screens are deliberately not created
   speculatively.
-- **The planner still has no edit mode.** Module cards follow the existing long-press menus, and
-  cards still cannot be nudged across day boundaries.
+- **A module's members cannot be reordered in the week.** Edit mode moves the module as a
+  whole; the order inside it is the template's, changed in the module editor.
 - **Circuit stations carry no variation.** A routine's stations copy the library default, as they
   always have; a variation can be chosen for a module's standalone exercises only.
 
@@ -1033,6 +1041,30 @@ instrumented tests pass, including the audio-focus cue test outside a call, a re
 being flagged and left out of its module, and a circuit's category surviving save, duplication and
 recategorisation of its template. Backup before the v4 wipe: `backups/pre-v4-20260926-004622/`.
 
+## Before phase 5B: edit mode, retired variations (2026-09-26)
+
+- **The week's edit mode**, owed since 4A. One position per top-level card, renumbered 0, 1, 2… on
+  every nudge, so a card can no longer jump past a circuit or land behind a module the way the old
+  per-occurrence *Move up / Move down* did. The landing is a pure function (`Planning.nudge`);
+  crossing a day goes through the existing move code. The long-press *Move up / Move down* are
+  gone.
+- **Variations are retired, not deleted, once anything was cut from them** (schema **v5**): no
+  longer offered, the tag free again, and past copies still showing their notes. One nothing came
+  from is still deleted outright.
+
+- **"Move to…" is gone** from every card's menu: edit mode moves cards, across days, and the move
+  dialog went with it.
+- **Plans live on their owners** (schema **v6**). The `prescriptions` table is gone; each owner
+  holds its plan as a JSON column and logged sets no longer point at a plan. Orphaned plan rows —
+  left behind by every deleted occurrence, circuit and module, and every edit — cannot exist any
+  more, and an export has one less table to carry.
+
+**Checks run:** 166 unit tests pass (7 new for the nudge landing, replacing 4 for the old
+single-slot reorder). All three APKs build. On the Pixel 9, before the schema-6 change, 71 of 72
+instrumented tests passed; the one failure was a wrong expectation in the new `WeekEditTest` (a
+second nudge carried a module on to Wednesday, as it should), since corrected. **The suite has not
+run on schema 6** — the phone was away.
+
 ## Next step
 
 **Phase 5B — daily notes, metrics, export and restore.**
@@ -1042,7 +1074,5 @@ Owed before or alongside it:
 - **Everything in *What still needs a phone*.** None of 5A, the timer extensions, variations or
   modules has been walked through by hand. `LibrarySeed` refills a wiped debug database with the
   library, variations, circuits and modules.
-- **Gating the planner behind an edit mode**, so cards only move when you have said you are
-  reorganising, with move-up/down crossing day boundaries. Explicitly asked for, still not built.
 - The 4A acceptance scenarios end to end. The instrumented suite exercises the database, not the
   screens.

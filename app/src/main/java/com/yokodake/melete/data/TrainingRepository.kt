@@ -4,11 +4,8 @@ import androidx.room.withTransaction
 import com.yokodake.melete.core.OneOffActivity
 import com.yokodake.melete.core.Planning
 import com.yokodake.melete.core.WeekMath
-import com.yokodake.melete.data.dao.ExerciseWithDefaultPrescription
-import com.yokodake.melete.data.dao.OccurrenceWithPrescription
 import com.yokodake.melete.data.dao.ModuleWithEntries
 import com.yokodake.melete.data.dao.SetPayloadRow
-import com.yokodake.melete.data.dao.VariationWithPrescription
 import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.ExerciseEntity
@@ -18,7 +15,6 @@ import com.yokodake.melete.data.entity.ModuleEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.ModuleInstanceEntity
 import com.yokodake.melete.data.entity.OccurrenceState
-import com.yokodake.melete.data.entity.PrescriptionEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 import com.yokodake.melete.data.dao.RoutineWithEntries
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
@@ -62,9 +58,8 @@ data class PlannedOccurrence(
     val category: ExerciseCategory?,
     val trainingDate: LocalDate?,
     val weekStart: LocalDate,
-    val prescriptionId: String?,
     val prescription: PrescriptionPayload?,
-    /** True when a prescription row exists but its payload could not be read. */
+    /** True when a plan is stored but its payload could not be read. */
     val prescriptionUnreadable: Boolean,
     /**
      * The date the work was actually filed under, when any has been logged. Deliberately separate
@@ -141,9 +136,15 @@ data class LibraryExercise(
     val defaultPrescription: PrescriptionPayload?,
     /** Retired from the library, but still the anchor for everything that refers to it. */
     val deletedAtEpochMs: Long? = null,
-    /** Its named alternative plans, in order. Empty for most exercises. */
+    /**
+     * Its named alternative plans, in order, retired ones included so past copies can still find
+     * theirs. Anything that offers a choice uses [activeVariations].
+     */
     val variations: List<ExerciseVariation> = emptyList(),
-)
+) {
+    /** The variations that can still be chosen. Empty for most exercises. */
+    val activeVariations: List<ExerciseVariation> get() = variations.filter { !it.retired }
+}
 
 /**
  * A named alternative plan for one library exercise: its own prescription and its own notes, under
@@ -156,7 +157,26 @@ data class ExerciseVariation(
     val notes: String?,
     val prescription: PrescriptionPayload?,
     val orderIndex: Int,
+    /** Retired: no longer offered, but still what past copies were cut from. */
+    val retired: Boolean = false,
 )
+
+/** Which kind of card of the week a [PlanItemRef] points at. */
+enum class PlanItemKind { EXERCISE, CIRCUIT, MODULE }
+
+/** One card of the week: a standalone exercise, a whole circuit, or a whole module. */
+data class PlanItemRef(val kind: PlanItemKind, val id: String)
+
+/** What a nudge came to. */
+enum class NudgeResult {
+    MOVED,
+
+    /** Already at the top or bottom of the week, or no longer there: nothing to do. */
+    AT_EDGE,
+
+    /** Refused: trained work belongs to a day, and the unscheduled area has none. */
+    NEEDS_A_DAY,
+}
 
 /** What saving a variation came to. The tag rules are the only way it can be refused. */
 enum class VariationSave { SAVED, TAG_INVALID, TAG_TAKEN }
@@ -390,8 +410,6 @@ data class PerformedSet(
     val orderIndex: Int,
     val side: BodySide?,
     val payload: ActualSetPayload,
-    /** Null when the set was performed without a plan. */
-    val prescriptionId: String?,
     val recordedAtEpochMs: Long,
 )
 
@@ -434,8 +452,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
 
         rows.map {
             it.toPlanned(
-                maxLoad = heaviest[it.occurrence.id],
-                loggedSets = counts[it.occurrence.id] ?: 0,
+                maxLoad = heaviest[it.id],
+                loggedSets = counts[it.id] ?: 0,
             )
         }
     }
@@ -474,13 +492,12 @@ class TrainingRepository(private val database: MeleteDatabase) {
 
     fun observeLibrary(): Flow<List<LibraryExercise>> =
         combine(library.observeExercises(), variations.observeAllVariations()) { rows, all ->
-            val byExercise = all.groupBy { it.variation.exerciseId }
-            rows.map { it.toLibraryExercise(byExercise[it.exercise.id].orEmpty()) }
+            val byExercise = all.groupBy { it.exerciseId }
+            rows.map { it.toLibraryExercise(byExercise[it.id].orEmpty()) }
         }
 
     suspend fun getLibraryExercise(id: String): LibraryExercise? =
-        library.getExerciseWithDefault(id)
-            ?.toLibraryExercise(variations.variationsWithPrescriptionOf(id))
+        library.getExercise(id)?.toLibraryExercise(variations.variationsOf(id))
 
     /**
      * The library entry a planned copy came from, followed live. The explanation of a movement is
@@ -489,13 +506,12 @@ class TrainingRepository(private val database: MeleteDatabase) {
      */
     fun observeLibraryExercise(id: String): Flow<LibraryExercise?> =
         combine(
-            library.observeExerciseWithDefault(id),
+            library.observeExercise(id),
             variations.observeVariationsOf(id),
         ) { row, rows -> row?.toLibraryExercise(rows) }
 
     suspend fun createExercise(draft: ExerciseDraft): String = database.withTransaction {
         val now = System.currentTimeMillis()
-        val prescription = newPrescriptionRow(draft.defaultPrescription, now)
         val exercise = ExerciseEntity(
             id = UUID.randomUUID().toString(),
             name = draft.name.trim(),
@@ -506,24 +522,20 @@ class TrainingRepository(private val database: MeleteDatabase) {
             notes = draft.notes?.takeIf { it.isNotBlank() },
             description = draft.description?.takeIf { it.isNotBlank() },
             category = draft.category,
-            defaultPrescriptionId = prescription.id,
+            defaultPrescriptionJson = draft.defaultPrescription.toJson(),
             createdAtEpochMs = now,
         )
-        library.insertPrescription(prescription)
         library.insertExercise(exercise)
         exercise.id
     }
 
     /**
-     * Updates the library entry. The default prescription is written as a *new* row rather than
-     * mutated, so copies already placed in a week keep pointing at what they were given.
+     * Updates the library entry. Copies already placed in a week hold their own plan, so changing
+     * the default here cannot reach them.
      */
     suspend fun updateExercise(id: String, draft: ExerciseDraft) {
         database.withTransaction {
-            val existing = library.getExerciseWithDefault(id)?.exercise ?: return@withTransaction
-            val now = System.currentTimeMillis()
-            val prescription = newPrescriptionRow(draft.defaultPrescription, now)
-            library.insertPrescription(prescription)
+            val existing = library.getExercise(id) ?: return@withTransaction
             library.updateExercise(
                 existing.copy(
                     name = draft.name.trim(),
@@ -534,24 +546,17 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     notes = draft.notes?.takeIf { it.isNotBlank() },
                     description = draft.description?.takeIf { it.isNotBlank() },
                     category = draft.category,
-                    defaultPrescriptionId = prescription.id,
+                    defaultPrescriptionJson = draft.defaultPrescription.toJson(),
                 )
             )
         }
     }
 
-    /**
-     * Replaces the library default with a new prescription row and repoints the exercise at it.
-     * Copies already placed in a week keep pointing at what they were given, because nothing is
-     * mutated in place.
-     */
+    /** Replaces the library default. Copies already placed in a week hold their own plan. */
     suspend fun updateDefaultPrescription(exerciseId: String, payload: PrescriptionPayload) {
         database.withTransaction {
-            val existing = library.getExerciseWithDefault(exerciseId)?.exercise
-                ?: return@withTransaction
-            val row = newPrescriptionRow(payload, System.currentTimeMillis())
-            library.insertPrescription(row)
-            library.updateExercise(existing.copy(defaultPrescriptionId = row.id))
+            val existing = library.getExercise(exerciseId) ?: return@withTransaction
+            library.updateExercise(existing.copy(defaultPrescriptionJson = payload.toJson()))
         }
     }
 
@@ -563,7 +568,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
      */
     suspend fun removalImpactOf(exerciseId: String): ExerciseRemoval? =
         database.withTransaction {
-            val exercise = library.getExerciseWithDefault(exerciseId)?.toLibraryExercise()
+            val exercise = library.getExercise(exerciseId)?.toLibraryExercise()
                 ?: return@withTransaction null
             ExerciseRemoval(
                 exercise = exercise,
@@ -596,17 +601,9 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 return@withTransaction ExerciseRemoval.Outcome.RETIRED
             }
             val plannedCopies = library.countOccurrencesOf(exerciseId)
-            val prescriptions = buildList {
-                addAll(library.occurrencePrescriptionIdsOf(exerciseId))
-                // The variations go with the row, by cascade; the plans they held are freed here.
-                addAll(variations.variationsOf(exerciseId).mapNotNull { it.prescriptionId })
-                library.getExerciseWithDefault(exerciseId)?.exercise?.defaultPrescriptionId
-                    ?.let { add(it) }
-            }
-            // Occurrences first: their prescription copies are held by a RESTRICT foreign key.
+            // The plans go with their owners, and the variations with the row, by cascade.
             library.deleteOccurrencesOf(exerciseId)
             library.deleteExercise(exerciseId)
-            prescriptions.distinct().forEach { library.deletePrescriptionIfUnused(it) }
             if (plannedCopies > 0) {
                 ExerciseRemoval.Outcome.DELETED_WITH_PLANS
             } else {
@@ -635,15 +632,13 @@ class TrainingRepository(private val database: MeleteDatabase) {
             return@withTransaction VariationSave.TAG_TAKEN
         }
         val now = System.currentTimeMillis()
-        val row = newPrescriptionRow(prescription, now)
-        library.insertPrescription(row)
         variations.insertVariation(
             ExerciseVariationEntity(
                 id = UUID.randomUUID().toString(),
                 exerciseId = exerciseId,
                 tag = tag,
                 notes = notes?.trim()?.takeIf { it.isNotEmpty() },
-                prescriptionId = row.id,
+                prescriptionJson = prescription.toJson(),
                 orderIndex = variations.nextOrderIndex(exerciseId),
                 createdAtEpochMs = now,
             )
@@ -652,8 +647,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
     }
 
     /**
-     * Changes a variation. Its plan is written as a new row, like an exercise default, so copies
-     * already in a week keep what they were given; the tag they show is their own snapshot.
+     * Changes a variation. Copies already in a week hold their own plan and their own tag, so
+     * nothing here reaches them.
      */
     suspend fun updateVariation(
         variationId: String,
@@ -661,35 +656,37 @@ class TrainingRepository(private val database: MeleteDatabase) {
         notes: String?,
         prescription: PrescriptionPayload,
     ): VariationSave = database.withTransaction {
-        val existing = variations.getVariation(variationId)?.variation
+        val existing = variations.getVariation(variationId)
             ?: return@withTransaction VariationSave.SAVED
         if (!VariationTag.isValid(tag)) return@withTransaction VariationSave.TAG_INVALID
         if (variations.countTag(existing.exerciseId, tag, excludeId = variationId) > 0) {
             return@withTransaction VariationSave.TAG_TAKEN
         }
-        val row = newPrescriptionRow(prescription, System.currentTimeMillis())
-        library.insertPrescription(row)
         variations.updateVariation(
             existing.copy(
                 tag = tag,
                 notes = notes?.trim()?.takeIf { it.isNotEmpty() },
-                prescriptionId = row.id,
+                prescriptionJson = prescription.toJson(),
             )
         )
-        existing.prescriptionId?.let { library.deletePrescriptionIfUnused(it) }
         VariationSave.SAVED
     }
 
     /**
-     * Deletes a variation. Nothing already planned or logged changes: every copy holds its own plan
-     * and its own tag, and only remembers which variation it came from.
+     * Removes a variation, as completely as what refers to it allows.
+     *
+     * One nothing was ever cut from is deleted outright: a mistake leaves nothing behind. One that
+     * a planned copy or a module entry came from is retired instead, exactly as an exercise is — it
+     * stops being offered, its tag is free again, and past copies can still show its notes.
      */
     suspend fun deleteVariation(variationId: String) {
         database.withTransaction {
-            val existing = variations.getVariation(variationId)?.variation
-                ?: return@withTransaction
+            variations.getVariation(variationId) ?: return@withTransaction
+            if (variations.countReferences(variationId) > 0) {
+                variations.markVariationDeleted(variationId, System.currentTimeMillis())
+                return@withTransaction
+            }
             variations.deleteVariation(variationId)
-            existing.prescriptionId?.let { library.deletePrescriptionIfUnused(it) }
         }
     }
 
@@ -709,17 +706,16 @@ class TrainingRepository(private val database: MeleteDatabase) {
         trainingDate: LocalDate?,
         variationId: String? = null,
     ): String = database.withTransaction {
-        val source = library.getExerciseWithDefault(exerciseId)
-            ?: error("Unknown exercise $exerciseId")
+        val source = library.getExercise(exerciseId) ?: error("Unknown exercise $exerciseId")
         val variation = variationId
             ?.let { variations.getVariation(it) }
-            ?.takeIf { it.variation.exerciseId == exerciseId }
+            ?.takeIf { it.exerciseId == exerciseId }
         placeExercise(
-            exercise = source.exercise,
+            exercise = source,
             // A variation with no plan is copied as having none, never as the default.
-            plan = if (variation != null) variation.prescription else source.defaultPrescription,
-            variationId = variation?.variation?.id,
-            variationTag = variation?.variation?.tag,
+            plan = if (variation != null) variation.prescriptionJson else source.defaultPrescriptionJson,
+            variationId = variation?.id,
+            variationTag = variation?.tag,
             weekStart = weekStart,
             trainingDate = trainingDate,
             orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
@@ -727,12 +723,12 @@ class TrainingRepository(private val database: MeleteDatabase) {
     }
 
     /**
-     * Writes one occurrence cut from [exercise] and a copy of [plan]. The single place a library
-     * exercise becomes planned work, whether it arrives alone or as part of a module.
+     * Writes one occurrence cut from [exercise], holding its own copy of [plan]. The single place a
+     * library exercise becomes planned work, whether it arrives alone or as part of a module.
      */
     private suspend fun placeExercise(
         exercise: ExerciseEntity,
-        plan: PrescriptionEntity?,
+        plan: String?,
         variationId: String?,
         variationTag: String?,
         weekStart: LocalDate,
@@ -742,15 +738,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
         modulePosition: Int? = null,
     ): String {
         val now = System.currentTimeMillis()
-        val copy = plan?.let {
-            PrescriptionEntity(
-                id = UUID.randomUUID().toString(),
-                payloadVersion = it.payloadVersion,
-                payloadJson = it.payloadJson,
-                createdAtEpochMs = now,
-            )
-        }
-        copy?.let { library.insertPrescription(it) }
         val occurrence = ExerciseOccurrenceEntity(
             id = UUID.randomUUID().toString(),
             weekStartEpochDay = weekStart.toEpochDay(),
@@ -762,7 +749,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
             measurementUnitSnapshot = exercise.measurementUnit,
             measurementMeaningSnapshot = exercise.measurementMeaning,
             categorySnapshot = exercise.category,
-            prescriptionId = copy?.id,
+            // The text itself: copying a plan is copying its payload, and nothing is shared.
+            prescriptionJson = plan,
             orderIndex = orderIndex,
             state = OccurrenceState.PLANNED,
             comment = null,
@@ -776,13 +764,11 @@ class TrainingRepository(private val database: MeleteDatabase) {
         return occurrence.id
     }
 
-    /** Edits this week's copy only. Writes a new prescription row; nothing else is touched. */
+    /** Edits this week's copy only; nothing else holds it, so nothing else is touched. */
     suspend fun updateOccurrencePrescription(occurrenceId: String, payload: PrescriptionPayload) {
         database.withTransaction {
             val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
-            val row = newPrescriptionRow(payload, System.currentTimeMillis())
-            library.insertPrescription(row)
-            dao.updateOccurrence(occurrence.copy(prescriptionId = row.id))
+            dao.updateOccurrence(occurrence.copy(prescriptionJson = payload.toJson()))
         }
     }
 
@@ -888,22 +874,11 @@ class TrainingRepository(private val database: MeleteDatabase) {
     ): String? = database.withTransaction {
         val source = dao.getOccurrence(occurrenceId) ?: return@withTransaction null
         val now = System.currentTimeMillis()
-        val prescriptionCopy = source.prescriptionId
-            ?.let { library.getPrescription(it) }
-            ?.let {
-                PrescriptionEntity(
-                    id = UUID.randomUUID().toString(),
-                    payloadVersion = it.payloadVersion,
-                    payloadJson = it.payloadJson,
-                    createdAtEpochMs = now,
-                )
-            }
-        prescriptionCopy?.let { library.insertPrescription(it) }
+        // The plan text comes with it: a copy of text is already its own.
         val copy = source.copy(
             id = UUID.randomUUID().toString(),
             weekStartEpochDay = weekStart.toEpochDay(),
             trainingDateEpochDay = trainingDate?.toEpochDay(),
-            prescriptionId = prescriptionCopy?.id,
             // A copy is a new plan standing on its own: it joins neither the source's circuit nor
             // its module, which would otherwise gain a member nobody put there.
             circuitInstanceId = null,
@@ -923,19 +898,103 @@ class TrainingRepository(private val database: MeleteDatabase) {
         copy.id
     }
 
-    /** Nudges a placement up or down within its own day, or within the unscheduled area. */
-    suspend fun reorderOccurrence(occurrenceId: String, delta: Int) {
-        database.withTransaction {
-            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
-            val slot = dao.occurrencesInSlot(
-                occurrence.weekStartEpochDay,
-                occurrence.trainingDateEpochDay,
-            )
-            val moving = slot.firstOrNull { it.id == occurrenceId } ?: return@withTransaction
-            val reordered = Planning.reorder(slot, moving, delta)
-            if (reordered == slot) return@withTransaction
-            reordered.forEachIndexed { index, row ->
-                if (row.orderIndex != index) dao.updateOccurrence(row.copy(orderIndex = index))
+    /**
+     * Nudges one card of the week a single place up or down, crossing into the neighbouring day
+     * when it is already at the edge of its own.
+     *
+     * A card is a top-level item — a standalone exercise, a whole circuit, a whole module — and
+     * only those take a place in a day's order. What is inside a circuit or a module keeps its own
+     * position there and never competes with the day's cards, which is what used to make a nudge
+     * jump past a circuit or land behind one.
+     *
+     * Crossing into another day is a real move, through the same code as *Move to…*: logged sets
+     * go with it, and trained work is refused the unscheduled area.
+     */
+    suspend fun nudge(item: PlanItemRef, delta: Int): NudgeResult = database.withTransaction {
+        val (week, date) = slotOf(item) ?: return@withTransaction NudgeResult.AT_EDGE
+        val weekStart = LocalDate.ofEpochDay(week)
+        // The unscheduled area first, then Monday to Sunday: the order they are shown in.
+        val dates: List<Long?> = listOf<Long?>(null) + WeekMath.daysOf(weekStart).map { it.toEpochDay() }
+        val slots = dates.map { topLevelIn(week, it) }
+        val from = dates.indexOf(date)
+        val landing = Planning.nudge(slots, from, item, delta)
+            ?: return@withTransaction NudgeResult.AT_EDGE
+
+        if (!landing.crosses(from)) {
+            val reordered = slots[from].toMutableList().apply {
+                remove(item)
+                add(landing.position, item)
+            }
+            writeOrder(reordered)
+            return@withTransaction NudgeResult.MOVED
+        }
+
+        val target = dates[landing.slot]?.let(LocalDate::ofEpochDay)
+        val moved = when (item.kind) {
+            PlanItemKind.EXERCISE -> moveOccurrence(item.id, weekStart, target)
+            PlanItemKind.CIRCUIT -> moveCircuit(item.id, weekStart, target)
+            PlanItemKind.MODULE -> moveModule(item.id, weekStart, target)
+        }
+        if (!moved) return@withTransaction NudgeResult.NEEDS_A_DAY
+        val placed = topLevelIn(week, dates[landing.slot]).filter { it != item }.toMutableList()
+        placed.add(landing.position.coerceAtMost(placed.size), item)
+        writeOrder(placed)
+        NudgeResult.MOVED
+    }
+
+    /** The week and day a card sits in, as epoch days; null when it no longer exists. */
+    private suspend fun slotOf(item: PlanItemRef): Pair<Long, Long?>? = when (item.kind) {
+        PlanItemKind.EXERCISE ->
+            dao.getOccurrence(item.id)?.let { it.weekStartEpochDay to it.trainingDateEpochDay }
+        PlanItemKind.CIRCUIT ->
+            dao.getCircuit(item.id)?.let { it.weekStartEpochDay to it.trainingDateEpochDay }
+        PlanItemKind.MODULE ->
+            modules.getInstance(item.id)?.let { it.weekStartEpochDay to it.trainingDateEpochDay }
+    }
+
+    /**
+     * The cards of one slot, in order, by exactly the rules the week screen folds by: a station
+     * belongs to its circuit's card, and a member to its module's card only while it shares the
+     * module's slot. Anything else stands on its own.
+     */
+    private suspend fun topLevelIn(week: Long, date: Long?): List<PlanItemRef> {
+        val weekCircuits = dao.circuitsInWeek(week)
+        val weekModules = modules.instancesInWeek(week)
+        val circuitIds = weekCircuits.map { it.id }.toSet()
+        val moduleDates = weekModules.associate { it.id to it.trainingDateEpochDay }
+        fun grouped(moduleInstanceId: String?) =
+            moduleInstanceId != null && moduleInstanceId in moduleDates &&
+                moduleDates[moduleInstanceId] == date
+
+        data class Placed(val ref: PlanItemRef, val order: Int, val created: Long)
+        val placed = buildList {
+            dao.occurrencesInSlot(week, date)
+                .filter { it.circuitInstanceId == null || it.circuitInstanceId !in circuitIds }
+                .filter { !grouped(it.moduleInstanceId) }
+                .forEach { add(Placed(PlanItemRef(PlanItemKind.EXERCISE, it.id), it.orderIndex, it.createdAtEpochMs)) }
+            weekCircuits
+                .filter { it.trainingDateEpochDay == date && !grouped(it.moduleInstanceId) }
+                .forEach { add(Placed(PlanItemRef(PlanItemKind.CIRCUIT, it.id), it.orderIndex, it.createdAtEpochMs)) }
+            weekModules
+                .filter { it.trainingDateEpochDay == date }
+                .forEach { add(Placed(PlanItemRef(PlanItemKind.MODULE, it.id), it.orderIndex, it.createdAtEpochMs)) }
+        }
+        return placed.sortedWith(compareBy({ it.order }, { it.created })).map { it.ref }
+    }
+
+    /** Numbers a slot's cards 0, 1, 2… in the given order. Members inside them are untouched. */
+    private suspend fun writeOrder(cards: List<PlanItemRef>) {
+        cards.forEachIndexed { index, card ->
+            when (card.kind) {
+                PlanItemKind.EXERCISE -> dao.getOccurrence(card.id)
+                    ?.takeIf { it.orderIndex != index }
+                    ?.let { dao.updateOccurrence(it.copy(orderIndex = index)) }
+                PlanItemKind.CIRCUIT -> dao.getCircuit(card.id)
+                    ?.takeIf { it.orderIndex != index }
+                    ?.let { dao.updateCircuit(it.copy(orderIndex = index)) }
+                PlanItemKind.MODULE -> modules.getInstance(card.id)
+                    ?.takeIf { it.orderIndex != index }
+                    ?.let { modules.updateInstance(it.copy(orderIndex = index)) }
             }
         }
     }
@@ -1027,7 +1086,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
             sessionId = session.id,
             exerciseId = occurrence.exerciseId,
             trainingDateEpochDay = trainingDate.toEpochDay(),
-            prescriptionId = occurrence.prescriptionId,
             orderIndex = logging.nextSetOrderIndex(occurrenceId),
             side = side,
             payloadVersion = ACTUAL_SET_PAYLOAD_VERSION,
@@ -1084,11 +1142,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
     ): String = database.withTransaction {
         val trimmed = name.trim().ifBlank { "Activity" }
         val now = System.currentTimeMillis()
-        val prescription = newPrescriptionRow(
-            PrescriptionPayload(sets = 1, targetDurationSeconds = plannedDurationSeconds),
-            now,
-        )
-        library.insertPrescription(prescription)
         val occurrence = ExerciseOccurrenceEntity(
             id = UUID.randomUUID().toString(),
             weekStartEpochDay = weekStart.toEpochDay(),
@@ -1100,7 +1153,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
             measurementUnitSnapshot = null,
             measurementMeaningSnapshot = null,
             categorySnapshot = ExerciseCategory.OTHER_ACTIVITY,
-            prescriptionId = prescription.id,
+            prescriptionJson =
+                PrescriptionPayload(sets = 1, targetDurationSeconds = plannedDurationSeconds).toJson(),
             orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
             state = OccurrenceState.PLANNED,
             comment = null,
@@ -1172,7 +1226,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
                             sessionId = session.id,
                             exerciseId = occurrence.exerciseId,
                             trainingDateEpochDay = trainingDate.toEpochDay(),
-                            prescriptionId = occurrence.prescriptionId,
                             orderIndex = index,
                             side = set.side,
                             payloadVersion = ACTUAL_SET_PAYLOAD_VERSION,
@@ -1219,20 +1272,20 @@ class TrainingRepository(private val database: MeleteDatabase) {
      */
     fun observeRoutines(): Flow<List<Routine>> =
         combine(routines.observeRoutines(), library.observeExercises()) { rows, exercises ->
-            val byId = exercises.associateBy { it.exercise.id }
+            val byId = exercises.associateBy { it.id }
             rows.map { it.toRoutine(byId) }
         }
 
     fun observeRoutine(id: String): Flow<Routine?> =
         combine(routines.observeRoutine(id), library.observeExercises()) { row, exercises ->
-            row?.toRoutine(exercises.associateBy { it.exercise.id })
+            row?.toRoutine(exercises.associateBy { it.id })
         }
 
     suspend fun getRoutine(id: String): Routine? = database.withTransaction {
         val row = routines.getRoutine(id) ?: return@withTransaction null
         val exercises = row.entries
-            .mapNotNull { library.getExerciseWithDefault(it.entry.exerciseId) }
-            .associateBy { it.exercise.id }
+            .mapNotNull { library.getExercise(it.exerciseId) }
+            .associateBy { it.id }
         row.toRoutine(exercises)
     }
 
@@ -1261,7 +1314,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
         database.withTransaction {
             val existing = routines.getRoutine(id)?.routine ?: return@withTransaction
             val now = System.currentTimeMillis()
-            val superseded = routines.entryPrescriptionIdsOf(id)
             routines.deleteEntriesOf(id)
             routines.updateRoutine(
                 existing.copy(
@@ -1274,8 +1326,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 )
             )
             writeRoutineEntries(id, draft.entries, now)
-            // Only rows nothing points at any more actually go; a scheduled copy holds its own.
-            superseded.forEach { library.deletePrescriptionIfUnused(it) }
         }
     }
 
@@ -1290,8 +1340,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 roundRestSeconds = source.routine.roundRestSeconds,
                 entries = source.orderedEntries.map { row ->
                     RoutineEntryDraft(
-                        exerciseId = row.entry.exerciseId,
-                        prescription = row.prescription?.payload(),
+                        exerciseId = row.exerciseId,
+                        prescription = row.prescriptionJson.toPlan(),
                     )
                 },
                 category = source.routine.category,
@@ -1319,10 +1369,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
             routines.markRoutineDeleted(id, System.currentTimeMillis())
             return@withTransaction true
         }
-        val prescriptions = routines.entryPrescriptionIdsOf(id)
         routines.deleteEntriesOf(id)
         routines.deleteRoutine(existing.routine.id)
-        prescriptions.forEach { library.deletePrescriptionIfUnused(it) }
         true
     }
 
@@ -1332,23 +1380,21 @@ class TrainingRepository(private val database: MeleteDatabase) {
         now: Long,
     ) {
         val rows = entries.mapIndexed { index, draft ->
-            val prescription = draft.prescription?.let { newPrescriptionRow(it, now) }
-            prescription?.let { library.insertPrescription(it) }
             RoutineEntryEntity(
                 id = UUID.randomUUID().toString(),
                 routineId = routineId,
                 orderIndex = index,
                 exerciseId = draft.exerciseId,
                 exerciseNameSnapshot =
-                    library.getExerciseWithDefault(draft.exerciseId)?.exercise?.name.orEmpty(),
-                prescriptionId = prescription?.id,
+                    library.getExercise(draft.exerciseId)?.name.orEmpty(),
+                prescriptionJson = draft.prescription?.toJson(),
             )
         }
         routines.insertEntries(rows)
     }
 
     private fun RoutineWithEntries.toRoutine(
-        exercises: Map<String, ExerciseWithDefaultPrescription>,
+        exercises: Map<String, ExerciseEntity>,
     ) = Routine(
         id = routine.id,
         name = routine.name,
@@ -1358,18 +1404,18 @@ class TrainingRepository(private val database: MeleteDatabase) {
         structureVersion = routine.structureVersion,
         category = routine.category,
         entries = orderedEntries.map { row ->
-            val definition = exercises[row.entry.exerciseId]?.exercise
+            val definition = exercises[row.exerciseId]
             RoutineEntryView(
-                id = row.entry.id,
-                exerciseId = row.entry.exerciseId,
-                name = definition?.name ?: row.entry.exerciseNameSnapshot,
+                id = row.id,
+                exerciseId = row.exerciseId,
+                name = definition?.name ?: row.exerciseNameSnapshot,
                 mode = definition?.mode ?: ExerciseMode.REPETITIONS,
                 unilateral = definition?.unilateral == true,
                 measurementUnit = definition?.measurementUnit,
                 measurementMeaning = definition?.measurementMeaning,
                 category = definition?.category,
-                prescription = row.prescription?.payload(),
-                orderIndex = row.entry.orderIndex,
+                prescription = row.prescriptionJson.toPlan(),
+                orderIndex = row.orderIndex,
                 definitionMissing = definition == null,
             )
         },
@@ -1410,8 +1456,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
             row.toScheduledCircuit(
                 stations.map {
                     it.toPlanned(
-                        maxLoad = heaviest[it.occurrence.id],
-                        loggedSets = counts[it.occurrence.id] ?: 0,
+                        maxLoad = heaviest[it.id],
+                        loggedSets = counts[it.id] ?: 0,
                     )
                 }
             )
@@ -1441,21 +1487,12 @@ class TrainingRepository(private val database: MeleteDatabase) {
             ?: dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
         val snapshots = mutableListOf<CircuitEntrySnapshot>()
         val occurrences = source.orderedEntries.mapIndexed { position, row ->
-            val definition = library.getExerciseWithDefault(row.entry.exerciseId)?.exercise
-            val payload = row.prescription?.payload()
-            val copy = row.prescription?.let {
-                PrescriptionEntity(
-                    id = UUID.randomUUID().toString(),
-                    payloadVersion = it.payloadVersion,
-                    payloadJson = it.payloadJson,
-                    createdAtEpochMs = now,
-                )
-            }
-            copy?.let { library.insertPrescription(it) }
+            val definition = library.getExercise(row.exerciseId)
+            val payload = row.prescriptionJson.toPlan()
             snapshots += CircuitEntrySnapshot(
                 position = position,
-                exerciseId = row.entry.exerciseId,
-                exerciseName = definition?.name ?: row.entry.exerciseNameSnapshot,
+                exerciseId = row.exerciseId,
+                exerciseName = definition?.name ?: row.exerciseNameSnapshot,
                 mode = definition?.mode ?: ExerciseMode.REPETITIONS,
                 unilateral = definition?.unilateral == true,
                 prescription = payload,
@@ -1464,14 +1501,14 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 id = UUID.randomUUID().toString(),
                 weekStartEpochDay = weekStart.toEpochDay(),
                 trainingDateEpochDay = trainingDate?.toEpochDay(),
-                exerciseId = row.entry.exerciseId,
-                exerciseNameSnapshot = definition?.name ?: row.entry.exerciseNameSnapshot,
+                exerciseId = row.exerciseId,
+                exerciseNameSnapshot = definition?.name ?: row.exerciseNameSnapshot,
                 modeSnapshot = definition?.mode ?: ExerciseMode.REPETITIONS,
                 unilateralSnapshot = definition?.unilateral == true,
                 measurementUnitSnapshot = definition?.measurementUnit,
                 measurementMeaningSnapshot = definition?.measurementMeaning,
                 categorySnapshot = definition?.category,
-                prescriptionId = copy?.id,
+                prescriptionJson = row.prescriptionJson,
                 orderIndex = base + position,
                 state = OccurrenceState.PLANNED,
                 comment = null,
@@ -1626,7 +1663,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
     fun observeModules(): Flow<List<TrainingModule>> =
         combine(modules.observeModules(), library.observeExercises(), observeRoutines()) {
             rows, exercises, saved ->
-            val exercisesById = exercises.associateBy { it.exercise.id }
+            val exercisesById = exercises.associateBy { it.id }
             val routinesById = saved.associateBy { it.id }
             rows.map { it.toModule(exercisesById, routinesById) }
         }
@@ -1634,7 +1671,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
     fun observeModule(id: String): Flow<TrainingModule?> =
         combine(modules.observeModule(id), library.observeExercises(), observeRoutines()) {
             row, exercises, saved ->
-            row?.toModule(exercises.associateBy { it.exercise.id }, saved.associateBy { it.id })
+            row?.toModule(exercises.associateBy { it.id }, saved.associateBy { it.id })
         }
 
     suspend fun getModule(id: String): TrainingModule? = database.withTransaction {
@@ -1642,11 +1679,11 @@ class TrainingRepository(private val database: MeleteDatabase) {
         // Retired exercises and circuits are left out, so they read as unavailable here exactly
         // as they do in the live list, and exactly as scheduling will treat them.
         val exercises = row.entries
-            .mapNotNull { entry -> entry.entry.exerciseId?.let { library.getExerciseWithDefault(it) } }
-            .filter { it.exercise.deletedAtEpochMs == null }
-            .associateBy { it.exercise.id }
+            .mapNotNull { entry -> entry.exerciseId?.let { library.getExercise(it) } }
+            .filter { it.deletedAtEpochMs == null }
+            .associateBy { it.id }
         val saved = row.entries
-            .mapNotNull { entry -> entry.entry.routineId }
+            .mapNotNull { entry -> entry.routineId }
             .filter { routines.getRoutine(it)?.routine?.deletedAtEpochMs == null }
             .mapNotNull { getRoutine(it) }
             .associateBy { it.id }
@@ -1673,7 +1710,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
     suspend fun updateModule(id: String, draft: ModuleDraft) {
         database.withTransaction {
             val existing = modules.getModule(id)?.module ?: return@withTransaction
-            val superseded = modules.entryPrescriptionIdsOf(id)
             modules.deleteEntriesOf(id)
             modules.updateModule(
                 existing.copy(
@@ -1682,7 +1718,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 )
             )
             writeModuleEntries(id, draft.entries, System.currentTimeMillis())
-            superseded.forEach { library.deletePrescriptionIfUnused(it) }
         }
     }
 
@@ -1694,10 +1729,10 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 description = source.module.description,
                 entries = source.orderedEntries.map { row ->
                     ModuleEntryDraft(
-                        exerciseId = row.entry.exerciseId,
-                        variationId = row.entry.variationId,
-                        prescription = row.prescription?.payload(),
-                        routineId = row.entry.routineId,
+                        exerciseId = row.exerciseId,
+                        variationId = row.variationId,
+                        prescription = row.prescriptionJson.toPlan(),
+                        routineId = row.routineId,
                     )
                 },
             )
@@ -1719,10 +1754,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
             modules.markModuleDeleted(id, System.currentTimeMillis())
             return@withTransaction true
         }
-        val prescriptions = modules.entryPrescriptionIdsOf(id)
         modules.deleteEntriesOf(id)
         modules.deleteModule(existing.module.id)
-        prescriptions.forEach { library.deletePrescriptionIfUnused(it) }
         true
     }
 
@@ -1742,11 +1775,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 )
 
                 draft.exerciseId != null -> {
-                    val prescription = draft.prescription?.let { newPrescriptionRow(it, now) }
-                    prescription?.let { library.insertPrescription(it) }
                     val variation = draft.variationId
                         ?.let { variations.getVariation(it) }
-                        ?.variation
                         ?.takeIf { it.exerciseId == draft.exerciseId }
                     ModuleEntryEntity(
                         id = UUID.randomUUID().toString(),
@@ -1754,10 +1784,10 @@ class TrainingRepository(private val database: MeleteDatabase) {
                         orderIndex = index,
                         exerciseId = draft.exerciseId,
                         exerciseNameSnapshot =
-                            library.getExerciseWithDefault(draft.exerciseId)?.exercise?.name,
+                            library.getExercise(draft.exerciseId)?.name,
                         variationId = variation?.id,
                         variationTagSnapshot = variation?.tag,
-                        prescriptionId = prescription?.id,
+                        prescriptionJson = draft.prescription?.toJson(),
                     )
                 }
 
@@ -1768,15 +1798,15 @@ class TrainingRepository(private val database: MeleteDatabase) {
     }
 
     private fun ModuleWithEntries.toModule(
-        exercises: Map<String, ExerciseWithDefaultPrescription>,
+        exercises: Map<String, ExerciseEntity>,
         saved: Map<String, Routine>,
     ) = TrainingModule(
         id = module.id,
         name = module.name,
         description = module.description,
         entries = orderedEntries.map { row ->
-            val entry = row.entry
-            val definition = entry.exerciseId?.let { exercises[it]?.exercise }
+            val entry = row
+            val definition = entry.exerciseId?.let { exercises[it] }
             val routine = entry.routineId?.let { saved[it] }
             ModuleEntryView(
                 id = entry.id,
@@ -1788,7 +1818,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 mode = definition?.mode ?: ExerciseMode.REPETITIONS,
                 unilateral = definition?.unilateral == true,
                 category = definition?.category ?: routine?.category,
-                prescription = row.prescription?.payload(),
+                prescription = row.prescriptionJson.toPlan(),
                 routineId = entry.routineId,
                 routine = routine,
                 definitionMissing = if (entry.routineId != null) routine == null else definition == null,
@@ -1839,7 +1869,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
             )
         )
         source.orderedEntries.forEachIndexed { position, row ->
-            val entry = row.entry
+            val entry = row
             when {
                 entry.routineId != null -> {
                     // Unavailable entries are left out, exactly as the editor and the picker
@@ -1860,12 +1890,12 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 entry.exerciseId != null -> {
                     // Deleted outright leaves nothing to cut a copy from; retired from the library
                     // is a statement that it is not to be planned again. Either way it is skipped.
-                    val exercise = library.getExerciseWithDefault(entry.exerciseId)?.exercise
+                    val exercise = library.getExercise(entry.exerciseId)
                         ?.takeIf { it.deletedAtEpochMs == null }
                         ?: return@forEachIndexed
                     placeExercise(
                         exercise = exercise,
-                        plan = row.prescription,
+                        plan = row.prescriptionJson,
                         variationId = entry.variationId,
                         variationTag = entry.variationTagSnapshot,
                         weekStart = weekStart,
@@ -1997,24 +2027,20 @@ class TrainingRepository(private val database: MeleteDatabase) {
     private suspend fun moduleHasRecord(moduleInstanceId: String): Boolean =
         moduleRecordedExercises(moduleInstanceId) > 0
 
-    private fun PrescriptionEntity.payload(): PrescriptionPayload? =
-        runCatching { PrescriptionJson.decode(payloadJson) }.getOrNull()
-
-    private fun newPrescriptionRow(payload: PrescriptionPayload, now: Long) = PrescriptionEntity(
-        id = UUID.randomUUID().toString(),
-        payloadVersion = PRESCRIPTION_PAYLOAD_VERSION,
-        payloadJson = PrescriptionJson.encode(payload),
-        createdAtEpochMs = now,
-    )
 }
 
-private fun OccurrenceWithPrescription.toPlanned(
+/** A stored plan, read back; null when there is none or it cannot be read. */
+private fun String?.toPlan(): PrescriptionPayload? =
+    this?.let { runCatching { PrescriptionJson.decode(it) }.getOrNull() }
+
+private fun PrescriptionPayload.toJson(): String = PrescriptionJson.encode(this)
+
+private fun ExerciseOccurrenceEntity.toPlanned(
     maxLoad: Double? = null,
     loggedSets: Int = 0,
 ): PlannedOccurrence {
-    val payload: PrescriptionPayload? = prescription?.let {
-        runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
-    }
+    val occurrence = this
+    val payload = prescriptionJson.toPlan()
     return PlannedOccurrence(
         id = occurrence.id,
         exerciseId = occurrence.exerciseId,
@@ -2026,9 +2052,8 @@ private fun OccurrenceWithPrescription.toPlanned(
         category = occurrence.categorySnapshot,
         trainingDate = occurrence.trainingDateEpochDay?.let(LocalDate::ofEpochDay),
         weekStart = LocalDate.ofEpochDay(occurrence.weekStartEpochDay),
-        prescriptionId = occurrence.prescriptionId,
         prescription = payload,
-        prescriptionUnreadable = prescription != null && payload == null,
+        prescriptionUnreadable = prescriptionJson != null && payload == null,
         maxLoad = maxLoad,
         loggedSets = loggedSets,
         state = occurrence.state,
@@ -2047,33 +2072,30 @@ private fun OccurrenceWithPrescription.toPlanned(
     )
 }
 
-private fun VariationWithPrescription.toVariation() = ExerciseVariation(
-    id = variation.id,
-    exerciseId = variation.exerciseId,
-    tag = variation.tag,
-    notes = variation.notes,
-    prescription = prescription?.let {
-        runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
-    },
-    orderIndex = variation.orderIndex,
+private fun ExerciseVariationEntity.toVariation() = ExerciseVariation(
+    id = id,
+    exerciseId = exerciseId,
+    tag = tag,
+    notes = notes,
+    prescription = prescriptionJson.toPlan(),
+    orderIndex = orderIndex,
+    retired = deletedAtEpochMs != null,
 )
 
-private fun ExerciseWithDefaultPrescription.toLibraryExercise(
-    variations: List<VariationWithPrescription> = emptyList(),
+private fun ExerciseEntity.toLibraryExercise(
+    variations: List<ExerciseVariationEntity> = emptyList(),
 ) = LibraryExercise(
-    id = exercise.id,
-    name = exercise.name,
-    mode = exercise.mode,
-    unilateral = exercise.unilateral,
-    measurementUnit = exercise.measurementUnit,
-    measurementMeaning = exercise.measurementMeaning,
-    notes = exercise.notes,
-    description = exercise.description,
-    category = exercise.category,
-    deletedAtEpochMs = exercise.deletedAtEpochMs,
-    defaultPrescription = defaultPrescription?.let {
-        runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
-    },
+    id = id,
+    name = name,
+    mode = mode,
+    unilateral = unilateral,
+    measurementUnit = measurementUnit,
+    measurementMeaning = measurementMeaning,
+    notes = notes,
+    description = description,
+    category = category,
+    deletedAtEpochMs = deletedAtEpochMs,
+    defaultPrescription = defaultPrescriptionJson.toPlan(),
     variations = variations.map { it.toVariation() }.sortedWith(compareBy({ it.orderIndex }, { it.tag })),
 )
 
@@ -2100,6 +2122,5 @@ private fun ActualSetEntity.toPerformed() = PerformedSet(
     orderIndex = orderIndex,
     side = side,
     payload = runCatching { ActualSetJson.decode(payloadJson) }.getOrElse { ActualSetPayload() },
-    prescriptionId = prescriptionId,
     recordedAtEpochMs = recordedAtEpochMs,
 )

@@ -152,6 +152,7 @@ should be picked up whenever the surrounding screen is next open.
   day boundaries — move-up at the top of a day carries into the day before, and past the top of
   Monday into the week's unscheduled area. Today the only reordering is within one slot, and
   changing a day means the move dialog. Asked for since phase 4A and deferred every round since.
+  **Done 2026-09-26:** *Edit* / *Done* in the week's header, ↑ ↓ per top-level card, crossing days.
 
 - **Create an exercise from inside the circuit editor.** The *Add an exercise* dialog in the
   routine editor lists the library and nothing else, so building a circuit around a movement you

@@ -52,7 +52,6 @@ class DurationLoggingTest {
         category = null,
         trainingDate = monday,
         weekStart = monday,
-        prescriptionId = null,
         prescription = prescription,
         prescriptionUnreadable = false,
         state = OccurrenceState.PLANNED,

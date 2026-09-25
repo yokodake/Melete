@@ -71,7 +71,7 @@ fun VariationChoiceDialog(
                         onClick = { onChoose(null) },
                     )
                 }
-                items(items = exercise.variations, key = { it.id }) { variation ->
+                items(items = exercise.activeVariations, key = { it.id }) { variation ->
                     HorizontalDivider()
                     PlanChoiceRow(
                         tag = variation.tag,
@@ -127,7 +127,7 @@ fun AddToPlanFlow(
 ) {
     // Chosen straight away when there is nothing to choose between.
     var chosen by remember(exercise.id) {
-        mutableStateOf(if (exercise.variations.isEmpty()) PlanPick(null) else null)
+        mutableStateOf(if (exercise.activeVariations.isEmpty()) PlanPick(null) else null)
     }
     when (val pick = chosen) {
         null -> VariationChoiceDialog(

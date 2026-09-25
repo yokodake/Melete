@@ -18,7 +18,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -338,8 +337,7 @@ class ActivityAndCircuitTest {
 
         val a = repository.observeScheduledCircuit(first).first()!!.stations.first()
         val b = repository.observeScheduledCircuit(second).first()!!.stations.first()
-        assertNotEquals(a.prescriptionId, b.prescriptionId)
-
+        // Each holds its own plan text, so editing one cannot reach the other.
         repository.updateOccurrencePrescription(
             a.id,
             PrescriptionPayload(sets = 1, targetDurationSeconds = 7),
