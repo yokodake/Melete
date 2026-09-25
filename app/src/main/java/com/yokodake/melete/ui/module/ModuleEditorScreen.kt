@@ -192,7 +192,7 @@ fun ModuleEditorScreen(state: ModuleEditorUiState, actions: ModuleEditorActions)
                                         style = MaterialTheme.typography.bodyLarge,
                                         modifier = Modifier.weight(1f, fill = false),
                                     )
-                                    exercise.variations.forEach { VariationChip(it.tag) }
+                                    exercise.activeVariations.forEach { VariationChip(it.tag) }
                                 },
                             )
                         }

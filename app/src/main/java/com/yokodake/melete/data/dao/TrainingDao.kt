@@ -15,18 +15,10 @@ import com.yokodake.melete.data.entity.ExerciseVariationEntity
 import com.yokodake.melete.data.entity.ModuleEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.ModuleInstanceEntity
-import com.yokodake.melete.data.entity.PrescriptionEntity
 import com.yokodake.melete.data.entity.RoutineEntity
 import com.yokodake.melete.data.entity.RoutineEntryEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 import kotlinx.coroutines.flow.Flow
-
-/** An occurrence together with the prescription copy that was planned for it. */
-data class OccurrenceWithPrescription(
-    @Embedded val occurrence: ExerciseOccurrenceEntity,
-    @Relation(parentColumn = "prescriptionId", entityColumn = "id")
-    val prescription: PrescriptionEntity?,
-)
 
 /** One logged set, reduced to what the planner needs to summarise it. */
 data class SetPayloadRow(
@@ -34,17 +26,9 @@ data class SetPayloadRow(
     val payloadJson: String,
 )
 
-/** A library exercise together with its current default prescription. */
-data class ExerciseWithDefaultPrescription(
-    @Embedded val exercise: ExerciseEntity,
-    @Relation(parentColumn = "defaultPrescriptionId", entityColumn = "id")
-    val defaultPrescription: PrescriptionEntity?,
-)
-
 @Dao
 interface TrainingDao {
 
-    @Transaction
     @Query(
         """
         SELECT * FROM exercise_occurrences
@@ -52,11 +36,10 @@ interface TrainingDao {
         ORDER BY trainingDateEpochDay IS NOT NULL, trainingDateEpochDay, orderIndex, createdAtEpochMs
         """
     )
-    fun observeWeek(weekStartEpochDay: Long): Flow<List<OccurrenceWithPrescription>>
+    fun observeWeek(weekStartEpochDay: Long): Flow<List<ExerciseOccurrenceEntity>>
 
-    @Transaction
     @Query("SELECT * FROM exercise_occurrences WHERE id = :id")
-    fun observeOccurrence(id: String): Flow<OccurrenceWithPrescription?>
+    fun observeOccurrence(id: String): Flow<ExerciseOccurrenceEntity?>
 
     @Query("SELECT * FROM exercise_occurrences WHERE id = :id")
     suspend fun getOccurrence(id: String): ExerciseOccurrenceEntity?
@@ -130,6 +113,9 @@ interface TrainingDao {
     @Query("SELECT * FROM circuit_instances WHERE id = :id")
     suspend fun getCircuit(id: String): CircuitInstanceEntity?
 
+    @Query("SELECT * FROM circuit_instances WHERE weekStartEpochDay = :weekStartEpochDay")
+    suspend fun circuitsInWeek(weekStartEpochDay: Long): List<CircuitInstanceEntity>
+
     @Query("SELECT * FROM circuit_instances WHERE id = :id")
     fun observeCircuit(id: String): Flow<CircuitInstanceEntity?>
 
@@ -143,7 +129,6 @@ interface TrainingDao {
     suspend fun deleteCircuit(id: String)
 
     /** The stations of one scheduled circuit, in execution order. */
-    @Transaction
     @Query(
         """
         SELECT * FROM exercise_occurrences
@@ -151,7 +136,7 @@ interface TrainingDao {
         ORDER BY circuitPosition, orderIndex
         """
     )
-    fun observeCircuitStations(circuitInstanceId: String): Flow<List<OccurrenceWithPrescription>>
+    fun observeCircuitStations(circuitInstanceId: String): Flow<List<ExerciseOccurrenceEntity>>
 
     @Query(
         """
@@ -166,9 +151,6 @@ interface TrainingDao {
     suspend fun insertExercises(exercises: List<ExerciseEntity>)
 
     @Insert
-    suspend fun insertPrescriptions(prescriptions: List<PrescriptionEntity>)
-
-    @Insert
     suspend fun insertOccurrences(occurrences: List<ExerciseOccurrenceEntity>)
 
     @Update
@@ -178,7 +160,6 @@ interface TrainingDao {
     suspend fun deleteOccurrence(id: String)
 
     /** Every occurrence of one exercise, newest planning first. Includes retired definitions. */
-    @Transaction
     @Query(
         """
         SELECT * FROM exercise_occurrences
@@ -186,7 +167,7 @@ interface TrainingDao {
         ORDER BY trainingDateEpochDay DESC, createdAtEpochMs DESC
         """
     )
-    fun observeOccurrencesOf(exerciseId: String): Flow<List<OccurrenceWithPrescription>>
+    fun observeOccurrencesOf(exerciseId: String): Flow<List<ExerciseOccurrenceEntity>>
 
     /** Occurrences sharing one slot, in the order they are shown. */
     @Query(
@@ -209,7 +190,6 @@ interface TrainingDao {
 interface LibraryDao {
 
     /** The active library: what you can still plan. Retired entries are excluded. */
-    @Transaction
     @Query(
         """
         SELECT * FROM exercises
@@ -217,27 +197,19 @@ interface LibraryDao {
         ORDER BY name COLLATE NOCASE
         """
     )
-    fun observeExercises(): Flow<List<ExerciseWithDefaultPrescription>>
+    fun observeExercises(): Flow<List<ExerciseEntity>>
 
-    @Transaction
     @Query("SELECT * FROM exercises WHERE id = :id")
-    suspend fun getExerciseWithDefault(id: String): ExerciseWithDefaultPrescription?
+    suspend fun getExercise(id: String): ExerciseEntity?
 
-    @Transaction
     @Query("SELECT * FROM exercises WHERE id = :id")
-    fun observeExerciseWithDefault(id: String): Flow<ExerciseWithDefaultPrescription?>
+    fun observeExercise(id: String): Flow<ExerciseEntity?>
 
     @Insert
     suspend fun insertExercise(exercise: ExerciseEntity)
 
     @Update
     suspend fun updateExercise(exercise: ExerciseEntity)
-
-    @Insert
-    suspend fun insertPrescription(prescription: PrescriptionEntity)
-
-    @Query("SELECT * FROM prescriptions WHERE id = :id")
-    suspend fun getPrescription(id: String): PrescriptionEntity?
 
     @Query("UPDATE exercises SET deletedAtEpochMs = :atEpochMs WHERE id = :id")
     suspend fun markExerciseDeleted(id: String, atEpochMs: Long)
@@ -275,39 +247,12 @@ interface LibraryDao {
     )
     suspend fun countCompletedOccurrencesOf(exerciseId: String): Int
 
-    @Query(
-        """
-        SELECT prescriptionId FROM exercise_occurrences
-        WHERE exerciseId = :exerciseId AND prescriptionId IS NOT NULL
-        """
-    )
-    suspend fun occurrencePrescriptionIdsOf(exerciseId: String): List<String>
-
     @Query("DELETE FROM exercise_occurrences WHERE exerciseId = :exerciseId")
     suspend fun deleteOccurrencesOf(exerciseId: String)
 
     @Query("DELETE FROM exercises WHERE id = :id")
     suspend fun deleteExercise(id: String)
 
-    /**
-     * Drops a prescription row only once nothing points at it.
-     *
-     * Prescriptions are copied by value and shared by nobody, but the guard makes the delete
-     * order-independent and impossible to get wrong: if anything still refers to it, it stays.
-     */
-    @Query(
-        """
-        DELETE FROM prescriptions
-        WHERE id = :id
-          AND NOT EXISTS (SELECT 1 FROM exercises WHERE defaultPrescriptionId = :id)
-          AND NOT EXISTS (SELECT 1 FROM exercise_occurrences WHERE prescriptionId = :id)
-          AND NOT EXISTS (SELECT 1 FROM actual_sets WHERE prescriptionId = :id)
-          AND NOT EXISTS (SELECT 1 FROM routine_entries WHERE prescriptionId = :id)
-          AND NOT EXISTS (SELECT 1 FROM exercise_variations WHERE prescriptionId = :id)
-          AND NOT EXISTS (SELECT 1 FROM module_entries WHERE prescriptionId = :id)
-        """
-    )
-    suspend fun deletePrescriptionIfUnused(id: String)
 }
 
 @Dao
@@ -398,21 +343,14 @@ interface LoggingDao {
     fun observeSetPayloadsForCircuit(circuitInstanceId: String): Flow<List<SetPayloadRow>>
 }
 
-/** One station of a routine, with the prescription copy it owns. */
-data class RoutineEntryWithPrescription(
-    @Embedded val entry: RoutineEntryEntity,
-    @Relation(parentColumn = "prescriptionId", entityColumn = "id")
-    val prescription: PrescriptionEntity?,
-)
-
 /** A routine with its stations, in order. */
 data class RoutineWithEntries(
     @Embedded val routine: RoutineEntity,
     @Relation(entity = RoutineEntryEntity::class, parentColumn = "id", entityColumn = "routineId")
-    val entries: List<RoutineEntryWithPrescription>,
+    val entries: List<RoutineEntryEntity>,
 ) {
-    val orderedEntries: List<RoutineEntryWithPrescription>
-        get() = entries.sortedBy { it.entry.orderIndex }
+    val orderedEntries: List<RoutineEntryEntity>
+        get() = entries.sortedBy { it.orderIndex }
 }
 
 @Dao
@@ -440,9 +378,6 @@ interface RoutineDao {
     @Insert
     suspend fun insertEntries(entries: List<RoutineEntryEntity>)
 
-    @Query("SELECT prescriptionId FROM routine_entries WHERE routineId = :routineId AND prescriptionId IS NOT NULL")
-    suspend fun entryPrescriptionIdsOf(routineId: String): List<String>
-
     @Query("DELETE FROM routine_entries WHERE routineId = :routineId")
     suspend fun deleteEntriesOf(routineId: String)
 
@@ -460,44 +395,31 @@ interface RoutineDao {
     suspend fun instanceIdsOf(routineId: String): List<String>
 }
 
-/** A variation together with the prescription it owns. */
-data class VariationWithPrescription(
-    @Embedded val variation: ExerciseVariationEntity,
-    @Relation(parentColumn = "prescriptionId", entityColumn = "id")
-    val prescription: PrescriptionEntity?,
-)
-
 @Dao
 interface VariationDao {
 
-    @Transaction
     @Query("SELECT * FROM exercise_variations WHERE exerciseId = :exerciseId ORDER BY orderIndex, tag")
-    fun observeVariationsOf(exerciseId: String): Flow<List<VariationWithPrescription>>
+    fun observeVariationsOf(exerciseId: String): Flow<List<ExerciseVariationEntity>>
 
     /** Every variation of every exercise, for lists that need to know which ones have any. */
-    @Transaction
     @Query("SELECT * FROM exercise_variations ORDER BY exerciseId, orderIndex, tag")
-    fun observeAllVariations(): Flow<List<VariationWithPrescription>>
+    fun observeAllVariations(): Flow<List<ExerciseVariationEntity>>
 
-    @Transaction
     @Query("SELECT * FROM exercise_variations WHERE id = :id")
-    suspend fun getVariation(id: String): VariationWithPrescription?
+    suspend fun getVariation(id: String): ExerciseVariationEntity?
 
     @Query("SELECT * FROM exercise_variations WHERE exerciseId = :exerciseId")
     suspend fun variationsOf(exerciseId: String): List<ExerciseVariationEntity>
 
-    @Transaction
-    @Query("SELECT * FROM exercise_variations WHERE exerciseId = :exerciseId ORDER BY orderIndex, tag")
-    suspend fun variationsWithPrescriptionOf(exerciseId: String): List<VariationWithPrescription>
-
     @Query("SELECT COALESCE(MAX(orderIndex), -1) + 1 FROM exercise_variations WHERE exerciseId = :exerciseId")
     suspend fun nextOrderIndex(exerciseId: String): Int
 
-    /** Whether another variation of the exercise already answers to [tag]. */
+    /** Whether another active variation of the exercise already answers to [tag]. */
     @Query(
         """
         SELECT COUNT(*) FROM exercise_variations
         WHERE exerciseId = :exerciseId AND tag = :tag AND id != :excludeId
+          AND deletedAtEpochMs IS NULL
         """
     )
     suspend fun countTag(exerciseId: String, tag: String, excludeId: String): Int
@@ -510,23 +432,28 @@ interface VariationDao {
 
     @Query("DELETE FROM exercise_variations WHERE id = :id")
     suspend fun deleteVariation(id: String)
-}
 
-/** One entry of a module template, with the prescription copy it owns. */
-data class ModuleEntryWithPrescription(
-    @Embedded val entry: ModuleEntryEntity,
-    @Relation(parentColumn = "prescriptionId", entityColumn = "id")
-    val prescription: PrescriptionEntity?,
-)
+    @Query("UPDATE exercise_variations SET deletedAtEpochMs = :atEpochMs WHERE id = :id")
+    suspend fun markVariationDeleted(id: String, atEpochMs: Long)
+
+    /** Planned copies and module entries cut from this variation: what a retirement protects. */
+    @Query(
+        """
+        SELECT (SELECT COUNT(*) FROM exercise_occurrences WHERE variationId = :id)
+             + (SELECT COUNT(*) FROM module_entries WHERE variationId = :id)
+        """
+    )
+    suspend fun countReferences(id: String): Int
+}
 
 /** A module template with its entries, in order. */
 data class ModuleWithEntries(
     @Embedded val module: ModuleEntity,
     @Relation(entity = ModuleEntryEntity::class, parentColumn = "id", entityColumn = "moduleId")
-    val entries: List<ModuleEntryWithPrescription>,
+    val entries: List<ModuleEntryEntity>,
 ) {
-    val orderedEntries: List<ModuleEntryWithPrescription>
-        get() = entries.sortedBy { it.entry.orderIndex }
+    val orderedEntries: List<ModuleEntryEntity>
+        get() = entries.sortedBy { it.orderIndex }
 }
 
 @Dao
@@ -556,9 +483,6 @@ interface ModuleDao {
     @Insert
     suspend fun insertEntries(entries: List<ModuleEntryEntity>)
 
-    @Query("SELECT prescriptionId FROM module_entries WHERE moduleId = :moduleId AND prescriptionId IS NOT NULL")
-    suspend fun entryPrescriptionIdsOf(moduleId: String): List<String>
-
     @Query("DELETE FROM module_entries WHERE moduleId = :moduleId")
     suspend fun deleteEntriesOf(moduleId: String)
 
@@ -584,6 +508,9 @@ interface ModuleDao {
 
     @Query("SELECT * FROM module_instances WHERE id = :id")
     suspend fun getInstance(id: String): ModuleInstanceEntity?
+
+    @Query("SELECT * FROM module_instances WHERE weekStartEpochDay = :weekStartEpochDay")
+    suspend fun instancesInWeek(weekStartEpochDay: Long): List<ModuleInstanceEntity>
 
     @Insert
     suspend fun insertInstance(instance: ModuleInstanceEntity)

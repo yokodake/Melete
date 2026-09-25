@@ -42,7 +42,6 @@ class WeekUiStateTest {
         category = null,
         trainingDate = date,
         weekStart = monday,
-        prescriptionId = null,
         prescription = prescription,
         prescriptionUnreadable = false,
         state = OccurrenceState.PLANNED,

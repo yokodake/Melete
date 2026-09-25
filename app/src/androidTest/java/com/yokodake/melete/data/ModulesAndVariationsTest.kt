@@ -155,6 +155,22 @@ class ModulesAndVariationsTest {
         copy = week().single()
         assertEquals("PWR", copy.variationTag)
         assertEquals(5, copy.prescription?.sets)
+        // A copy came from it, so it is retired rather than deleted: no longer offered, still there
+        // for the copy to find its notes, and its tag is free for a new variation.
+        val library = repository.getLibraryExercise(squat)!!
+        assertTrue(library.activeVariations.isEmpty())
+        assertEquals("Heavier", library.variations.single { it.id == pwr }.notes)
+        assertEquals(
+            VariationSave.SAVED,
+            repository.createVariation(squat, "STR", null, PrescriptionPayload(sets = 3, targetReps = 3)),
+        )
+    }
+
+    @Test
+    fun aVariationNothingCameFromIsDeletedOutright() = runBlocking {
+        val squat = exercise("Squat")
+        repository.createVariation(squat, "PWR", null, PrescriptionPayload(sets = 5, targetReps = 3))
+        repository.deleteVariation(variationId(squat, "PWR"))
         assertTrue(repository.getLibraryExercise(squat)!!.variations.isEmpty())
     }
 

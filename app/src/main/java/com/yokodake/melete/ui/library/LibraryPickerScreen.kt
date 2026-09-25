@@ -167,7 +167,7 @@ fun LibraryPickerScreen(
                         is Workout.Exercise -> LibraryRow(
                             exercise = workout.exercise,
                             onClick = {
-                                if (workout.exercise.variations.isEmpty()) {
+                                if (workout.exercise.activeVariations.isEmpty()) {
                                     onPickExercise(workout.exercise.id, null)
                                 } else {
                                     choosingPlanFor = workout.exercise

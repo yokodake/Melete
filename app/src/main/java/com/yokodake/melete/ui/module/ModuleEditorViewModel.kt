@@ -218,7 +218,7 @@ class ModuleEditorViewModel(
 
     /** An exercise picked from the list: added at once, or after its plan is chosen. */
     fun pickExercise(exercise: LibraryExercise) {
-        if (exercise.variations.isEmpty()) {
+        if (exercise.activeVariations.isEmpty()) {
             addExercise(exercise, null)
         } else {
             // Keeps `replacing`, so the plan chosen next still lands in the right place.

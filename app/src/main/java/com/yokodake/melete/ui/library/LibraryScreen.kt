@@ -481,7 +481,7 @@ internal fun LibraryRow(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     // Which alternatives exist, at a glance; what each one is lives on the exercise.
-                    exercise.variations.forEach { VariationChip(it.tag) }
+                    exercise.activeVariations.forEach { VariationChip(it.tag) }
                 }
                 Text(
                     text = PrescriptionSummary.formatDefault(exercise),

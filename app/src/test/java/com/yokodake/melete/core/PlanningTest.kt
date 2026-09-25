@@ -1,52 +1,59 @@
 package com.yokodake.melete.core
 
+import com.yokodake.melete.core.Planning.Landing
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
-/**
- * The part of organising a plan that is arithmetic on values rather than database work.
- *
- * Moving and copying are mostly SQL, so the decision underneath them was pulled out here where it
- * can be checked without a device.
- */
 class PlanningTest {
 
+    /** Unscheduled, then three days: enough to cross boundaries both ways. */
+    private val week = listOf(
+        listOf("u1"),
+        listOf("a", "b", "c"),
+        emptyList(),
+        listOf("d"),
+    )
+
     @Test
-    fun `moving an item down swaps it with the one below`() {
-        assertEquals(
-            listOf("a", "c", "b", "d"),
-            Planning.reorder(listOf("a", "b", "c", "d"), "b", 1),
-        )
+    fun `within a slot an item swaps with its neighbour`() {
+        assertEquals(Landing(1, 2), Planning.nudge(week, 1, "b", 1))
+        assertEquals(Landing(1, 0), Planning.nudge(week, 1, "b", -1))
     }
 
     @Test
-    fun `moving an item up swaps it with the one above`() {
-        assertEquals(
-            listOf("a", "c", "b", "d"),
-            Planning.reorder(listOf("a", "b", "c", "d"), "c", -1),
-        )
+    fun `past the top of a day it lands at the bottom of the one above`() {
+        assertEquals(Landing(0, 1), Planning.nudge(week, 1, "a", -1))
+        assertEquals(Landing(2, 0), Planning.nudge(week, 3, "d", -1))
     }
 
     @Test
-    fun `nudging the top item up does nothing rather than wrapping to the bottom`() {
-        val items = listOf("a", "b", "c")
-        assertEquals(items, Planning.reorder(items, "a", -1))
-        assertEquals(items, Planning.reorder(items, "c", 1))
+    fun `past the bottom of a day it lands at the top of the one below, empty days included`() {
+        assertEquals(Landing(2, 0), Planning.nudge(week, 1, "c", 1))
+        assertEquals(Landing(1, 0), Planning.nudge(week, 0, "u1", 1))
     }
 
     @Test
-    fun `a bigger nudge is clamped to the ends`() {
-        assertEquals(
-            listOf("b", "c", "d", "a"),
-            Planning.reorder(listOf("a", "b", "c", "d"), "a", 99),
-        )
+    fun `the ends of the week stop rather than wrap`() {
+        assertNull(Planning.nudge(week, 0, "u1", -1))
+        assertNull(Planning.nudge(week, 3, "d", 1))
     }
 
     @Test
-    fun `an item that is not in the list leaves it alone`() {
-        val items = listOf("a", "b")
-        assertEquals(items, Planning.reorder(items, "z", 1))
-        assertEquals(items, Planning.reorder(items, "a", 0))
+    fun `an item not in the slot, or no movement, lands nowhere`() {
+        assertNull(Planning.nudge(week, 1, "d", 1))
+        assertNull(Planning.nudge(week, 1, "a", 0))
     }
 
+    @Test
+    fun `a bigger delta still moves one place, so a double tap is two nudges`() {
+        assertEquals(Landing(1, 2), Planning.nudge(week, 1, "b", 5))
+    }
+
+    @Test
+    fun `crossing is reported so the caller knows to change the date`() {
+        val landing = Planning.nudge(week, 1, "a", -1)!!
+        assertEquals(true, landing.crosses(from = 1))
+        assertEquals(false, Planning.nudge(week, 1, "b", 1)!!.crosses(from = 1))
+    }
 }
