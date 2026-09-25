@@ -24,11 +24,11 @@ the two ever disagree, the code and the first half win.
 | Timer A — unilateral execution | ✅ |
 | Timer B — repeaters | ✅ |
 | Timer C — supersets/circuits and compact review | ✅ |
-| 4B — modules for planning | not started |
+| 4B — modules for planning | built; not yet run on a phone |
 | 5B — daily notes, metrics, export and restore | not started |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **1**, and one schema only until phase 6 — see *No migration chain* below.
+Schema version **3**, and one schema only until phase 6 — see *No migration chain* below.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -39,20 +39,29 @@ highlighted and the list opens near it. Previous/next week and a *Today* action.
 
 Each day's `+` offers two things:
 
-- **From library** opens the picker for that slot. It lists exercises by default; *Circuits* at
-  the right of its header switches to saved circuits and becomes *Exercises* to switch back, and
-  the bottom button creates whichever kind is on screen (*New exercise* / *New circuit*). An
-  exercise copies its definition and prescription into the slot; a circuit copies in as a
-  container plus one real occurrence per station. The slot is fixed for the life of the picker,
-  across switching views and detours to create something.
+- **From library** opens the picker for that slot, with three tabs under its header —
+  *Exercises* · *Circuits* · *Modules* — and a bottom button that creates whichever kind is on
+  screen. An exercise copies its definition and prescription into the slot (asking which plan
+  first, when it has variations); a circuit copies in as a container plus one real occurrence per
+  station; a module copies in as a named group plus each of its entries as that real work. The
+  slot is fixed for the life of the picker, across switching tabs and detours to create
+  something.
 - **Other activity**, typed in by name with optional minutes — no library entry is created.
 
-The circuit list reached from the Library tab is for managing circuits only; it no longer
-schedules them.
+The circuit and module lists reached from the Library tab are for managing them only; scheduling
+goes through the picker.
 
 A card is tapped to open what it is, and long-pressed for its menu: move to any week and day (or
 back to unscheduled), duplicate, nudge up and down within its slot, remove. A circuit is one card
-with its stations listed inside it, and moves, removes and completes as a unit.
+with its stations listed inside it, and moves, removes and completes as a unit. A copy cut from a
+variation carries the variation's tag as a chip beside its name.
+
+A **module** is an outlined group under its name, holding the ordinary cards of its members —
+each opened, moved and logged as it would be on its own, with one extra menu item, *Take out of
+module*. The group's own menu moves it (with the members still in its slot, taking their logs to
+the new date), ungroups it (every member stays exactly where it is), or removes it. Moving a member
+on its own takes it out of the group, and a member that ends up on another day — logged there, say
+— is shown there rather than inside a group that says it is elsewhere.
 
 Removing is refused once anything has been recorded, where "recorded" means a logged set **or** a
 completed occurrence — a duration-only activity writes no sets and is still a workout that
@@ -72,9 +81,25 @@ happened. The stronger answer exists and names what it would destroy.
 - **A one-off activity** is an occurrence with no library row. Its exercise id is derived from its
   name (`core/OneOffActivity`), so two sessions called the same thing already group in history and
   could be promoted to a definition later. Going for a run once leaves no clutter behind.
+- **A variation** is a named alternative plan for one library exercise — `A`, `PWR`, `END`: a tag
+  of up to four capitals or digits (unique per exercise, folded to capitals as typed), its own
+  prescription, and optional notes long enough for "first 3 reps at 40% of 5RM, then RIR 1–2". It
+  is the same exercise, so history groups across variations. The exercise shows *Default plan*
+  when it has none and *Plans* — the default first, then each variation with its chip — when it
+  does, each edited by its own cog; *+ Add a variation* sits under them. A copy snapshots the tag
+  and copies the plan by value; the variation's notes are read live, like the exercise's own.
+  Editing or deleting a variation never reaches a copy already in a week.
 - **A routine** is a saved, named circuit: ordered library exercises, each with its own copied
   prescription, plus a round count, a rest between exercises and a rest between rounds. Reached
-  from *Circuits* in the library's top bar, or from a day's `+`.
+  from *Circuits* in the library's top bar, and scheduled from the picker's *Circuits* tab.
+- **A module** is a saved, named group of planned work: ordered exercises (each with its own
+  copied plan, optionally cut from a variation) and whole saved circuits, plus an optional
+  purpose / description. Organisational only: it is not trained, timed or counted, and adds no time of
+  its own. Reached from *Modules* in the library's top bar. Template edits never reach scheduled
+  copies; removing a template that was ever scheduled leaves a tombstone for their lineage.
+- **Adding to a plan from the library** — a row's menu, or *Add to plan* in an exercise's own menu
+  — asks which plan when there are variations, then which week, from a list that scrolls without
+  end.
 
 ## Logging
 
@@ -557,8 +582,12 @@ the migration suite having gone.
 - `today` is computed when the UI state is built, so an app left open across midnight keeps the old
   highlight until the state is rebuilt.
 - The month abbreviation in week labels comes from the device locale. Unit tests pin `Locale.US`.
-- No modules, diary, export or dashboard yet; those tables and screens are deliberately not created
+- No diary, export or dashboard yet; those tables and screens are deliberately not created
   speculatively.
+- **The planner still has no edit mode.** Module cards follow the existing long-press menus, and
+  cards still cannot be nudged across day boundaries.
+- **Circuit stations carry no variation.** A routine's stations copy the library default, as they
+  always have; a variation can be chosen for a module's standalone exercises only.
 
 ## What still needs a phone
 
@@ -668,6 +697,24 @@ These are the ones no test can make.
 - [ ] **Move a recorded circuit** to another day: the stations and their sets move with it, and
       "anytime this week" is not offered.
 - [ ] **Remove the routine** from the Circuits list. The scheduled copy and its log stay.
+
+### 7. Variations and modules
+
+- [ ] **Make a variation** from an exercise: *+ Add a variation*, type `pwr`, see `PWR`. A second
+      `PWR` on the same exercise is refused with a message under the tag.
+- [ ] **Plans on the exercise**: *Default plan* with no variations, *Plans* with them, each with
+      its own cog; delete one from its dialog.
+- [ ] **Add to plan** from the exercise's menu and from a library row: the plan question appears
+      only for an exercise with variations, then the week list scrolls well past December.
+- [ ] **The chip** shows on the week card, on the exercise opened from the week (with the
+      variation's notes), and on the logger's planned card.
+- [ ] **Make a module** with an exercise (pick a variation), a circuit and a new exercise created
+      from the add dialog; write a description; save; reopen and see it all come back.
+- [ ] **Schedule it** from the picker's *Modules* tab: one outlined group on that day, members
+      inside in order, the circuit as its own card within.
+- [ ] **Move the group**, **take one member out**, **ungroup**, **remove** — with and without a
+      logged member (a logged one refuses *unscheduled* and asks before deleting).
+- [ ] **The three tabs** in the picker, and the bottom button following them.
 
 ### 6. Background and audio
 
@@ -888,15 +935,58 @@ separate planned and performed dates — all of them contradicted by later secti
 document. Current behaviour and history are now separated, and the stale claims are gone from the
 first half and recorded as superseded in the second.
 
+## Phase 4B, variations and the unlimited week list (2026-09-25)
+
+- **Variations** — `exercise_variations`, with the tag unique per exercise and the plan its own
+  prescription row. Occurrences gained `variationId` and `variationTagSnapshot`. Scheduling takes
+  an optional variation; removing an unused exercise frees its variations' plans with it.
+- **Modules** — `modules`, `module_entries` and `module_instances`, with `moduleInstanceId` and a
+  position on occurrences and circuit instances. Scheduling cuts each entry through the same code
+  as scheduling it alone (`placeExercise`, `scheduleRoutine`), so a module is only the group.
+  Moving, ungrouping, taking out, removing and the stronger delete-with-log are all in the
+  repository; the week folds members into their group only while they share its slot.
+- **Slot ordering counts containers.** `nextOrderIndex` and `firstOrderIndex` looked at occurrences
+  only, so something added after an empty group landed in front of it; they now take circuit and
+  module containers into account.
+- **`deletePrescriptionIfUnused` checks routine entries**, which it never did — a latent foreign-key
+  failure — as well as the new variation and module-entry owners.
+- **A copied placement joins no group.** Duplicating copied `circuitInstanceId` along with
+  everything else, which would have made a duplicate a station of its source's circuit; it and the
+  new module fields are now cleared on copy.
+- **The week list for *Add to plan* has no end.** A lazy list of `Int.MAX_VALUE` rows, starting
+  last week.
+- **The picker is its own screen** (`LibraryPickerScreen`) with a segmented control, rather than
+  options threaded through the library tab's screen.
+- Schema **v1 → v2**, destructive in debug by design; `1.json` replaced by `2.json`.
+- **Module planning metadata cut back to a description** (schema **v3**, `3.json`). Estimated
+  minutes, target system, equipment and the effort/CNS and skin costs were specified by the phase
+  plan and went unused; a module now carries only an optional purpose / description, trimmed, and
+  stored as absent when blank.
+- **`LibrarySeed`** now also seeds variations, four circuits (ordinary, all one side at a time, a
+  repeater with a station that must wait, a zero-transition superset) and five modules, unless run
+  with `-e planning false`.
+
+**Checks run:** 160 unit tests pass (4 new for module grouping, 4 for the tag rule). Both APKs
+build. `ModulesAndVariationsTest` (14 instrumented tests: copy isolation, tag rules, template edits
+not reaching copies, group moves carrying logs, ungrouping, member moves, trained-module
+protection, template deletion keeping logs, container ordering) **pass on the Pixel 9**, in the full suite of 63 run with
+`scripts/device-tests.sh` against a backup taken immediately before
+(`backups/pre-v2-20260925-173611/`, schema 1, integrity ok, 25 exercises / 8 occurrences).
+After the v3 change the suite ran again (backup `backups/pre-v3-20260925-175404/`): 62 of 63 pass,
+all 14 module and variation tests among them. The one failure,
+`aCueDoesNotTakeAudioFocusFromWhateverElseIsPlaying`, failed at its own precondition — a phone call
+held audio focus, so the test could not take it to begin with. Not yet re-run outside a call.
+
 ## Next step
 
-**Phase 4B — modules for planning.** Reusable named groups of exercises, optionally containing a
-circuit as a single execution item, with template lineage, group moves and ungrouping.
+**Phase 5B — daily notes, metrics, export and restore.**
 
 Owed before or alongside it:
 
-- **Everything in *What still needs a phone*.** None of 5A or the timer extensions has been run on
-  hardware.
+- **Everything in *What still needs a phone*.** None of 5A, the timer extensions, variations or
+  modules has been walked through by hand. `LibrarySeed` refills a wiped debug database with the
+  library, variations, circuits and modules.
+- **Re-run the audio-focus cue test** with no call in progress.
 - **Gating the planner behind an edit mode**, so cards only move when you have said you are
   reorganising, with move-up/down crossing day boundaries. Explicitly asked for, still not built.
 - The 4A acceptance scenarios end to end. The instrumented suite exercises the database, not the

@@ -2,6 +2,7 @@ package com.yokodake.melete.ui
 
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.WeekCircuit
+import com.yokodake.melete.data.WeekModule
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.Measurement
@@ -28,6 +29,8 @@ class WeekUiStateTest {
         prescription: PrescriptionPayload? = PrescriptionPayload(sets = 3, targetReps = 5),
         circuitInstanceId: String? = null,
         circuitPosition: Int? = null,
+        moduleInstanceId: String? = null,
+        modulePosition: Int? = null,
     ) = PlannedOccurrence(
         id = "$name-$date-$order",
         exerciseId = name,
@@ -47,12 +50,25 @@ class WeekUiStateTest {
         orderIndex = order,
         circuitInstanceId = circuitInstanceId,
         circuitPosition = circuitPosition,
+        moduleInstanceId = moduleInstanceId,
+        modulePosition = modulePosition,
+    )
+
+    private fun module(id: String, date: LocalDate?, order: Int = 0) = WeekModule(
+        id = id,
+        moduleId = "template-$id",
+        name = id,
+        weekStart = monday,
+        trainingDate = date,
+        orderIndex = order,
     )
 
     private fun circuit(
         id: String,
         date: LocalDate?,
         order: Int = 0,
+        moduleInstanceId: String? = null,
+        modulePosition: Int? = null,
     ) = WeekCircuit(
         id = id,
         routineId = "routine-$id",
@@ -63,14 +79,99 @@ class WeekUiStateTest {
         weekStart = monday,
         trainingDate = date,
         orderIndex = order,
+        moduleInstanceId = moduleInstanceId,
+        modulePosition = modulePosition,
     )
 
-    /** The names of a slot's cards: a circuit reads as its own name, not as its stations. */
+    /** The names of a slot's cards: a circuit or module reads as its own name, not its contents. */
     private fun List<WeekItem>.names(): List<String> = map { item ->
         when (item) {
             is WeekItem.Single -> item.occurrence.name
             is WeekItem.Circuit -> item.circuit.name
+            is WeekItem.Module -> item.module.name
         }
+    }
+
+    // ------------------------------------------------------------- modules
+
+    @Test
+    fun `a module is one group holding its exercises and circuits in module order`() {
+        val state = WeekUiState.build(
+            weekStart = monday,
+            today = monday,
+            occurrences = listOf(
+                occurrence("Warm-up", monday, order = 0),
+                occurrence("Mobility", monday, order = 3, moduleInstanceId = "Fingers", modulePosition = 1),
+                occurrence("Max hangs", monday, order = 2, moduleInstanceId = "Fingers", modulePosition = 0),
+                // A station of a circuit that is itself a member: listed once, inside the circuit.
+                occurrence(
+                    "Row", monday, order = 4,
+                    circuitInstanceId = "Pull", circuitPosition = 0,
+                    moduleInstanceId = "Fingers", modulePosition = 2,
+                ),
+            ),
+            circuits = listOf(
+                circuit("Pull", monday, order = 4, moduleInstanceId = "Fingers", modulePosition = 2),
+            ),
+            modules = listOf(module("Fingers", monday, order = 1)),
+        )
+        assertEquals(listOf("Warm-up", "Fingers"), state.days[0].items.names())
+        val group = state.days[0].items[1] as WeekItem.Module
+        assertEquals(listOf("Max hangs", "Mobility", "Pull"), group.members.names())
+        // Three exercises in it, the circuit's station included; the group itself is none of them.
+        assertEquals(listOf("Max hangs", "Mobility", "Row"), group.exercises.map { it.name })
+    }
+
+    @Test
+    fun `a member filed on another day shows there, not inside the group`() {
+        val state = WeekUiState.build(
+            weekStart = monday,
+            today = monday,
+            occurrences = listOf(
+                occurrence("Max hangs", monday, moduleInstanceId = "Fingers", modulePosition = 0),
+                // Logged on Tuesday: still a member on paper, but it happened on Tuesday.
+                occurrence("Mobility", monday.plusDays(1), moduleInstanceId = "Fingers", modulePosition = 1),
+            ),
+            modules = listOf(module("Fingers", monday)),
+        )
+        val group = state.days[0].items.single() as WeekItem.Module
+        assertEquals(listOf("Max hangs"), group.members.names())
+        assertEquals(listOf("Mobility"), state.days[1].items.names())
+    }
+
+    @Test
+    fun `a module is done only once every exercise in it is, and counts nothing itself`() {
+        fun build(vararg states: OccurrenceState) = WeekUiState.build(
+            weekStart = monday,
+            today = monday,
+            occurrences = states.mapIndexed { index, state ->
+                occurrence(
+                    name = "Exercise $index",
+                    date = monday,
+                    order = index,
+                    moduleInstanceId = "Fingers",
+                    modulePosition = index,
+                ).copy(state = state)
+            },
+            modules = listOf(module("Fingers", monday)),
+        ).days[0].items.filterIsInstance<WeekItem.Module>().single()
+
+        assertTrue(!build(OccurrenceState.COMPLETED, OccurrenceState.PLANNED).completed)
+        assertEquals(1, build(OccurrenceState.COMPLETED, OccurrenceState.PLANNED).recordedExercises)
+        assertTrue(build(OccurrenceState.COMPLETED, OccurrenceState.COMPLETED).completed)
+        // An empty group is never "done": there is nothing in it to have done.
+        assertTrue(!WeekUiState.build(monday, monday, emptyList(), modules = listOf(module("E", monday)))
+            .days[0].items.filterIsInstance<WeekItem.Module>().single().completed)
+    }
+
+    @Test
+    fun `a member whose module is missing still shows as its own card`() {
+        val state = WeekUiState.build(
+            weekStart = monday,
+            today = monday,
+            occurrences = listOf(occurrence("Orphan", monday, moduleInstanceId = "gone")),
+        )
+        assertEquals(listOf("Orphan"), state.days[0].items.names())
     }
 
     @Test

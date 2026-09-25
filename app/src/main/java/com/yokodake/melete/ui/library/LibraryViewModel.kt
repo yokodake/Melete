@@ -68,10 +68,11 @@ class LibraryViewModel(
     }
 
     /** Places a copy of this exercise in the chosen week, on a day or in its unscheduled area. */
-    fun schedule(exerciseId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
+    /** Copies an exercise into a week's unscheduled area, with the plan that was chosen. */
+    fun schedule(exerciseId: String, weekStart: LocalDate, variationId: String?) {
         viewModelScope.launch {
-            repository.scheduleExercise(exerciseId, weekStart, trainingDate)
-            message.value = "Added to ${trainingDate?.let(WeekMath::dayLabel) ?: "unscheduled"}"
+            repository.scheduleExercise(exerciseId, weekStart, trainingDate = null, variationId)
+            message.value = "Added to ${WeekMath.weekLabel(weekStart)}"
         }
     }
 

@@ -21,12 +21,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,8 +46,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.timer.TimerPhase
+import com.yokodake.melete.ui.components.AddToPlanFlow
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.PrescriptionFields
+import com.yokodake.melete.ui.components.PrescriptionFormState
+import com.yokodake.melete.ui.components.VariationChip
+import com.yokodake.melete.ui.components.VariationEditorDialog
+import com.yokodake.melete.ui.components.VariationEditorState
+import java.time.LocalDate
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
 /**
@@ -72,6 +81,13 @@ fun ExerciseDetailRoute(
         onPlanChange = viewModel::updatePrescriptionEditor,
         onSavePlan = viewModel::savePrescription,
         onDismissPlan = viewModel::dismissPrescriptionEditor,
+        onEditVariation = viewModel::openVariationEditor,
+        onVariationChange = viewModel::updateVariationEditor,
+        onSaveVariation = viewModel::saveVariation,
+        onDeleteVariation = viewModel::deleteVariation,
+        onDismissVariation = viewModel::dismissVariationEditor,
+        onSchedule = viewModel::schedule,
+        onMessageShown = viewModel::consumeMessage,
         onEditExercise = onEditExercise,
         onBack = onBack,
     )
@@ -86,14 +102,30 @@ fun ExerciseDetailScreen(
     onConfirmReplace: () -> Unit,
     onDismissReplace: () -> Unit,
     onEditPlan: () -> Unit,
-    onPlanChange: (com.yokodake.melete.ui.components.PrescriptionFormState) -> Unit,
+    onPlanChange: (PrescriptionFormState) -> Unit,
     onSavePlan: () -> Unit,
     onDismissPlan: () -> Unit,
     onEditExercise: (String) -> Unit,
     onBack: () -> Unit,
+    onEditVariation: (variationId: String?) -> Unit = {},
+    onVariationChange: (VariationEditorState) -> Unit = {},
+    onSaveVariation: () -> Unit = {},
+    onDeleteVariation: () -> Unit = {},
+    onDismissVariation: () -> Unit = {},
+    onSchedule: (weekStart: LocalDate, variationId: String?) -> Unit = { _, _ -> },
+    onMessageShown: () -> Unit = {},
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    var addingToPlan by remember { mutableStateOf(false) }
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbarHostState.showSnackbar(it)
+            onMessageShown()
+        }
+    }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -122,7 +154,15 @@ fun ExerciseDetailScreen(
                 // Changing what the exercise *is* — its name, category, explanation, how a set is
                 // measured — is rarer than changing its numbers, so it sits one level further in.
                 actions = {
-                    state.exerciseId?.let { ExerciseMenu(it, onEditExercise) }
+                    state.exerciseId?.let {
+                        ExerciseMenu(
+                            exerciseId = it,
+                            onEditExercise = onEditExercise,
+                            // Only while the entry can still be planned: a retired one is history.
+                            onAddToPlan = { addingToPlan = true }
+                                .takeIf { state.libraryExercise != null },
+                        )
+                    }
                 },
             )
         },
@@ -188,47 +228,43 @@ fun ExerciseDetailScreen(
                 )
             }
 
-            Section(if (state.occurrenceId == null) "Default plan" else "Planned")
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
-            ) {
-                Row(
-                    modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = state.prescriptionSummary,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Text(
-                            text = facts(state),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        if (state.mode.hasSetStructure) {
-                            state.timerShapeLine?.let {
-                                Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                )
-                            }
-                        }
-                    }
-                    // The numbers are edited where they are shown, rather than through a button
-                    // further down that has to re-explain which plan it means.
-                    IconButton(
-                        onClick = onEditPlan,
-                        modifier = Modifier.semantics {
-                            contentDescription = "Edit this plan"
-                        },
-                    ) {
-                        Text("⚙", style = MaterialTheme.typography.titleLarge)
-                    }
+            val browsingLibrary = state.occurrenceId == null
+            Section(
+                when {
+                    !browsingLibrary -> "Planned"
+                    state.variations.isEmpty() -> "Default plan"
+                    else -> "Plans"
+                }
+            )
+            PlanCard(
+                summary = state.prescriptionSummary,
+                // On a planned copy, the variation it was cut from; the default has no chip.
+                tag = state.variationTag.takeIf { !browsingLibrary },
+                lines = buildList {
+                    add(facts(state))
+                    if (state.mode.hasSetStructure) state.timerShapeLine?.let(::add)
+                    if (!browsingLibrary) state.variationNotes?.let(::add)
+                },
+                editDescription = "Edit this plan",
+                onEdit = onEditPlan,
+            )
+            if (browsingLibrary) {
+                // The alternatives, each edited where it is shown, exactly like the default.
+                state.variations.forEach { variation ->
+                    PlanCard(
+                        summary = PrescriptionSummary.formatPlan(
+                            variation.prescription,
+                            state.mode,
+                            state.unilateral,
+                        ),
+                        tag = variation.tag,
+                        lines = listOfNotNull(variation.notes),
+                        editDescription = "Edit variation ${variation.tag}",
+                        onEdit = { onEditVariation(variation.id) },
+                    )
+                }
+                if (state.libraryExercise != null) {
+                    TextButton(onClick = { onEditVariation(null) }) { Text("+  Add a variation") }
                 }
             }
 
@@ -279,6 +315,32 @@ fun ExerciseDetailScreen(
         )
     }
 
+    state.variationEditor?.let { editor ->
+        VariationEditorDialog(
+            state = editor,
+            mode = state.mode,
+            unilateral = state.unilateral,
+            onChange = onVariationChange,
+            onSave = onSaveVariation,
+            onDelete = onDeleteVariation,
+            onDismiss = onDismissVariation,
+        )
+    }
+
+    if (addingToPlan) {
+        state.libraryExercise?.let { exercise ->
+            AddToPlanFlow(
+                exercise = exercise,
+                today = state.today,
+                onSchedule = { week, variationId ->
+                    addingToPlan = false
+                    onSchedule(week, variationId)
+                },
+                onDismiss = { addingToPlan = false },
+            )
+        }
+    }
+
     state.replacePrompt?.let { running ->
         AlertDialog(
             onDismissRequest = onDismissReplace,
@@ -296,8 +358,62 @@ fun ExerciseDetailScreen(
     }
 }
 
+/**
+ * One plan: the default, a variation, or the copy sitting in a week. The summary on top, the tag
+ * beside it when there is one, and the cog to change it right where it is read.
+ */
 @Composable
-private fun ExerciseMenu(exerciseId: String, onEditExercise: (String) -> Unit) {
+private fun PlanCard(
+    summary: String,
+    tag: String?,
+    lines: List<String>,
+    editDescription: String,
+    onEdit: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    tag?.let { VariationChip(it) }
+                    Text(text = summary, style = MaterialTheme.typography.bodyLarge)
+                }
+                lines.forEach {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+            }
+            // The numbers are edited where they are shown, rather than through a button further
+            // down that has to re-explain which plan it means.
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.semantics { contentDescription = editDescription },
+            ) {
+                Text("⚙", style = MaterialTheme.typography.titleLarge)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExerciseMenu(
+    exerciseId: String,
+    onEditExercise: (String) -> Unit,
+    onAddToPlan: (() -> Unit)?,
+) {
     var expanded by remember { mutableStateOf(false) }
     IconButton(
         onClick = { expanded = true },
@@ -306,6 +422,15 @@ private fun ExerciseMenu(exerciseId: String, onEditExercise: (String) -> Unit) {
         Text("⋮", style = MaterialTheme.typography.titleLarge)
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        onAddToPlan?.let { add ->
+            DropdownMenuItem(
+                text = { Text("Add to plan") },
+                onClick = {
+                    expanded = false
+                    add()
+                },
+            )
+        }
         DropdownMenuItem(
             text = { Text("Edit this exercise") },
             onClick = {

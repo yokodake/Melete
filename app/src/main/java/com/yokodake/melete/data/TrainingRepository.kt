@@ -6,11 +6,17 @@ import com.yokodake.melete.core.Planning
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.dao.ExerciseWithDefaultPrescription
 import com.yokodake.melete.data.dao.OccurrenceWithPrescription
+import com.yokodake.melete.data.dao.ModuleWithEntries
 import com.yokodake.melete.data.dao.SetPayloadRow
+import com.yokodake.melete.data.dao.VariationWithPrescription
 import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
+import com.yokodake.melete.data.entity.ExerciseVariationEntity
+import com.yokodake.melete.data.entity.ModuleEntity
+import com.yokodake.melete.data.entity.ModuleEntryEntity
+import com.yokodake.melete.data.entity.ModuleInstanceEntity
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.PrescriptionEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
@@ -32,6 +38,7 @@ import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PRESCRIPTION_PAYLOAD_VERSION
 import com.yokodake.melete.data.model.PrescriptionJson
 import com.yokodake.melete.data.model.PrescriptionPayload
+import com.yokodake.melete.data.model.VariationTag
 import com.yokodake.melete.data.timer.DurationEstimate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -87,6 +94,12 @@ data class PlannedOccurrence(
     /** The scheduled circuit this is a station of, when it is one. */
     val circuitInstanceId: String? = null,
     val circuitPosition: Int? = null,
+    /** The library variation this copy was cut from, and its tag as it stood then. */
+    val variationId: String? = null,
+    val variationTag: String? = null,
+    /** The scheduled module this belongs to, when it was placed as part of one. */
+    val moduleInstanceId: String? = null,
+    val modulePosition: Int? = null,
 ) {
     /**
      * How long the plan says this should take, worked out from its shape. Null when there is
@@ -128,7 +141,25 @@ data class LibraryExercise(
     val defaultPrescription: PrescriptionPayload?,
     /** Retired from the library, but still the anchor for everything that refers to it. */
     val deletedAtEpochMs: Long? = null,
+    /** Its named alternative plans, in order. Empty for most exercises. */
+    val variations: List<ExerciseVariation> = emptyList(),
 )
+
+/**
+ * A named alternative plan for one library exercise: its own prescription and its own notes, under
+ * a short tag. The same movement planned another way, never a second exercise.
+ */
+data class ExerciseVariation(
+    val id: String,
+    val exerciseId: String,
+    val tag: String,
+    val notes: String?,
+    val prescription: PrescriptionPayload?,
+    val orderIndex: Int,
+)
+
+/** What saving a variation came to. The tag rules are the only way it can be refused. */
+enum class VariationSave { SAVED, TAG_INVALID, TAG_TAKEN }
 
 /**
  * What removing an exercise from the library would actually do.
@@ -260,10 +291,70 @@ data class WeekCircuit(
     val weekStart: LocalDate,
     val trainingDate: LocalDate?,
     val orderIndex: Int,
+    /** The scheduled module this circuit belongs to, when it was placed as part of one. */
+    val moduleInstanceId: String? = null,
+    val modulePosition: Int? = null,
 )
 
 /** What removing a routine would cost. */
 data class RoutineRemoval(val routine: Routine, val scheduledCopies: Int, val recordedCopies: Int)
+
+/** One entry of a module as the editor holds it: an exercise with its plan, or a circuit. */
+data class ModuleEntryDraft(
+    val exerciseId: String? = null,
+    val variationId: String? = null,
+    val prescription: PrescriptionPayload? = null,
+    val routineId: String? = null,
+)
+
+/** Everything the module editor writes. */
+data class ModuleDraft(
+    val name: String,
+    val description: String?,
+    val entries: List<ModuleEntryDraft>,
+)
+
+/** One entry of a saved module, joined to what the library currently says about it. */
+data class ModuleEntryView(
+    val id: String,
+    val exerciseId: String?,
+    val variationId: String?,
+    val variationTag: String?,
+    val name: String,
+    val mode: ExerciseMode,
+    val unilateral: Boolean,
+    val category: ExerciseCategory?,
+    /** This entry's own copy of the plan. Editing it never reaches the library. */
+    val prescription: PrescriptionPayload?,
+    val routineId: String?,
+    /** The saved circuit, when this entry is one and it still exists. */
+    val routine: Routine?,
+    /** The exercise or circuit it came from is gone, so only the snapshotted name is left. */
+    val definitionMissing: Boolean,
+) {
+    val isCircuit: Boolean get() = routineId != null
+}
+
+/** A saved module: a named group of planned work, ready to be copied into a week. */
+data class TrainingModule(
+    val id: String,
+    val name: String,
+    val description: String?,
+    val entries: List<ModuleEntryView>,
+)
+
+/** A module copied into a week, as the planner sees it: the group, without its members. */
+data class WeekModule(
+    val id: String,
+    val moduleId: String,
+    val name: String,
+    val weekStart: LocalDate,
+    val trainingDate: LocalDate?,
+    val orderIndex: Int,
+)
+
+/** What removing a module template would cost. Scheduled copies are never touched either way. */
+data class ModuleRemoval(val module: TrainingModule, val scheduledCopies: Int)
 
 /**
  * One occurrence's whole log, about to be written.
@@ -314,6 +405,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
     private val library = database.libraryDao()
     private val logging = database.loggingDao()
     private val routines = database.routineDao()
+    private val variations = database.variationDao()
+    private val modules = database.moduleDao()
 
     // ---------------------------------------------------------------- week
 
@@ -373,10 +466,14 @@ class TrainingRepository(private val database: MeleteDatabase) {
     // ------------------------------------------------------------- library
 
     fun observeLibrary(): Flow<List<LibraryExercise>> =
-        library.observeExercises().map { rows -> rows.map { it.toLibraryExercise() } }
+        combine(library.observeExercises(), variations.observeAllVariations()) { rows, all ->
+            val byExercise = all.groupBy { it.variation.exerciseId }
+            rows.map { it.toLibraryExercise(byExercise[it.exercise.id].orEmpty()) }
+        }
 
     suspend fun getLibraryExercise(id: String): LibraryExercise? =
-        library.getExerciseWithDefault(id)?.toLibraryExercise()
+        library.getExerciseWithDefault(id)
+            ?.toLibraryExercise(variations.variationsWithPrescriptionOf(id))
 
     /**
      * The library entry a planned copy came from, followed live. The explanation of a movement is
@@ -384,7 +481,10 @@ class TrainingRepository(private val database: MeleteDatabase) {
      * of from the snapshot: an exercise that has since been deleted simply has none.
      */
     fun observeLibraryExercise(id: String): Flow<LibraryExercise?> =
-        library.observeExerciseWithDefault(id).map { it?.toLibraryExercise() }
+        combine(
+            library.observeExerciseWithDefault(id),
+            variations.observeVariationsOf(id),
+        ) { row, rows -> row?.toLibraryExercise(rows) }
 
     suspend fun createExercise(draft: ExerciseDraft): String = database.withTransaction {
         val now = System.currentTimeMillis()
@@ -491,6 +591,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
             val plannedCopies = library.countOccurrencesOf(exerciseId)
             val prescriptions = buildList {
                 addAll(library.occurrencePrescriptionIdsOf(exerciseId))
+                // The variations go with the row, by cascade; the plans they held are freed here.
+                addAll(variations.variationsOf(exerciseId).mapNotNull { it.prescriptionId })
                 library.getExerciseWithDefault(exerciseId)?.exercise?.defaultPrescriptionId
                     ?.let { add(it) }
             }
@@ -507,22 +609,133 @@ class TrainingRepository(private val database: MeleteDatabase) {
 
     suspend fun restoreExercise(exerciseId: String) = library.restoreExercise(exerciseId)
 
+    // ---------------------------------------------------------- variations
+
+    /**
+     * Adds a named alternative plan to a library exercise.
+     *
+     * Refused, without writing anything, for a tag that breaks the rules or that another variation
+     * of the same exercise already uses: two plans under one chip could not be told apart.
+     */
+    suspend fun createVariation(
+        exerciseId: String,
+        tag: String,
+        notes: String?,
+        prescription: PrescriptionPayload,
+    ): VariationSave = database.withTransaction {
+        if (!VariationTag.isValid(tag)) return@withTransaction VariationSave.TAG_INVALID
+        if (variations.countTag(exerciseId, tag, excludeId = "") > 0) {
+            return@withTransaction VariationSave.TAG_TAKEN
+        }
+        val now = System.currentTimeMillis()
+        val row = newPrescriptionRow(prescription, now)
+        library.insertPrescription(row)
+        variations.insertVariation(
+            ExerciseVariationEntity(
+                id = UUID.randomUUID().toString(),
+                exerciseId = exerciseId,
+                tag = tag,
+                notes = notes?.trim()?.takeIf { it.isNotEmpty() },
+                prescriptionId = row.id,
+                orderIndex = variations.nextOrderIndex(exerciseId),
+                createdAtEpochMs = now,
+            )
+        )
+        VariationSave.SAVED
+    }
+
+    /**
+     * Changes a variation. Its plan is written as a new row, like an exercise default, so copies
+     * already in a week keep what they were given; the tag they show is their own snapshot.
+     */
+    suspend fun updateVariation(
+        variationId: String,
+        tag: String,
+        notes: String?,
+        prescription: PrescriptionPayload,
+    ): VariationSave = database.withTransaction {
+        val existing = variations.getVariation(variationId)?.variation
+            ?: return@withTransaction VariationSave.SAVED
+        if (!VariationTag.isValid(tag)) return@withTransaction VariationSave.TAG_INVALID
+        if (variations.countTag(existing.exerciseId, tag, excludeId = variationId) > 0) {
+            return@withTransaction VariationSave.TAG_TAKEN
+        }
+        val row = newPrescriptionRow(prescription, System.currentTimeMillis())
+        library.insertPrescription(row)
+        variations.updateVariation(
+            existing.copy(
+                tag = tag,
+                notes = notes?.trim()?.takeIf { it.isNotEmpty() },
+                prescriptionId = row.id,
+            )
+        )
+        existing.prescriptionId?.let { library.deletePrescriptionIfUnused(it) }
+        VariationSave.SAVED
+    }
+
+    /**
+     * Deletes a variation. Nothing already planned or logged changes: every copy holds its own plan
+     * and its own tag, and only remembers which variation it came from.
+     */
+    suspend fun deleteVariation(variationId: String) {
+        database.withTransaction {
+            val existing = variations.getVariation(variationId)?.variation
+                ?: return@withTransaction
+            variations.deleteVariation(variationId)
+            existing.prescriptionId?.let { library.deletePrescriptionIfUnused(it) }
+        }
+    }
+
     // ---------------------------------------------------------- scheduling
 
     /**
      * Copies a library exercise into the week: onto [trainingDate], or into the week's unscheduled
      * area when it is null. The prescription is copied by value and the exercise's identity fields
      * are snapshotted, so later template edits cannot reach this copy.
+     *
+     * With a [variationId] the copy is cut from that variation's plan instead of the default, and
+     * carries its tag.
      */
     suspend fun scheduleExercise(
         exerciseId: String,
         weekStart: LocalDate,
         trainingDate: LocalDate?,
+        variationId: String? = null,
     ): String = database.withTransaction {
         val source = library.getExerciseWithDefault(exerciseId)
             ?: error("Unknown exercise $exerciseId")
+        val variation = variationId
+            ?.let { variations.getVariation(it) }
+            ?.takeIf { it.variation.exerciseId == exerciseId }
+        placeExercise(
+            exercise = source.exercise,
+            // A variation with no plan is copied as having none, never as the default.
+            plan = if (variation != null) variation.prescription else source.defaultPrescription,
+            variationId = variation?.variation?.id,
+            variationTag = variation?.variation?.tag,
+            weekStart = weekStart,
+            trainingDate = trainingDate,
+            orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
+        )
+    }
+
+    /**
+     * Writes one occurrence cut from [exercise] and a copy of [plan]. The single place a library
+     * exercise becomes planned work, whether it arrives alone or as part of a module.
+     */
+    private suspend fun placeExercise(
+        exercise: ExerciseEntity,
+        plan: PrescriptionEntity?,
+        variationId: String?,
+        variationTag: String?,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+        orderIndex: Int,
+        moduleInstanceId: String? = null,
+        modulePosition: Int? = null,
+    ): String {
         val now = System.currentTimeMillis()
-        val copy = source.defaultPrescription?.let {
+        val copy = plan?.let {
             PrescriptionEntity(
                 id = UUID.randomUUID().toString(),
                 payloadVersion = it.payloadVersion,
@@ -535,21 +748,25 @@ class TrainingRepository(private val database: MeleteDatabase) {
             id = UUID.randomUUID().toString(),
             weekStartEpochDay = weekStart.toEpochDay(),
             trainingDateEpochDay = trainingDate?.toEpochDay(),
-            exerciseId = source.exercise.id,
-            exerciseNameSnapshot = source.exercise.name,
-            modeSnapshot = source.exercise.mode,
-            unilateralSnapshot = source.exercise.unilateral,
-            measurementUnitSnapshot = source.exercise.measurementUnit,
-            measurementMeaningSnapshot = source.exercise.measurementMeaning,
-            categorySnapshot = source.exercise.category,
+            exerciseId = exercise.id,
+            exerciseNameSnapshot = exercise.name,
+            modeSnapshot = exercise.mode,
+            unilateralSnapshot = exercise.unilateral,
+            measurementUnitSnapshot = exercise.measurementUnit,
+            measurementMeaningSnapshot = exercise.measurementMeaning,
+            categorySnapshot = exercise.category,
             prescriptionId = copy?.id,
-            orderIndex = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
+            orderIndex = orderIndex,
             state = OccurrenceState.PLANNED,
             comment = null,
             createdAtEpochMs = now,
+            variationId = variationId,
+            variationTagSnapshot = variationTag,
+            moduleInstanceId = moduleInstanceId,
+            modulePosition = modulePosition,
         )
         dao.insertOccurrences(listOf(occurrence))
-        occurrence.id
+        return occurrence.id
     }
 
     /** Edits this week's copy only. Writes a new prescription row; nothing else is touched. */
@@ -620,6 +837,9 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     weekStart.toEpochDay(),
                     trainingDate?.toEpochDay(),
                 ),
+                // Moved on its own, it has left its group: a module is the things planned together.
+                moduleInstanceId = null,
+                modulePosition = null,
             )
         )
         if (trainingDate != null && loggedSets > 0) {
@@ -677,6 +897,12 @@ class TrainingRepository(private val database: MeleteDatabase) {
             weekStartEpochDay = weekStart.toEpochDay(),
             trainingDateEpochDay = trainingDate?.toEpochDay(),
             prescriptionId = prescriptionCopy?.id,
+            // A copy is a new plan standing on its own: it joins neither the source's circuit nor
+            // its module, which would otherwise gain a member nobody put there.
+            circuitInstanceId = null,
+            circuitPosition = null,
+            moduleInstanceId = null,
+            modulePosition = null,
             orderIndex = if (atTop) {
                 dao.firstOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
             } else {
@@ -1156,6 +1382,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
         weekStart = LocalDate.ofEpochDay(weekStartEpochDay),
         trainingDate = trainingDateEpochDay?.let(LocalDate::ofEpochDay),
         orderIndex = orderIndex,
+        moduleInstanceId = moduleInstanceId,
+        modulePosition = modulePosition,
     )
 
     /** One scheduled circuit and the occurrences that are its stations. */
@@ -1190,11 +1418,15 @@ class TrainingRepository(private val database: MeleteDatabase) {
         routineId: String,
         weekStart: LocalDate,
         trainingDate: LocalDate?,
+        moduleInstanceId: String? = null,
+        modulePosition: Int? = null,
+        orderIndex: Int? = null,
     ): String? = database.withTransaction {
         val source = routines.getRoutine(routineId) ?: return@withTransaction null
         val now = System.currentTimeMillis()
         val circuitId = UUID.randomUUID().toString()
-        val base = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+        val base = orderIndex
+            ?: dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
         val snapshots = mutableListOf<CircuitEntrySnapshot>()
         val occurrences = source.orderedEntries.mapIndexed { position, row ->
             val definition = library.getExerciseWithDefault(row.entry.exerciseId)?.exercise
@@ -1234,6 +1466,10 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 createdAtEpochMs = now,
                 circuitInstanceId = circuitId,
                 circuitPosition = position,
+                // Stations carry the module too, so what a module holds can be asked of the
+                // occurrences alone when checking for records or moving logged work.
+                moduleInstanceId = moduleInstanceId,
+                modulePosition = modulePosition,
             )
         }
         dao.insertCircuit(
@@ -1260,29 +1496,53 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 transitionSeconds = source.routine.transitionSeconds,
                 roundRestSeconds = source.routine.roundRestSeconds,
                 createdAtEpochMs = now,
+                moduleInstanceId = moduleInstanceId,
+                modulePosition = modulePosition,
             )
         )
         dao.insertOccurrences(occurrences)
         circuitId
     }
 
-    /** Moves a scheduled circuit, and every station of it, together. */
+    /**
+     * Moves a scheduled circuit, and every station of it, together. Moved on its own it leaves any
+     * module it was part of, exactly as a single exercise does.
+     */
     suspend fun moveCircuit(
         circuitInstanceId: String,
         weekStart: LocalDate,
         trainingDate: LocalDate?,
     ): Boolean = database.withTransaction {
         val circuit = dao.getCircuit(circuitInstanceId) ?: return@withTransaction false
-        val stations = dao.circuitStations(circuitInstanceId)
         if (trainingDate == null && circuitHasRecord(circuitInstanceId)) {
             return@withTransaction false
         }
-        val base = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+        relocateCircuit(
+            circuit = circuit,
+            weekStart = weekStart,
+            trainingDate = trainingDate,
+            base = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay()),
+            keepModule = false,
+        )
+        true
+    }
+
+    /** Puts a circuit and its stations in a slot, taking any logged sets along to the new date. */
+    private suspend fun relocateCircuit(
+        circuit: CircuitInstanceEntity,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+        base: Int,
+        keepModule: Boolean,
+    ) {
+        val stations = dao.circuitStations(circuit.id)
         dao.updateCircuit(
             circuit.copy(
                 weekStartEpochDay = weekStart.toEpochDay(),
                 trainingDateEpochDay = trainingDate?.toEpochDay(),
                 orderIndex = base,
+                moduleInstanceId = circuit.moduleInstanceId.takeIf { keepModule },
+                modulePosition = circuit.modulePosition.takeIf { keepModule },
             )
         )
         stations.forEachIndexed { index, station ->
@@ -1291,6 +1551,8 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     weekStartEpochDay = weekStart.toEpochDay(),
                     trainingDateEpochDay = trainingDate?.toEpochDay(),
                     orderIndex = base + index,
+                    moduleInstanceId = station.moduleInstanceId.takeIf { keepModule },
+                    modulePosition = station.modulePosition.takeIf { keepModule },
                 )
             )
         }
@@ -1298,7 +1560,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
             val session = ensureSession(trainingDate)
             stations.forEach { logging.repointSets(it.id, trainingDate.toEpochDay(), session.id) }
         }
-        true
     }
 
     /** Takes a scheduled circuit back out of the week, refusing once anything was recorded. */
@@ -1346,6 +1607,368 @@ class TrainingRepository(private val database: MeleteDatabase) {
             stations = stations,
         )
 
+    // ------------------------------------------------------------- modules
+
+    fun observeModules(): Flow<List<TrainingModule>> =
+        combine(modules.observeModules(), library.observeExercises(), observeRoutines()) {
+            rows, exercises, saved ->
+            val exercisesById = exercises.associateBy { it.exercise.id }
+            val routinesById = saved.associateBy { it.id }
+            rows.map { it.toModule(exercisesById, routinesById) }
+        }
+
+    fun observeModule(id: String): Flow<TrainingModule?> =
+        combine(modules.observeModule(id), library.observeExercises(), observeRoutines()) {
+            row, exercises, saved ->
+            row?.toModule(exercises.associateBy { it.exercise.id }, saved.associateBy { it.id })
+        }
+
+    suspend fun getModule(id: String): TrainingModule? = database.withTransaction {
+        val row = modules.getModule(id) ?: return@withTransaction null
+        val exercises = row.entries
+            .mapNotNull { entry -> entry.entry.exerciseId?.let { library.getExerciseWithDefault(it) } }
+            .associateBy { it.exercise.id }
+        val saved = row.entries
+            .mapNotNull { entry -> entry.entry.routineId?.let { getRoutine(it) } }
+            .associateBy { it.id }
+        row.toModule(exercises, saved)
+    }
+
+    suspend fun createModule(draft: ModuleDraft): String = database.withTransaction {
+        val now = System.currentTimeMillis()
+        val module = ModuleEntity(
+            id = UUID.randomUUID().toString(),
+            name = draft.name.trim().ifBlank { "Module" },
+            description = draft.description.cleaned(),
+            createdAtEpochMs = now,
+        )
+        modules.insertModule(module)
+        writeModuleEntries(module.id, draft.entries, now)
+        module.id
+    }
+
+    /**
+     * Replaces a module's entries. Each gets a fresh prescription row, so scheduled copies keep
+     * what they were given: template edits never reach the week.
+     */
+    suspend fun updateModule(id: String, draft: ModuleDraft) {
+        database.withTransaction {
+            val existing = modules.getModule(id)?.module ?: return@withTransaction
+            val superseded = modules.entryPrescriptionIdsOf(id)
+            modules.deleteEntriesOf(id)
+            modules.updateModule(
+                existing.copy(
+                    name = draft.name.trim().ifBlank { existing.name },
+                    description = draft.description.cleaned(),
+                )
+            )
+            writeModuleEntries(id, draft.entries, System.currentTimeMillis())
+            superseded.forEach { library.deletePrescriptionIfUnused(it) }
+        }
+    }
+
+    suspend fun duplicateModule(id: String): String? = database.withTransaction {
+        val source = modules.getModule(id) ?: return@withTransaction null
+        createModule(
+            ModuleDraft(
+                name = source.module.name + " copy",
+                description = source.module.description,
+                entries = source.orderedEntries.map { row ->
+                    ModuleEntryDraft(
+                        exerciseId = row.entry.exerciseId,
+                        variationId = row.entry.variationId,
+                        prescription = row.prescription?.payload(),
+                        routineId = row.entry.routineId,
+                    )
+                },
+            )
+        )
+    }
+
+    suspend fun moduleRemovalImpact(id: String): ModuleRemoval? = database.withTransaction {
+        val module = getModule(id) ?: return@withTransaction null
+        ModuleRemoval(module, scheduledCopies = modules.countInstancesOf(id))
+    }
+
+    /**
+     * Removes a module template. Scheduled copies are untouched either way. One nothing was ever
+     * cut from goes outright; one that was scheduled stays as a tombstone for their lineage.
+     */
+    suspend fun removeModule(id: String): Boolean = database.withTransaction {
+        val existing = modules.getModule(id) ?: return@withTransaction false
+        if (modules.countInstancesOf(id) > 0) {
+            modules.markModuleDeleted(id, System.currentTimeMillis())
+            return@withTransaction true
+        }
+        val prescriptions = modules.entryPrescriptionIdsOf(id)
+        modules.deleteEntriesOf(id)
+        modules.deleteModule(existing.module.id)
+        prescriptions.forEach { library.deletePrescriptionIfUnused(it) }
+        true
+    }
+
+    private suspend fun writeModuleEntries(
+        moduleId: String,
+        entries: List<ModuleEntryDraft>,
+        now: Long,
+    ) {
+        val rows = entries.mapIndexedNotNull { index, draft ->
+            when {
+                draft.routineId != null -> ModuleEntryEntity(
+                    id = UUID.randomUUID().toString(),
+                    moduleId = moduleId,
+                    orderIndex = index,
+                    routineId = draft.routineId,
+                    routineNameSnapshot = routines.getRoutine(draft.routineId)?.routine?.name,
+                )
+
+                draft.exerciseId != null -> {
+                    val prescription = draft.prescription?.let { newPrescriptionRow(it, now) }
+                    prescription?.let { library.insertPrescription(it) }
+                    val variation = draft.variationId
+                        ?.let { variations.getVariation(it) }
+                        ?.variation
+                        ?.takeIf { it.exerciseId == draft.exerciseId }
+                    ModuleEntryEntity(
+                        id = UUID.randomUUID().toString(),
+                        moduleId = moduleId,
+                        orderIndex = index,
+                        exerciseId = draft.exerciseId,
+                        exerciseNameSnapshot =
+                            library.getExerciseWithDefault(draft.exerciseId)?.exercise?.name,
+                        variationId = variation?.id,
+                        variationTagSnapshot = variation?.tag,
+                        prescriptionId = prescription?.id,
+                    )
+                }
+
+                else -> null
+            }
+        }
+        modules.insertEntries(rows)
+    }
+
+    private fun ModuleWithEntries.toModule(
+        exercises: Map<String, ExerciseWithDefaultPrescription>,
+        saved: Map<String, Routine>,
+    ) = TrainingModule(
+        id = module.id,
+        name = module.name,
+        description = module.description,
+        entries = orderedEntries.map { row ->
+            val entry = row.entry
+            val definition = entry.exerciseId?.let { exercises[it]?.exercise }
+            val routine = entry.routineId?.let { saved[it] }
+            ModuleEntryView(
+                id = entry.id,
+                exerciseId = entry.exerciseId,
+                variationId = entry.variationId,
+                variationTag = entry.variationTagSnapshot,
+                name = definition?.name ?: routine?.name ?: entry.exerciseNameSnapshot
+                    ?: entry.routineNameSnapshot.orEmpty(),
+                mode = definition?.mode ?: ExerciseMode.REPETITIONS,
+                unilateral = definition?.unilateral == true,
+                category = definition?.category,
+                prescription = row.prescription?.payload(),
+                routineId = entry.routineId,
+                routine = routine,
+                definitionMissing = if (entry.routineId != null) routine == null else definition == null,
+            )
+        },
+    )
+
+    private fun String?.cleaned(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
+
+    // ------------------------------------------------- modules in the week
+
+    fun observeWeekModules(weekStart: LocalDate): Flow<List<WeekModule>> =
+        modules.observeModulesInWeek(weekStart.toEpochDay()).map { rows ->
+            rows.map {
+                WeekModule(
+                    id = it.id,
+                    moduleId = it.moduleId,
+                    name = it.moduleNameSnapshot,
+                    weekStart = LocalDate.ofEpochDay(it.weekStartEpochDay),
+                    trainingDate = it.trainingDateEpochDay?.let(LocalDate::ofEpochDay),
+                    orderIndex = it.orderIndex,
+                )
+            }
+        }
+
+    /**
+     * Copies a module into a week: the named group, and each entry as the real planned work it
+     * stands for — an exercise occurrence with its own prescription copy, or a whole circuit cut by
+     * the same code that schedules a circuit alone. The group counts nothing and adds no time.
+     */
+    suspend fun scheduleModule(
+        moduleId: String,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+    ): String? = database.withTransaction {
+        val source = modules.getModule(moduleId) ?: return@withTransaction null
+        val instanceId = UUID.randomUUID().toString()
+        val base = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+        modules.insertInstance(
+            ModuleInstanceEntity(
+                id = instanceId,
+                moduleId = moduleId,
+                moduleNameSnapshot = source.module.name,
+                weekStartEpochDay = weekStart.toEpochDay(),
+                trainingDateEpochDay = trainingDate?.toEpochDay(),
+                orderIndex = base,
+                createdAtEpochMs = System.currentTimeMillis(),
+            )
+        )
+        source.orderedEntries.forEachIndexed { position, row ->
+            val entry = row.entry
+            when {
+                entry.routineId != null -> scheduleRoutine(
+                    routineId = entry.routineId,
+                    weekStart = weekStart,
+                    trainingDate = trainingDate,
+                    moduleInstanceId = instanceId,
+                    modulePosition = position,
+                    orderIndex = base + position,
+                )
+
+                entry.exerciseId != null -> {
+                    // A definition deleted outright leaves nothing to cut a copy from.
+                    val exercise = library.getExerciseWithDefault(entry.exerciseId)?.exercise
+                        ?: return@forEachIndexed
+                    placeExercise(
+                        exercise = exercise,
+                        plan = row.prescription,
+                        variationId = entry.variationId,
+                        variationTag = entry.variationTagSnapshot,
+                        weekStart = weekStart,
+                        trainingDate = trainingDate,
+                        orderIndex = base + position,
+                        moduleInstanceId = instanceId,
+                        modulePosition = position,
+                    )
+                }
+            }
+        }
+        instanceId
+    }
+
+    /**
+     * Moves a scheduled module and the members still with it, together.
+     *
+     * A member that has already been filed somewhere else — logged on another day, say — stays
+     * where it is: moving the group is a statement about the plan, and re-dating that work would
+     * rewrite a record nobody asked to change. Refuses to unschedule a group holding trained work.
+     */
+    suspend fun moveModule(
+        moduleInstanceId: String,
+        weekStart: LocalDate,
+        trainingDate: LocalDate?,
+    ): Boolean = database.withTransaction {
+        val instance = modules.getInstance(moduleInstanceId) ?: return@withTransaction false
+        if (trainingDate == null && moduleHasRecord(moduleInstanceId)) {
+            return@withTransaction false
+        }
+        val base = dao.nextOrderIndex(weekStart.toEpochDay(), trainingDate?.toEpochDay())
+        fun withGroup(week: Long, date: Long?) =
+            week == instance.weekStartEpochDay && date == instance.trainingDateEpochDay
+        modules.updateInstance(
+            instance.copy(
+                weekStartEpochDay = weekStart.toEpochDay(),
+                trainingDateEpochDay = trainingDate?.toEpochDay(),
+                orderIndex = base,
+            )
+        )
+        modules.circuitsIn(moduleInstanceId)
+            .filter { withGroup(it.weekStartEpochDay, it.trainingDateEpochDay) }
+            .forEach { circuit ->
+                relocateCircuit(
+                    circuit = circuit,
+                    weekStart = weekStart,
+                    trainingDate = trainingDate,
+                    base = base + (circuit.modulePosition ?: 0),
+                    keepModule = true,
+                )
+            }
+        val session = trainingDate?.let { ensureSession(it) }
+        modules.occurrencesIn(moduleInstanceId)
+            .filter { it.circuitInstanceId == null }
+            .filter { withGroup(it.weekStartEpochDay, it.trainingDateEpochDay) }
+            .forEach { member ->
+                dao.updateOccurrence(
+                    member.copy(
+                        weekStartEpochDay = weekStart.toEpochDay(),
+                        trainingDateEpochDay = trainingDate?.toEpochDay(),
+                        orderIndex = base + (member.modulePosition ?: 0),
+                    )
+                )
+                if (session != null && trainingDate != null &&
+                    logging.countSetsForOccurrence(member.id) > 0
+                ) {
+                    logging.repointSets(member.id, trainingDate.toEpochDay(), session.id)
+                }
+            }
+        true
+    }
+
+    /** Dissolves the group. Every member stays exactly where it is, as ordinary planned work. */
+    suspend fun ungroupModule(moduleInstanceId: String) {
+        database.withTransaction {
+            modules.releaseOccurrences(moduleInstanceId)
+            modules.releaseCircuits(moduleInstanceId)
+            modules.deleteInstance(moduleInstanceId)
+        }
+    }
+
+    /** Takes one exercise out of its module, leaving it where it is. */
+    suspend fun takeOccurrenceOutOfModule(occurrenceId: String) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            dao.updateOccurrence(occurrence.copy(moduleInstanceId = null, modulePosition = null))
+        }
+    }
+
+    /** Takes one circuit out of its module, stations and all, leaving it where it is. */
+    suspend fun takeCircuitOutOfModule(circuitInstanceId: String) {
+        database.withTransaction {
+            val circuit = dao.getCircuit(circuitInstanceId) ?: return@withTransaction
+            dao.updateCircuit(circuit.copy(moduleInstanceId = null, modulePosition = null))
+            dao.circuitStations(circuitInstanceId).forEach {
+                dao.updateOccurrence(it.copy(moduleInstanceId = null, modulePosition = null))
+            }
+        }
+    }
+
+    /** How many of a module's exercises carry a record, for saying what a deletion would cost. */
+    suspend fun moduleRecordedExercises(moduleInstanceId: String): Int =
+        modules.occurrencesIn(moduleInstanceId).count {
+            it.state == OccurrenceState.COMPLETED || logging.countSetsForOccurrence(it.id) > 0
+        }
+
+    /** Takes a scheduled module and everything in it back out of the week, refusing once trained. */
+    suspend fun removeModuleIfEmpty(moduleInstanceId: String): Boolean =
+        database.withTransaction {
+            if (moduleHasRecord(moduleInstanceId)) return@withTransaction false
+            deleteModuleMembers(moduleInstanceId, withLogs = false)
+            true
+        }
+
+    /** The deliberate stronger answer: the module, its members and what was logged against them. */
+    suspend fun deleteModuleAndLogs(moduleInstanceId: String) {
+        database.withTransaction { deleteModuleMembers(moduleInstanceId, withLogs = true) }
+    }
+
+    private suspend fun deleteModuleMembers(moduleInstanceId: String, withLogs: Boolean) {
+        modules.occurrencesIn(moduleInstanceId).forEach { member ->
+            if (withLogs) logging.deleteSetsForOccurrence(member.id)
+            dao.deleteOccurrence(member.id)
+        }
+        modules.circuitsIn(moduleInstanceId).forEach { dao.deleteCircuit(it.id) }
+        modules.deleteInstance(moduleInstanceId)
+    }
+
+    private suspend fun moduleHasRecord(moduleInstanceId: String): Boolean =
+        moduleRecordedExercises(moduleInstanceId) > 0
+
     private fun PrescriptionEntity.payload(): PrescriptionPayload? =
         runCatching { PrescriptionJson.decode(payloadJson) }.getOrNull()
 
@@ -1389,10 +2012,27 @@ private fun OccurrenceWithPrescription.toPlanned(
         isOneOff = occurrence.isOneOff,
         circuitInstanceId = occurrence.circuitInstanceId,
         circuitPosition = occurrence.circuitPosition,
+        variationId = occurrence.variationId,
+        variationTag = occurrence.variationTagSnapshot,
+        moduleInstanceId = occurrence.moduleInstanceId,
+        modulePosition = occurrence.modulePosition,
     )
 }
 
-private fun ExerciseWithDefaultPrescription.toLibraryExercise() = LibraryExercise(
+private fun VariationWithPrescription.toVariation() = ExerciseVariation(
+    id = variation.id,
+    exerciseId = variation.exerciseId,
+    tag = variation.tag,
+    notes = variation.notes,
+    prescription = prescription?.let {
+        runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
+    },
+    orderIndex = variation.orderIndex,
+)
+
+private fun ExerciseWithDefaultPrescription.toLibraryExercise(
+    variations: List<VariationWithPrescription> = emptyList(),
+) = LibraryExercise(
     id = exercise.id,
     name = exercise.name,
     mode = exercise.mode,
@@ -1406,6 +2046,7 @@ private fun ExerciseWithDefaultPrescription.toLibraryExercise() = LibraryExercis
     defaultPrescription = defaultPrescription?.let {
         runCatching { PrescriptionJson.decode(it.payloadJson) }.getOrNull()
     },
+    variations = variations.map { it.toVariation() }.sortedWith(compareBy({ it.orderIndex }, { it.tag })),
 )
 
 /**

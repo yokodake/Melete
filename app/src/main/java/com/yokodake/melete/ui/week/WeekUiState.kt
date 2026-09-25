@@ -3,6 +3,7 @@ package com.yokodake.melete.ui.week
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.WeekCircuit
+import com.yokodake.melete.data.WeekModule
 import java.time.LocalDate
 
 /**
@@ -33,6 +34,34 @@ sealed interface WeekItem {
         val completed: Boolean get() = stations.isNotEmpty() && stations.all { it.hasRecord }
 
         val recordedStations: Int get() = stations.count { it.hasRecord }
+    }
+
+    /**
+     * A scheduled module: a named group holding standalone exercises and whole circuits.
+     *
+     * Organisational only. It is shown as one group because it was planned as one, but its members
+     * are the work — each keeps its own card, menu and log — and nothing counts the group itself.
+     */
+    data class Module(
+        val module: WeekModule,
+        val members: List<WeekItem>,
+    ) : WeekItem {
+        override val key: String get() = "module-${module.id}"
+        override val orderIndex: Int get() = module.orderIndex
+
+        /** The exercises inside it, circuit stations included, for "done" and deletion costs. */
+        val exercises: List<PlannedOccurrence>
+            get() = members.flatMap {
+                when (it) {
+                    is Single -> listOf(it.occurrence)
+                    is Circuit -> it.stations
+                    is Module -> emptyList()
+                }
+            }
+
+        val recordedExercises: Int get() = exercises.count { it.hasRecord }
+
+        val completed: Boolean get() = exercises.isNotEmpty() && exercises.all { it.hasRecord }
     }
 }
 
@@ -65,28 +94,52 @@ data class WeekUiState(
             today: LocalDate,
             occurrences: List<PlannedOccurrence>,
             circuits: List<WeekCircuit> = emptyList(),
+            modules: List<WeekModule> = emptyList(),
         ): WeekUiState {
             val stationsByCircuit = occurrences
                 .filter { it.circuitInstanceId != null }
                 .groupBy { it.circuitInstanceId }
             val known = circuits.map { it.id }.toSet()
+            val modulesById = modules.associateBy { it.id }
+
+            // A member folds into its module only while it shares the module's slot. Work logged
+            // on another day, or moved there, is shown where it now is rather than hidden inside a
+            // group that says it is somewhere else.
+            fun groupOf(moduleInstanceId: String?, date: LocalDate?): WeekModule? =
+                moduleInstanceId?.let(modulesById::get)?.takeIf { it.trainingDate == date }
+
+            fun circuitItem(circuit: WeekCircuit) = WeekItem.Circuit(
+                circuit = circuit,
+                stations = stationsByCircuit[circuit.id]
+                    .orEmpty()
+                    .sortedBy { it.circuitPosition ?: it.orderIndex },
+            )
 
             fun itemsFor(date: LocalDate?): List<WeekItem> {
                 val singles = occurrences
                     .filter { it.trainingDate == date }
                     .filter { it.circuitInstanceId == null || it.circuitInstanceId !in known }
-                    .map(WeekItem::Single)
-                val groups = circuits
+                val slotCircuits = circuits.filter { it.trainingDate == date }
+
+                val loose = singles.filter { groupOf(it.moduleInstanceId, date) == null }
+                    .map(WeekItem::Single) +
+                    slotCircuits.filter { groupOf(it.moduleInstanceId, date) == null }
+                        .map(::circuitItem)
+
+                val grouped = modules
                     .filter { it.trainingDate == date }
-                    .map { circuit ->
-                        WeekItem.Circuit(
-                            circuit = circuit,
-                            stations = stationsByCircuit[circuit.id]
-                                .orEmpty()
-                                .sortedBy { it.circuitPosition ?: it.orderIndex },
+                    .map { module ->
+                        val members =
+                            singles.filter { groupOf(it.moduleInstanceId, date) == module }
+                                .map { (it.modulePosition ?: 0) to WeekItem.Single(it) } +
+                                slotCircuits.filter { groupOf(it.moduleInstanceId, date) == module }
+                                    .map { (it.modulePosition ?: 0) to circuitItem(it) }
+                        WeekItem.Module(
+                            module = module,
+                            members = members.sortedBy { it.first }.map { it.second },
                         )
                     }
-                return (singles + groups).sortedBy { it.orderIndex }
+                return (loose + grouped).sortedBy { it.orderIndex }
             }
 
             return WeekUiState(

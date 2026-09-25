@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -128,6 +129,9 @@ fun PlanTargetDialog(
  * Adding something from the library is a decision about *what* you are going to train, not about
  * which morning. The day is a later question, answered in the planner once the week has taken
  * shape, so this asks only for the week and drops the exercise into its unscheduled area.
+ *
+ * The list has no end. It is lazy, so only the rows on screen exist, and a block planned for
+ * next spring is a scroll away rather than beyond an arbitrary horizon.
  */
 @Composable
 fun WeekTargetDialog(
@@ -135,19 +139,19 @@ fun WeekTargetDialog(
     today: LocalDate,
     onConfirm: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
-    weeksAhead: Int = 11,
 ) {
     val thisWeek = WeekMath.weekStartOf(today)
     var selected by remember { mutableStateOf(thisWeek) }
-    // One week back, so a session you forgot to write down can still be put where it happened.
-    val weeks = (-1..weeksAhead).map { thisWeek.plusWeeks(it.toLong()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                weeks.forEach { week ->
+            LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                // Row 0 is last week, so a session you forgot to write down can still be put where
+                // it happened; everything after it runs forward without limit.
+                items(count = Int.MAX_VALUE) { index ->
+                    val week = thisWeek.plusWeeks(index - 1L)
                     TargetRow(
                         label = WeekMath.weekLabel(week),
                         detail = when (week) {

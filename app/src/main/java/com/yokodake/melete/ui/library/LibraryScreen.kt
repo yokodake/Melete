@@ -24,6 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.ui.components.AddToPlanFlow
+import com.yokodake.melete.ui.components.VariationChip
 import com.yokodake.melete.ui.components.WeekTargetDialog
 import java.time.LocalDate
 import androidx.compose.foundation.layout.Arrangement
@@ -57,8 +59,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.ExerciseRemoval
 import com.yokodake.melete.data.LibraryExercise
-import com.yokodake.melete.data.Routine
-import com.yokodake.melete.ui.routine.RoutineRow
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.Chip
 import com.yokodake.melete.ui.week.PrescriptionSummary
@@ -72,6 +72,7 @@ fun LibraryRoute(
     onOpenExercise: (String) -> Unit,
     onNewExercise: () -> Unit,
     onOpenCircuits: () -> Unit = {},
+    onOpenModules: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
@@ -98,51 +99,11 @@ fun LibraryRoute(
         onCancelRemove = viewModel::cancelRemoval,
         onRowClick = onOpenExercise,
         onNewExercise = onNewExercise,
-        // Circuits are made of library exercises and are edited the same way, so this is where
-        // they belong; they are not a fourth tab, because they are used far less often.
-        headerAction = "Circuits" to onOpenCircuits,
+        // Circuits and modules are made of library exercises and are edited the same way, so this
+        // is where they belong; they are not more tabs, because they are used far less often.
+        headerActions = listOf("Circuits" to onOpenCircuits, "Modules" to onOpenModules),
         onBack = null,
         bottomBar = bottomBar,
-    )
-}
-
-/**
- * The library as a picker: choosing an exercise or a circuit copies it into the chosen slot of the
- * week. Exercises first, because they are what is added most; circuits one tap away in the header,
- * and the button at the bottom always creates whichever kind is on screen.
- */
-@Composable
-fun LibraryPickerRoute(
-    onScheduled: () -> Unit,
-    onNewExercise: () -> Unit,
-    onNewCircuit: () -> Unit,
-    onOpenExercise: (String) -> Unit,
-    onEditCircuit: (String) -> Unit,
-    onBack: () -> Unit,
-    viewModel: LibraryPickerViewModel = viewModel(factory = LibraryPickerViewModel.Factory),
-) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val circuits = state.view == PickerView.CIRCUITS
-    LibraryScreen(
-        title = "Add to",
-        subtitle = state.targetLabel,
-        exercises = state.exercises,
-        circuits = state.circuits.takeIf { circuits },
-        emptyMessage = if (circuits) {
-            "No circuits yet. A circuit is an order of library exercises you run round, with " +
-                "its own rests."
-        } else {
-            "The library is empty. Create an exercise to get started."
-        },
-        onRowClick = { viewModel.schedule(it, onScheduled) },
-        onCircuitClick = { viewModel.scheduleCircuit(it, onScheduled) },
-        onSecondaryAction = onOpenExercise to "Open",
-        onCircuitSecondaryAction = onEditCircuit to "Edit",
-        // Names the view you would switch *to*, so the button says what pressing it does.
-        headerAction = (if (circuits) "Exercises" else "Circuits") to viewModel::toggleView,
-        newLabel = if (circuits) "New circuit" else "New exercise",
-        onNewExercise = if (circuits) onNewCircuit else onNewExercise,
-        onBack = onBack,
     )
 }
 
@@ -158,25 +119,21 @@ fun LibraryScreen(
     onNewExercise: () -> Unit,
     onBack: (() -> Unit)?,
     onSecondaryAction: Pair<(String) -> Unit, String>? = null,
-    newLabel: String = "New exercise",
-    /** Listed instead of [exercises] when not null: the picker's circuit view. */
-    circuits: List<Routine>? = null,
-    onCircuitClick: (String) -> Unit = {},
-    onCircuitSecondaryAction: Pair<(String) -> Unit, String>? = null,
     query: String? = null,
     onQueryChange: (String) -> Unit = {},
     message: String? = null,
     onMessageShown: () -> Unit = {},
     today: LocalDate = LocalDate.now(),
     defaultWeekStart: LocalDate = WeekMath.weekStartOf(today),
-    onSchedule: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
+    onSchedule: (exerciseId: String, weekStart: LocalDate, variationId: String?) -> Unit =
+        { _, _, _ -> },
     /** What removing the exercise under consideration would cost; null when nothing is pending. */
     removal: ExerciseRemoval? = null,
     onAskRemove: (LibraryExercise) -> Unit = {},
     onConfirmRemove: () -> Unit = {},
     onCancelRemove: () -> Unit = {},
-    /** A text button at the right of the header: a label and what it does. */
-    headerAction: Pair<String, () -> Unit>? = null,
+    /** Text buttons at the right of the header: each a label and what it does. */
+    headerActions: List<Pair<String, () -> Unit>> = emptyList(),
     bottomBar: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -217,7 +174,7 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
-                    headerAction?.let { (label, action) ->
+                    headerActions.forEach { (label, action) ->
                         TextButton(onClick = action) { Text(label) }
                     }
                 },
@@ -226,7 +183,7 @@ fun LibraryScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onNewExercise,
-                text = { Text(newLabel) },
+                text = { Text("New exercise") },
                 icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
             )
         },
@@ -257,7 +214,7 @@ fun LibraryScreen(
                     )
                 }
             }
-            if ((circuits ?: exercises).isEmpty()) {
+            if (exercises.isEmpty()) {
                 item {
                     Text(
                         text = emptyMessage,
@@ -266,17 +223,7 @@ fun LibraryScreen(
                     )
                 }
             }
-            if (circuits != null) {
-                items(items = circuits, key = { it.id }) { circuit ->
-                    RoutineRow(
-                        routine = circuit,
-                        onClick = { onCircuitClick(circuit.id) },
-                        secondaryAction = onCircuitSecondaryAction?.let { (action, label) ->
-                            { action(circuit.id) } to label
-                        },
-                    )
-                }
-            } else items(items = exercises, key = { it.id }) { exercise ->
+            items(items = exercises, key = { it.id }) { exercise ->
                 LibraryRow(
                     exercise = exercise,
                     onClick = { onRowClick(exercise.id) },
@@ -289,13 +236,13 @@ fun LibraryScreen(
     }
 
     scheduling?.let { exercise ->
-        WeekTargetDialog(
-            title = "Add ${exercise.name} to",
+        // Unscheduled: the week is the decision, the day is the planner's job.
+        AddToPlanFlow(
+            exercise = exercise,
             today = today,
-            onConfirm = { week ->
+            onSchedule = { week, variationId ->
                 scheduling = null
-                // Unscheduled: the week is the decision, the day is the planner's job.
-                onSchedule(exercise.id, week, null)
+                onSchedule(exercise.id, week, variationId)
             },
             onDismiss = { scheduling = null },
         )
@@ -374,7 +321,7 @@ private fun RemovalDialog(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LibraryRow(
+internal fun LibraryRow(
     exercise: LibraryExercise,
     onClick: () -> Unit,
     secondaryAction: Pair<(String) -> Unit, String>?,
@@ -416,6 +363,8 @@ private fun LibraryRow(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    // Which alternatives exist, at a glance; what each one is lives on the exercise.
+                    exercise.variations.forEach { VariationChip(it.tag) }
                 }
                 Text(
                     text = PrescriptionSummary.formatDefault(exercise),
