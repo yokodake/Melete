@@ -31,8 +31,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -50,7 +48,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,11 +79,11 @@ import com.yokodake.melete.ui.components.EffortSelector
 import com.yokodake.melete.ui.components.NumberField
 import com.yokodake.melete.ui.components.PrescriptionFields
 import com.yokodake.melete.ui.components.trimNumber
+import com.yokodake.melete.ui.components.TrainingDateCard
+import com.yokodake.melete.ui.components.TrainingDatePickerDialog
 import com.yokodake.melete.ui.components.VariationChip
 import com.yokodake.melete.ui.week.PrescriptionSummary
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 @Composable
 fun LoggerRoute(
@@ -186,7 +183,7 @@ fun LoggerScreen(
             }
             if (occurrence.trainingDate == null) {
                 item {
-                    UnscheduledCard(
+                    TrainingDateCard(
                         targetDate = state.targetDate,
                         today = state.today,
                         onChangeDate = { showDatePicker = true },
@@ -318,30 +315,11 @@ fun LoggerScreen(
 
 
     if (showDatePicker) {
-        val pickerState = rememberDatePickerState(
-            initialSelectedDateMillis = state.targetDate
-                .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        TrainingDatePickerDialog(
+            initial = state.targetDate,
+            onPick = viewModel::setTargetDate,
+            onDismiss = { showDatePicker = false },
         )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pickerState.selectedDateMillis?.let { millis ->
-                            viewModel.setTargetDate(
-                                Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                            )
-                        }
-                        showDatePicker = false
-                    },
-                ) { Text("Use this date") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            },
-        ) {
-            DatePicker(state = pickerState)
-        }
     }
 }
 
@@ -384,31 +362,6 @@ private fun PlannedCard(occurrence: PlannedOccurrence, onEdit: () -> Unit) {
                 )
             }
             TextButton(onClick = onEdit) { Text("Edit") }
-        }
-    }
-}
-
-@Composable
-private fun UnscheduledCard(targetDate: LocalDate, today: LocalDate, onChangeDate: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("No date yet", style = MaterialTheme.typography.labelMedium)
-                Text(
-                    text = "Logging for ${WeekMath.dayLabel(targetDate)}" +
-                        if (targetDate == today) " (today)" else "",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            TextButton(onClick = onChangeDate) { Text("Change") }
         }
     }
 }

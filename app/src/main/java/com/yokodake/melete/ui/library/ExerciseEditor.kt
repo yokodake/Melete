@@ -39,6 +39,8 @@ import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.ui.components.CategoryDot
+import com.yokodake.melete.ui.components.CategoryPicker
+import com.yokodake.melete.ui.components.EditorTopBar
 import com.yokodake.melete.ui.components.PrescriptionFields
 import com.yokodake.melete.ui.theme.MeleteTheme
 import com.yokodake.melete.ui.components.PrescriptionFormState
@@ -48,6 +50,11 @@ fun ExerciseEditorRoute(
     /** Called after saving, with the new exercise's id, or null when an existing one was edited. */
     onDone: (createdId: String?) -> Unit,
     onBack: () -> Unit,
+    /**
+     * Set only for a new workout: offers Circuit instead, above everything else, because the kind
+     * decides the rest of the form. Editing an existing exercise never changes what it is.
+     */
+    onSwitchToCircuit: (() -> Unit)? = null,
     viewModel: ExerciseEditorViewModel = viewModel(factory = ExerciseEditorViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -64,6 +71,7 @@ fun ExerciseEditorRoute(
         onPrescriptionChange = viewModel::setPrescription,
         onSave = { viewModel.save(onDone) },
         onBack = onBack,
+        onSwitchToCircuit = onSwitchToCircuit,
     )
 }
 
@@ -82,23 +90,24 @@ fun ExerciseEditorScreen(
     onPrescriptionChange: (PrescriptionFormState) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
+    onSwitchToCircuit: (() -> Unit)? = null,
 ) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .imePadding(),
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                title = { Text(if (state.isNew) "New exercise" else "Edit exercise") },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.semantics { contentDescription = "Back" },
-                    ) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
+            EditorTopBar(
+                title = if (state.isNew) "New exercise" else "Edit exercise",
+                onBack = onBack,
+                onSave = onSave,
+                canSave = state.canSave,
+                below = onSwitchToCircuit?.let { switch ->
+                    {
+                        WorkoutKindSwitch(
+                            selected = WorkoutKind.EXERCISE,
+                            onSelect = { if (it == WorkoutKind.CIRCUIT) switch() },
+                        )
                     }
                 },
             )
@@ -109,7 +118,8 @@ fun ExerciseEditorScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(padding)
-                .padding(horizontal = 16.dp),
+                // The same gutters and first-field offset as the circuit and module editors.
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             CompactTextField(
@@ -120,17 +130,7 @@ fun ExerciseEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Text("Category", style = MaterialTheme.typography.titleSmall)
-            // Wrapped. Six categories do not fit across a phone, and a plain Row squeezes the
-            // ones that overflow until their labels break a letter per line.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                ExerciseCategory.entries.forEach { category ->
-                    CategoryChip(category, state.category, onCategoryChange)
-                }
-            }
+            CategoryPicker(selected = state.category, onSelect = onCategoryChange)
 
             CompactTextField(
                 value = state.description,
@@ -207,34 +207,10 @@ fun ExerciseEditorScreen(
                 minHeight = 48,
                 modifier = Modifier.fillMaxWidth(),
             )
-
-            Button(
-                onClick = onSave,
-                enabled = state.canSave,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp),
-            ) {
-                Text(if (state.isNew) "Create exercise" else "Save changes")
-            }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CategoryChip(
-    category: ExerciseCategory,
-    selected: ExerciseCategory?,
-    onSelect: (ExerciseCategory?) -> Unit,
-) {
-    FilterChip(
-        selected = category == selected,
-        onClick = { onSelect(if (category == selected) null else category) },
-        leadingIcon = { CategoryDot(category) },
-        label = { Text(category.shortLabel) },
-    )
-}
 
 
 

@@ -15,6 +15,7 @@ import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerPhase
 import com.yokodake.melete.data.timer.TimerProgram
 import com.yokodake.melete.data.timer.TimerState
+import com.yokodake.melete.data.timer.TimerTransitions
 import com.yokodake.melete.data.timer.WorkKind
 import com.yokodake.melete.data.timer.positionDetail
 import kotlinx.coroutines.delay
@@ -130,14 +131,39 @@ data class TimerUiState(
      * inside, and saying "no 30-second warning" about a seven-second effort is the useful answer.
      */
     private val previewPhase: TimerPhase
-        get() = if (mode == TimerCreateMode.REPS) TimerPhase.REST else TimerPhase.WORK
-
-    private val previewMs: Long
-        get() = when (mode) {
-            TimerCreateMode.TIMED -> work.totalSeconds * 1000L
-            TimerCreateMode.REPS -> rest.totalSeconds * 1000L
-            TimerCreateMode.REPEATERS -> (repeaterSpec?.workSecondsPerRep ?: 0) * 1000L
+        get() = when (state) {
+            is TimerState.Running -> state.phase
+            is TimerState.Paused -> state.phase
+            else -> if (mode == TimerCreateMode.REPS) TimerPhase.REST else TimerPhase.WORK
         }
+
+    /**
+     * The length the cue preview is worked out for: the interval on screen while one is counting,
+     * otherwise what the create form describes. A planned timer is not the form's timer, so
+     * explaining its cues from the form's numbers answered a question nobody asked.
+     */
+    private val previewMs: Long
+        get() = when {
+            cuePreviewIsLive -> totalMs
+            else -> when (mode) {
+                TimerCreateMode.TIMED -> work.totalSeconds * 1000L
+                TimerCreateMode.REPS -> rest.totalSeconds * 1000L
+                TimerCreateMode.REPEATERS -> (repeaterSpec?.workSecondsPerRep ?: 0) * 1000L
+            }
+        }
+
+    /** Whether the cue preview describes a live interval rather than the create form. */
+    val cuePreviewIsLive: Boolean
+        get() = state is TimerState.Running || state is TimerState.Paused
+
+    /**
+     * Whether the previous button will restart this interval rather than go back one, decided by
+     * the same rule the transition uses.
+     */
+    val previousRestarts: Boolean
+        get() = TimerTransitions.previousRestarts(
+            (totalMs - remainingMs).takeIf { cuePreviewIsLive }
+        )
 
     /** What one interval of this program will sound, given its length. */
     val plannedCues: List<PlannedCue>

@@ -60,7 +60,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         ModuleEntryEntity::class,
         ModuleInstanceEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)

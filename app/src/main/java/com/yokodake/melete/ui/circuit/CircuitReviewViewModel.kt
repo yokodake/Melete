@@ -140,7 +140,8 @@ class CircuitReviewViewModel(
         val today = LocalDate.now(clock)
         val shares = circuit?.let(::durationShares).orEmpty()
         CircuitReviewUiState(
-            loading = circuit == null,
+            // The query has answered; a circuit that is gone is not still loading.
+            loading = false,
             circuit = circuit,
             stations = circuit?.stations.orEmpty().mapIndexed { index, station ->
                 val edit = currentEdits[station.id] ?: StationEdit(SetTable(), "")
@@ -170,7 +171,7 @@ class CircuitReviewViewModel(
                 ?: return@launch
             if (seeded) return@launch
             seeded = true
-            edits.value = circuit.stations.associate { it.id to seed(it) }
+            edits.value = circuit.stations.associate { it.id to seed(it, circuit.rounds) }
         }
     }
 
@@ -201,13 +202,16 @@ class CircuitReviewViewModel(
         else programOf(circuit).estimatedSecondsByEntry()
 
     /**
-     * Builds one station's table from its plan and from whatever is already recorded.
+     * Builds one station's table from the circuit and from whatever is already recorded.
      *
-     * Exactly as the single-exercise logger does it, including the pairing of a unilateral row's
-     * two sets, so reopening a saved circuit shows what it says rather than a fresh guess.
+     * One row per **round**, because in a circuit that is what a set is: the station's own set
+     * count is overridden by the round count, exactly as the timer overrides it. Seeding from the
+     * station's standalone sets gave a review that disagreed with the circuit it was reviewing.
+     * A unilateral row's two sets are paired as the single-exercise logger pairs them, so
+     * reopening a saved circuit shows what it says rather than a fresh guess.
      */
-    private fun seed(station: PlannedOccurrence): StationEdit {
-        val planned = station.prescription?.sets ?: 0
+    private fun seed(station: PlannedOccurrence, rounds: Int): StationEdit {
+        val planned = rounds
         // A unilateral row wrote two sets, left then right, so they come back in pairs.
         val recorded = if (station.unilateral) station.loggedSets / 2 else station.loggedSets
         val count = maxOf(planned, recorded, 1)

@@ -331,8 +331,9 @@ fun WeekScreen(
             initial = PlanTarget(state.weekStart, occurrence.trainingDate),
             confirmLabel = "Move",
             today = state.today,
-            // Trained work belongs to a day, so "anytime this week" is not on offer for it.
-            allowUnscheduled = action.loggedSets == 0,
+            // Trained work belongs to a day, so "anytime this week" is not on offer for it —
+            // including an activity marked done, which has no sets to count.
+            allowUnscheduled = action.loggedSets == 0 && !occurrence.hasRecord,
             onConfirm = { target ->
                 planning = null
                 onMoveOccurrence(occurrence.id, target.weekStart, target.trainingDate)
@@ -484,28 +485,35 @@ private fun RemoveDialog(
     onRemovePlan: () -> Unit,
     onDeleteWithLog: () -> Unit,
 ) {
+    // A log is sets *or* completion: a finished activity has no sets and is still a record, and
+    // judging by set count alone offered a plain removal the repository then refused.
+    val logged = loggedSets > 0 || occurrence.hasRecord
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (loggedSets == 0) "Remove ${occurrence.name}?" else "Delete ${occurrence.name} and its log?")
+            Text(if (!logged) "Remove ${occurrence.name}?" else "Delete ${occurrence.name} and its log?")
         },
         text = {
             Text(
-                if (loggedSets == 0) {
-                    "Remove ${occurrence.name} from this week?"
-                } else {
-                    "This will delete ${occurrence.name} from your plan and its " +
+                when {
+                    !logged -> "Remove ${occurrence.name} from this week?"
+                    loggedSets == 0 -> "This will delete ${occurrence.name} from your plan and its log."
+                    else -> "This will delete ${occurrence.name} from your plan and its " +
                         "$loggedSets logged ${if (loggedSets == 1) "set" else "sets"}."
                 }
             )
         },
         confirmButton = {
-            if (loggedSets == 0) {
+            if (!logged) {
                 TextButton(onClick = onRemovePlan) { Text("Remove") }
             } else {
                 TextButton(onClick = onDeleteWithLog) {
                     Text(
-                        text = "Delete plan and log",
+                        text = if (occurrence.mode == ExerciseMode.ACTIVITY) {
+                            "Delete activity and log"
+                        } else {
+                            "Delete plan and log"
+                        },
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -777,7 +785,8 @@ private fun Hint(text: String) {
 
 
 /**
- * A scheduled circuit: one card for the whole thing, with its stations listed inside it.
+ * A scheduled circuit: one card for the whole thing, built like an exercise card — its category
+ * dot and name on top, and its stations enumerated on one line underneath, in order.
  *
  * One card because a circuit is one decision — you do the whole thing or you do not — and because
  * four stations loose in a day would read as four unrelated exercises that happen to be adjacent.
@@ -795,55 +804,44 @@ private fun CircuitCard(
     onTakeOut: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
     Box {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }),
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menuOpen = true
+                    },
+                    onLongClickLabel = "Circuit actions",
+                ),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             ),
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = item.circuit.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = circuitSummary(item),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CategoryDot(item.circuit.category)
+                    Text(
+                        text = item.circuit.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f),
+                    )
                     if (item.completed) {
                         val colors = doneColors()
                         Chip("Done", colors.first, colors.second)
                     }
                 }
-                item.stations.forEach { station ->
-                    Row(
-                        modifier = Modifier.padding(top = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        CategoryDot(station.category)
-                        Text(
-                            text = station.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (station.hasRecord) {
-                            Text(
-                                text = "✓",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = doneColors().first,
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = circuitSummary(item),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -944,15 +942,14 @@ private fun ModuleCard(
 }
 
 /** The shape of a circuit in one line: how many times round, and what falls between. */
+/**
+ * The circuit in one line, as the library lists it: rounds and the stations in order, plus how
+ * much of it has been logged when that is some but not all.
+ */
 private fun circuitSummary(item: WeekItem.Circuit): String {
     val parts = mutableListOf<String>()
-    parts += "${item.circuit.rounds} × ${item.stations.size} ${if (item.stations.size == 1) "exercise" else "exercises"}"
-    if (item.circuit.transitionSeconds > 0) {
-        parts += "${PrescriptionSummary.duration(item.circuit.transitionSeconds)} between exercises"
-    }
-    if (item.circuit.roundRestSeconds > 0) {
-        parts += "${PrescriptionSummary.duration(item.circuit.roundRestSeconds)} between rounds"
-    }
+    parts += "${item.circuit.rounds} ${if (item.circuit.rounds == 1) "round" else "rounds"}"
+    parts += item.stations.joinToString(" → ") { it.name }.ifEmpty { "no exercises" }
     if (item.recordedStations in 1 until item.stations.size) {
         parts += "${item.recordedStations} of ${item.stations.size} logged"
     }

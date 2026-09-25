@@ -154,10 +154,16 @@ fun PrescriptionFields(
     mode: ExerciseMode,
     unilateral: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * A station of a circuit. Its set count, set rest and total time are not asked, because the
+     * circuit overrides all three — one set per round, the circuit's own rests, one clock for the
+     * whole thing — and a field whose value is ignored is a question with a hidden wrong answer.
+     */
+    inCircuit: Boolean = false,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (mode.hasSetStructure) {
-            SetStructureFields(state, onStateChange, mode, unilateral)
+            SetStructureFields(state, onStateChange, mode, unilateral, inCircuit)
         } else {
             // An activity is a block of time: how long, in the unit a session is thought of in.
             // No sets, rests or sides to ask about, and no separate planned duration, because
@@ -187,6 +193,7 @@ private fun SetStructureFields(
     onStateChange: (PrescriptionFormState) -> Unit,
     mode: ExerciseMode,
     unilateral: Boolean,
+    inCircuit: Boolean,
 ) {
     // What the shape of the work implies, so the duration field can show it in grey rather than
     // asking for a number the app can already work out.
@@ -196,12 +203,14 @@ private fun SetStructureFields(
         prescription = state.toPayload(mode).copy(plannedDurationSeconds = null),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        NumberField(
-            label = if (unilateral) "Sets per side" else "Sets",
-            value = state.sets,
-            onValueChange = { onStateChange(state.copy(sets = it)) },
-            modifier = Modifier.weight(1f),
-        )
+        if (!inCircuit) {
+            NumberField(
+                label = if (unilateral) "Sets per side" else "Sets",
+                value = state.sets,
+                onValueChange = { onStateChange(state.copy(sets = it)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
         when (mode) {
             ExerciseMode.REPETITIONS -> NumberField(
                 label = "Target reps",
@@ -223,12 +232,14 @@ private fun SetStructureFields(
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        NumberField(
-            label = "Between sets (s)",
-            value = state.restSeconds,
-            onValueChange = { onStateChange(state.copy(restSeconds = it)) },
-            modifier = Modifier.weight(1f),
-        )
+        if (!inCircuit) {
+            NumberField(
+                label = "Between sets (s)",
+                value = state.restSeconds,
+                onValueChange = { onStateChange(state.copy(restSeconds = it)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
         if (unilateral) {
             NumberField(
                 label = "Switch sides (s)",
@@ -244,6 +255,9 @@ private fun SetStructureFields(
         HorizontalDivider()
         RepeaterFields(state, onStateChange)
     }
+
+    // A circuit is timed once, from its own sequence; a station has no total of its own.
+    if (inCircuit) return
 
     HorizontalDivider()
     NumberField(

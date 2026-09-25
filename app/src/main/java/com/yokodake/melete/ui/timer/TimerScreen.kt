@@ -372,6 +372,7 @@ private fun ActiveCountdown(
     Transport(
         playing = state.isRunning,
         reps = false,
+        previousRestarts = state.previousRestarts,
         onPrevious = onPrevious,
         onPrimary = if (state.isRunning) onPause else onResume,
         onNext = onNext,
@@ -391,6 +392,8 @@ private fun ActiveCountdown(
 private fun Transport(
     playing: Boolean,
     reps: Boolean,
+    /** Said for the previous button: whether it restarts this interval or goes back one. */
+    previousRestarts: Boolean,
     onPrevious: () -> Unit,
     onPrimary: (() -> Unit)?,
     onNext: () -> Unit,
@@ -403,7 +406,10 @@ private fun Transport(
             onClick = onPrevious,
             modifier = Modifier
                 .size(56.dp)
-                .semantics { contentDescription = "Previous interval" },
+                .semantics {
+                    contentDescription =
+                        if (previousRestarts) "Restart this interval" else "Previous interval"
+                },
         ) {
             Icon(painterResource(R.drawable.ic_timer_previous), contentDescription = null)
         }
@@ -473,6 +479,8 @@ private fun AwaitingSet(
     Transport(
         playing = false,
         reps = true,
+        // Nothing is counting in a set of reps, so going back is the only thing it can mean.
+        previousRestarts = false,
         onPrevious = onPrevious,
         onPrimary = onNext,
         onNext = onNext,
@@ -487,41 +495,37 @@ private fun FinishedCard(
     onLog: (String) -> Unit,
     onReview: (String) -> Unit = {},
 ) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+    // On the screen itself, like the running timer, rather than boxed: the end of a countdown is
+    // the same screen reaching its last state, not a message laid over it.
+    Column(
+        modifier = Modifier.padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Text(
+            text = "Timer finished",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        state.program.label?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium)
+        }
+        if (state.program.circuitInstanceId != null || state.program.occurrenceId != null) {
             Text(
-                text = "Timer finished",
-                style = MaterialTheme.typography.headlineSmall,
+                text = "Review and save your log.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
             )
-            state.program.label?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium)
-            }
-            if (state.program.circuitInstanceId != null || state.program.occurrenceId != null) {
-                Text(
-                    text = "Review and save your log.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onDismiss) { Text("Close") }
-                // Offered only when the countdown came from planned work; a timer built on this
-                // screen has nothing to open. A circuit opens its review, which is where all of
-                // its exercises are confirmed at once.
-                val circuitId = state.program.circuitInstanceId
-                when {
-                    circuitId != null -> Button(onClick = { onReview(circuitId) }) { Text("Log circuit") }
-                    state.program.occurrenceId != null ->
-                        Button(onClick = { onLog(state.program.occurrenceId) }) { Text("Log exercise") }
-                }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onDismiss) { Text("Close") }
+            // Offered only when the countdown came from planned work; a timer built on this
+            // screen has nothing to open. A circuit opens its review, which is where all of
+            // its exercises are confirmed at once.
+            val circuitId = state.program.circuitInstanceId
+            when {
+                circuitId != null -> Button(onClick = { onReview(circuitId) }) { Text("Log circuit") }
+                state.program.occurrenceId != null ->
+                    Button(onClick = { onLog(state.program.occurrenceId) }) { Text("Log exercise") }
             }
         }
     }
@@ -833,7 +837,8 @@ private fun cueExplanation(state: TimerUiState): String {
         }
     }
     val count = state.plannedCues.size
-    val sounding = "$count cue${if (count == 1) "" else "s"} per interval"
+    val sounding = "$count cue${if (count == 1) "" else "s"} " +
+        if (state.cuePreviewIsLive) "in this interval" else "per interval"
     return if (notes.isEmpty()) sounding else "$sounding — ${notes.joinToString(", ")}"
 }
 

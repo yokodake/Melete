@@ -198,6 +198,11 @@ data class RoutineEntity(
     val createdAtEpochMs: Long,
     /** Retired from the library of routines, while staying the anchor for scheduled copies. */
     val deletedAtEpochMs: Long? = null,
+    /**
+     * What the circuit trains, as a whole, in the same categories as an exercise. Its own rather
+     * than inferred from its stations, because a pull circuit with a plank in it is still pulling.
+     */
+    val category: ExerciseCategory? = null,
 )
 
 /**
@@ -267,6 +272,8 @@ data class CircuitInstanceEntity(
     val moduleInstanceId: String? = null,
     /** Position within that module, among its exercises and circuits alike. */
     val modulePosition: Int? = null,
+    /** The routine's category when this copy was placed, snapshotted like an occurrence's. */
+    val categorySnapshot: ExerciseCategory? = null,
 )
 
 /**

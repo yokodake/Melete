@@ -40,7 +40,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.CompactTextField
 import com.yokodake.melete.ui.components.NumberField
+import com.yokodake.melete.ui.components.CategoryPicker
+import com.yokodake.melete.ui.components.EditorTopBar
 import com.yokodake.melete.ui.components.PrescriptionFields
+import com.yokodake.melete.ui.library.WorkoutKind
+import com.yokodake.melete.ui.library.WorkoutKindSwitch
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
 /**
@@ -54,14 +58,18 @@ import com.yokodake.melete.ui.week.PrescriptionSummary
 @Composable
 fun RoutineEditorRoute(
     onNewExercise: () -> Unit,
-    onDone: () -> Unit,
+    /** Called after saving, with the new circuit's id, or null when an existing one was edited. */
+    onDone: (createdId: String?) -> Unit,
     onBack: () -> Unit,
+    /** Set only for a new workout: offers Exercise instead, above everything else. */
+    onSwitchToExercise: (() -> Unit)? = null,
     viewModel: RoutineEditorViewModel = viewModel(factory = RoutineEditorViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     RoutineEditorScreen(
         state = state,
         onName = viewModel::setName,
+        onCategory = viewModel::setCategory,
         onRounds = viewModel::setRounds,
         onTransition = viewModel::setTransitionSeconds,
         onRoundRest = viewModel::setRoundRestSeconds,
@@ -75,6 +83,7 @@ fun RoutineEditorRoute(
         onStationForm = viewModel::updateStationForm,
         onSave = { viewModel.save(onDone) },
         onBack = onBack,
+        onSwitchToExercise = onSwitchToExercise,
     )
 }
 
@@ -83,6 +92,7 @@ fun RoutineEditorRoute(
 fun RoutineEditorScreen(
     state: RoutineEditorUiState,
     onName: (String) -> Unit,
+    onCategory: (com.yokodake.melete.data.model.ExerciseCategory?) -> Unit = {},
     onRounds: (String) -> Unit,
     onTransition: (String) -> Unit,
     onRoundRest: (String) -> Unit,
@@ -96,32 +106,25 @@ fun RoutineEditorScreen(
     onStationForm: (Int, com.yokodake.melete.ui.components.PrescriptionFormState) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
+    onSwitchToExercise: (() -> Unit)? = null,
 ) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .imePadding(),
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                title = {
-                    Text(
-                        text = if (state.existing) "Edit circuit" else "New circuit",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.semantics { contentDescription = "Back" },
-                    ) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
+            EditorTopBar(
+                title = if (state.existing) "Edit circuit" else "New circuit",
+                onBack = onBack,
+                onSave = onSave,
+                canSave = state.canSave,
+                below = onSwitchToExercise?.let { switch ->
+                    {
+                        WorkoutKindSwitch(
+                            selected = WorkoutKind.CIRCUIT,
+                            onSelect = { if (it == WorkoutKind.EXERCISE) switch() },
+                        )
                     }
-                },
-                actions = {
-                    TextButton(onClick = onSave, enabled = state.canSave) { Text("Save") }
                 },
             )
         },
@@ -146,6 +149,7 @@ fun RoutineEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            item { CategoryPicker(selected = state.category, onSelect = onCategory) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumberField(
@@ -293,6 +297,7 @@ private fun StationCard(
                             onStateChange = onForm,
                             mode = station.mode,
                             unilateral = station.unilateral,
+                            inCircuit = true,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }

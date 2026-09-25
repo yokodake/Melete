@@ -330,6 +330,64 @@ class ModulesAndVariationsTest {
     }
 
     @Test
+    fun aRetiredExerciseIsFlaggedInTheModuleAndLeftOutWhenScheduled() = runBlocking {
+        val id = fingersModule()
+        val hang = repository.getModule(id)!!.entries.first { it.name == "Max hangs" }.exerciseId!!
+        // Logged once, so removing it retires it rather than deleting it.
+        repository.scheduleExercise(hang, monday.plusWeeks(1), monday.plusWeeks(1))
+        val placed = repository.observeWeek(monday.plusWeeks(1)).first().single()
+        logOneSet(placed.id, monday.plusWeeks(1))
+        assertEquals(ExerciseRemoval.Outcome.RETIRED, repository.removeExercise(hang))
+
+        assertEquals(listOf("Max hangs"), repository.getModule(id)!!.unavailableEntries.map { it.name })
+        assertEquals(
+            listOf("Max hangs"),
+            repository.observeModules().first().single().unavailableEntries.map { it.name },
+        )
+
+        repository.scheduleModule(id, monday, monday)
+        // The circuit's two stations, and no hang.
+        assertEquals(listOf("Row", "Pull-up"), week().map { it.name })
+    }
+
+    @Test
+    fun aCircuitKeepsItsCategoryAndItsCopyInTheWeekSnapshotsIt() = runBlocking {
+        val row = exercise("Row")
+        val id = repository.createRoutine(
+            RoutineDraft(
+                name = "Pull circuit",
+                rounds = 3,
+                transitionSeconds = 30,
+                roundRestSeconds = 120,
+                entries = listOf(RoutineEntryDraft(row, PrescriptionPayload(sets = 1, targetReps = 8))),
+                category = ExerciseCategory.STRENGTH_CONDITIONING,
+            )
+        )
+        assertEquals(ExerciseCategory.STRENGTH_CONDITIONING, repository.getRoutine(id)!!.category)
+        val copy = repository.duplicateRoutine(id)!!
+        assertEquals(ExerciseCategory.STRENGTH_CONDITIONING, repository.getRoutine(copy)!!.category)
+
+        repository.scheduleRoutine(id, monday, monday)
+        // Recategorising the template afterwards does not recolour the copy already placed.
+        val template = repository.getRoutine(id)!!
+        repository.updateRoutine(
+            id,
+            RoutineDraft(
+                name = template.name,
+                rounds = template.rounds,
+                transitionSeconds = template.transitionSeconds,
+                roundRestSeconds = template.roundRestSeconds,
+                entries = template.entries.map { RoutineEntryDraft(it.exerciseId, it.prescription) },
+                category = ExerciseCategory.FINGER_TRAINING,
+            )
+        )
+        assertEquals(
+            ExerciseCategory.STRENGTH_CONDITIONING,
+            repository.observeWeekCircuits(monday).first().single().category,
+        )
+    }
+
+    @Test
     fun somethingAddedAfterAnEmptyGroupStillComesAfterIt() = runBlocking {
         val empty = repository.createModule(ModuleDraft("Empty", null, emptyList()))
         repository.scheduleModule(empty, monday, monday)

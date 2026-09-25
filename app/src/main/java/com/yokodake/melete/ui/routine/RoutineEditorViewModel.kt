@@ -13,6 +13,7 @@ import com.yokodake.melete.data.LibraryExercise
 import com.yokodake.melete.data.RoutineDraft
 import com.yokodake.melete.data.RoutineEntryDraft
 import com.yokodake.melete.data.TrainingRepository
+import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.timer.PrescriptionProgram
 import com.yokodake.melete.data.timer.StationPlan
@@ -55,6 +56,7 @@ data class RoutineEditorUiState(
     val stations: List<StationDraft> = emptyList(),
     val library: List<LibraryExercise> = emptyList(),
     val picking: Boolean = false,
+    val category: ExerciseCategory? = null,
 ) {
     val canSave: Boolean get() = name.isNotBlank() && stations.isNotEmpty()
 
@@ -84,6 +86,7 @@ data class RoutineEditorUiState(
         transitionSeconds = transitionSeconds.toIntOrNull() ?: 0,
         roundRestSeconds = roundRestSeconds.toIntOrNull() ?: 0,
         entries = stations.map { RoutineEntryDraft(it.exerciseId, it.form.toPayload(it.mode)) },
+        category = category,
     )
 }
 
@@ -112,6 +115,7 @@ class RoutineEditorViewModel(
         val roundRestSeconds: String = "120",
         val stations: List<StationDraft> = emptyList(),
         val picking: Boolean = false,
+        val category: ExerciseCategory? = null,
     )
 
     val uiState: StateFlow<RoutineEditorUiState> =
@@ -126,6 +130,7 @@ class RoutineEditorViewModel(
                 stations = current.stations,
                 library = library,
                 picking = current.picking,
+                category = current.category,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -157,6 +162,7 @@ class RoutineEditorViewModel(
                     rounds = routine?.rounds?.toString() ?: "3",
                     transitionSeconds = routine?.transitionSeconds?.toString() ?: "30",
                     roundRestSeconds = routine?.roundRestSeconds?.toString() ?: "120",
+                    category = routine?.category,
                     stations = routine?.entries.orEmpty().map { entry ->
                         StationDraft(
                             exerciseId = entry.exerciseId,
@@ -172,6 +178,9 @@ class RoutineEditorViewModel(
     }
 
     fun setName(value: String) = form.update { it.copy(name = value) }
+
+    /** Tapping the selected category clears it again: a circuit may simply have none. */
+    fun setCategory(value: ExerciseCategory?) = form.update { it.copy(category = value) }
 
     fun setRounds(value: String) = form.update { it.copy(rounds = value.digits(2)) }
 
@@ -254,14 +263,18 @@ class RoutineEditorViewModel(
         }
     }
 
-    fun save(onSaved: () -> Unit) {
+    /** Saves, then reports the new circuit's id — or null when an existing one was edited. */
+    fun save(onSaved: (createdId: String?) -> Unit) {
         val state = uiState.value
         if (!state.canSave) return
         viewModelScope.launch {
             val id = routineId
-            if (id == null) repository.createRoutine(state.toDraft())
-            else repository.updateRoutine(id, state.toDraft())
-            onSaved()
+            if (id == null) {
+                onSaved(repository.createRoutine(state.toDraft()))
+            } else {
+                repository.updateRoutine(id, state.toDraft())
+                onSaved(null)
+            }
         }
     }
 

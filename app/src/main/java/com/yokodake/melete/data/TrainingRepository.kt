@@ -231,6 +231,7 @@ data class RoutineDraft(
     val transitionSeconds: Int,
     val roundRestSeconds: Int,
     val entries: List<RoutineEntryDraft>,
+    val category: ExerciseCategory? = null,
 )
 
 /** One station of a routine, joined to what the library currently says about the exercise. */
@@ -259,6 +260,7 @@ data class Routine(
     val roundRestSeconds: Int,
     val structureVersion: Int,
     val entries: List<RoutineEntryView>,
+    val category: ExerciseCategory? = null,
 )
 
 /** A routine copied into a week, together with the occurrences that are its stations. */
@@ -273,6 +275,7 @@ data class ScheduledCircuit(
     val trainingDate: LocalDate?,
     val orderIndex: Int,
     val stations: List<PlannedOccurrence>,
+    val category: ExerciseCategory? = null,
 ) {
     /** A circuit is done when every station of it is. It counts nothing of its own. */
     val completed: Boolean get() = stations.isNotEmpty() && stations.all { it.hasRecord }
@@ -294,6 +297,7 @@ data class WeekCircuit(
     /** The scheduled module this circuit belongs to, when it was placed as part of one. */
     val moduleInstanceId: String? = null,
     val modulePosition: Int? = null,
+    val category: ExerciseCategory? = null,
 )
 
 /** What removing a routine would cost. */
@@ -341,7 +345,10 @@ data class TrainingModule(
     val name: String,
     val description: String?,
     val entries: List<ModuleEntryView>,
-)
+) {
+    /** Entries whose exercise or circuit is gone or retired, and which scheduling will leave out. */
+    val unavailableEntries: List<ModuleEntryView> get() = entries.filter { it.definitionMissing }
+}
 
 /** A module copied into a week, as the planner sees it: the group, without its members. */
 data class WeekModule(
@@ -1239,6 +1246,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
             roundRestSeconds = draft.roundRestSeconds.coerceAtLeast(0),
             structureVersion = 1,
             createdAtEpochMs = now,
+            category = draft.category,
         )
         routines.insertRoutine(routine)
         writeRoutineEntries(routine.id, draft.entries, now)
@@ -1262,6 +1270,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     transitionSeconds = draft.transitionSeconds.coerceAtLeast(0),
                     roundRestSeconds = draft.roundRestSeconds.coerceAtLeast(0),
                     structureVersion = existing.structureVersion + 1,
+                    category = draft.category,
                 )
             )
             writeRoutineEntries(id, draft.entries, now)
@@ -1285,6 +1294,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                         prescription = row.prescription?.payload(),
                     )
                 },
+                category = source.routine.category,
             )
         )
     }
@@ -1346,6 +1356,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
         transitionSeconds = routine.transitionSeconds,
         roundRestSeconds = routine.roundRestSeconds,
         structureVersion = routine.structureVersion,
+        category = routine.category,
         entries = orderedEntries.map { row ->
             val definition = exercises[row.entry.exerciseId]?.exercise
             RoutineEntryView(
@@ -1384,6 +1395,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
         orderIndex = orderIndex,
         moduleInstanceId = moduleInstanceId,
         modulePosition = modulePosition,
+        category = categorySnapshot,
     )
 
     /** One scheduled circuit and the occurrences that are its stations. */
@@ -1498,6 +1510,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 createdAtEpochMs = now,
                 moduleInstanceId = moduleInstanceId,
                 modulePosition = modulePosition,
+                categorySnapshot = source.routine.category,
             )
         )
         dao.insertOccurrences(occurrences)
@@ -1605,6 +1618,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
             trainingDate = trainingDateEpochDay?.let(LocalDate::ofEpochDay),
             orderIndex = orderIndex,
             stations = stations,
+            category = categorySnapshot,
         )
 
     // ------------------------------------------------------------- modules
@@ -1625,11 +1639,16 @@ class TrainingRepository(private val database: MeleteDatabase) {
 
     suspend fun getModule(id: String): TrainingModule? = database.withTransaction {
         val row = modules.getModule(id) ?: return@withTransaction null
+        // Retired exercises and circuits are left out, so they read as unavailable here exactly
+        // as they do in the live list, and exactly as scheduling will treat them.
         val exercises = row.entries
             .mapNotNull { entry -> entry.entry.exerciseId?.let { library.getExerciseWithDefault(it) } }
+            .filter { it.exercise.deletedAtEpochMs == null }
             .associateBy { it.exercise.id }
         val saved = row.entries
-            .mapNotNull { entry -> entry.entry.routineId?.let { getRoutine(it) } }
+            .mapNotNull { entry -> entry.entry.routineId }
+            .filter { routines.getRoutine(it)?.routine?.deletedAtEpochMs == null }
+            .mapNotNull { getRoutine(it) }
             .associateBy { it.id }
         row.toModule(exercises, saved)
     }
@@ -1768,7 +1787,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     ?: entry.routineNameSnapshot.orEmpty(),
                 mode = definition?.mode ?: ExerciseMode.REPETITIONS,
                 unilateral = definition?.unilateral == true,
-                category = definition?.category,
+                category = definition?.category ?: routine?.category,
                 prescription = row.prescription?.payload(),
                 routineId = entry.routineId,
                 routine = routine,
@@ -1822,18 +1841,27 @@ class TrainingRepository(private val database: MeleteDatabase) {
         source.orderedEntries.forEachIndexed { position, row ->
             val entry = row.entry
             when {
-                entry.routineId != null -> scheduleRoutine(
-                    routineId = entry.routineId,
-                    weekStart = weekStart,
-                    trainingDate = trainingDate,
-                    moduleInstanceId = instanceId,
-                    modulePosition = position,
-                    orderIndex = base + position,
-                )
+                entry.routineId != null -> {
+                    // Unavailable entries are left out, exactly as the editor and the picker
+                    // warn: a circuit removed from the list is not one to plan again.
+                    if (routines.getRoutine(entry.routineId)?.routine?.deletedAtEpochMs != null) {
+                        return@forEachIndexed
+                    }
+                    scheduleRoutine(
+                        routineId = entry.routineId,
+                        weekStart = weekStart,
+                        trainingDate = trainingDate,
+                        moduleInstanceId = instanceId,
+                        modulePosition = position,
+                        orderIndex = base + position,
+                    )
+                }
 
                 entry.exerciseId != null -> {
-                    // A definition deleted outright leaves nothing to cut a copy from.
+                    // Deleted outright leaves nothing to cut a copy from; retired from the library
+                    // is a statement that it is not to be planned again. Either way it is skipped.
                     val exercise = library.getExerciseWithDefault(entry.exerciseId)?.exercise
+                        ?.takeIf { it.deletedAtEpochMs == null }
                         ?: return@forEachIndexed
                     placeExercise(
                         exercise = exercise,

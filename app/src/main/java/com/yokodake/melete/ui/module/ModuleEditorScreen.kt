@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.CompactTextField
+import com.yokodake.melete.ui.components.EditorTopBar
 import com.yokodake.melete.ui.components.PrescriptionFields
 import com.yokodake.melete.ui.components.PrescriptionFormState
 import com.yokodake.melete.ui.components.VariationChip
@@ -47,6 +48,7 @@ import com.yokodake.melete.ui.week.PrescriptionSummary
 @Composable
 fun ModuleEditorRoute(
     onNewExercise: () -> Unit,
+    onNewCircuit: () -> Unit,
     onDone: () -> Unit,
     onBack: () -> Unit,
     viewModel: ModuleEditorViewModel = viewModel(factory = ModuleEditorViewModel.Factory),
@@ -63,6 +65,8 @@ fun ModuleEditorRoute(
             onChoosePlan = viewModel::choosePlan,
             onPickCircuit = viewModel::pickCircuit,
             onNewExercise = { viewModel.createExercise(onNewExercise) },
+            onNewCircuit = { viewModel.createCircuit(onNewCircuit) },
+            onReplace = viewModel::openReplace,
             onToggle = viewModel::toggleEntry,
             onMove = viewModel::moveEntry,
             onRemove = viewModel::removeEntry,
@@ -83,6 +87,8 @@ data class ModuleEditorActions(
     val onChoosePlan: (String?) -> Unit = {},
     val onPickCircuit: (com.yokodake.melete.data.Routine) -> Unit = {},
     val onNewExercise: () -> Unit = {},
+    val onNewCircuit: () -> Unit = {},
+    val onReplace: (Int) -> Unit = {},
     val onToggle: (Int) -> Unit = {},
     val onMove: (Int, Int) -> Unit = { _, _ -> },
     val onRemove: (Int) -> Unit = {},
@@ -100,27 +106,11 @@ fun ModuleEditorScreen(state: ModuleEditorUiState, actions: ModuleEditorActions)
             .fillMaxSize()
             .imePadding(),
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                title = {
-                    Text(
-                        text = if (state.existing) "Edit module" else "New module",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = actions.onBack,
-                        modifier = Modifier.semantics { contentDescription = "Back" },
-                    ) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
-                actions = {
-                    TextButton(onClick = actions.onSave, enabled = state.canSave) { Text("Save") }
-                },
+            EditorTopBar(
+                title = if (state.existing) "Edit module" else "New module",
+                onBack = actions.onBack,
+                onSave = actions.onSave,
+                canSave = state.canSave,
             )
         },
     ) { padding ->
@@ -167,6 +157,7 @@ fun ModuleEditorScreen(state: ModuleEditorUiState, actions: ModuleEditorActions)
                     onMove = { actions.onMove(index, it) },
                     onRemove = { actions.onRemove(index) },
                     onForm = { actions.onForm(index, it) },
+                    onReplace = { actions.onReplace(index) },
                 )
             }
             item {
@@ -240,7 +231,12 @@ fun ModuleEditorScreen(state: ModuleEditorUiState, actions: ModuleEditorActions)
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = actions.onDismissPicker) { Text("Close") } },
+            // Circuits are often the thing not written yet, so one can be made from right here
+            // and comes back as the next entry, with the module as it was left.
+            dismissButton = { TextButton(onClick = actions.onDismissPicker) { Text("Close") } },
+            confirmButton = {
+                TextButton(onClick = actions.onNewCircuit) { Text("+  New circuit") }
+            },
         )
 
         null -> Unit
@@ -280,15 +276,13 @@ private fun EntryCard(
     onMove: (Int) -> Unit,
     onRemove: () -> Unit,
     onForm: (PrescriptionFormState) -> Unit,
+    onReplace: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (entry.isCircuit) {
-                MaterialTheme.colorScheme.surfaceContainerHighest
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            },
+            // One colour for both: a circuit entry is told apart by its line, not its shade.
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -302,7 +296,7 @@ private fun EntryCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        if (!entry.isCircuit) CategoryDot(entry.category)
+                        CategoryDot(entry.category)
                         Text(
                             text = entry.name,
                             style = MaterialTheme.typography.titleSmall,
@@ -311,19 +305,31 @@ private fun EntryCard(
                         )
                         entry.variationTag?.let { VariationChip(it) }
                     }
-                    Text(
-                        text = if (entry.isCircuit) {
-                            "Circuit · " + (entry.circuitSummary ?: "no longer saved")
-                        } else {
-                            PrescriptionSummary.formatPlan(
-                                entry.form.toPayload(entry.mode),
-                                entry.mode,
-                                entry.unilateral,
-                            )
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (entry.unavailable) {
+                        // Scheduling leaves this out; say so here, where it can be repaired.
+                        Text(
+                            text = "Unavailable — replace or remove. Left out when added to a plan.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    } else {
+                        Text(
+                            text = if (entry.isCircuit) {
+                                entry.circuitSummary.orEmpty()
+                            } else {
+                                PrescriptionSummary.formatPlan(
+                                    entry.form.toPayload(entry.mode),
+                                    entry.mode,
+                                    entry.unilateral,
+                                )
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (entry.unavailable) {
+                    TextButton(onClick = onReplace) { Text("Replace") }
                 }
                 IconButton(
                     onClick = { onMove(-1) },
@@ -340,7 +346,7 @@ private fun EntryCard(
                     modifier = Modifier.semantics { contentDescription = "Remove ${entry.name} from module" },
                 ) { Text("×", style = MaterialTheme.typography.titleLarge) }
             }
-            if (entry.expanded && !entry.isCircuit) {
+            if (entry.expanded && !entry.isCircuit && !entry.unavailable) {
                 Text(
                     text = "Changes apply to this module only",
                     style = MaterialTheme.typography.bodySmall,
@@ -354,7 +360,7 @@ private fun EntryCard(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            if (entry.isCircuit && entry.circuitSummary != null) {
+            if (entry.isCircuit && !entry.unavailable) {
                 Text(
                     text = "Uses the saved circuit when added to your plan.",
                     style = MaterialTheme.typography.bodySmall,

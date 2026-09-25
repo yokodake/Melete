@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.R
@@ -30,9 +31,7 @@ import com.yokodake.melete.ui.circuit.CircuitDetailRoute
 import com.yokodake.melete.ui.circuit.CircuitReviewRoute
 import com.yokodake.melete.ui.logger.LoggerRoute
 import com.yokodake.melete.ui.module.ModuleEditorRoute
-import com.yokodake.melete.ui.module.ModuleListRoute
 import com.yokodake.melete.ui.routine.RoutineEditorRoute
-import com.yokodake.melete.ui.routine.RoutineListRoute
 import com.yokodake.melete.ui.timer.TimerRoute
 import com.yokodake.melete.ui.week.WeekRoute
 import kotlinx.serialization.Serializable
@@ -63,13 +62,20 @@ data class LibraryPickerDestination(
 }
 
 @Serializable
-data class ExerciseEditorDestination(val exerciseId: String? = null)
+data class ExerciseEditorDestination(
+    val exerciseId: String? = null,
+    /** A new workout, not yet an exercise or a circuit: the editor offers the other kind. */
+    val choosingKind: Boolean = false,
+)
 
 /**
  * The saved-state key the exercise editor leaves on the screen below it when it has just created
  * an exercise, holding the new id.
  */
 const val CREATED_EXERCISE_ID = "createdExerciseId"
+
+/** The same hand-back for a circuit just created from the circuit editor. */
+const val CREATED_CIRCUIT_ID = "createdCircuitId"
 
 /**
  * What an exercise *is*, before anything is asked of the user. One destination serves both the
@@ -85,16 +91,12 @@ data class ExerciseDetailDestination(
 @Serializable
 data class LoggerDestination(val occurrenceId: String)
 
-/** The saved circuits, as a list to manage. Adding one to a week goes through the library picker. */
 @Serializable
-data object RoutineListDestination
-
-@Serializable
-data class RoutineEditorDestination(val routineId: String? = null)
-
-/** The saved modules, as a list to manage. Adding one to a week goes through the library picker. */
-@Serializable
-data object ModuleListDestination
+data class RoutineEditorDestination(
+    val routineId: String? = null,
+    /** A new workout, not yet an exercise or a circuit: the editor offers the other kind. */
+    val choosingKind: Boolean = false,
+)
 
 @Serializable
 data class ModuleEditorDestination(val moduleId: String? = null)
@@ -167,9 +169,12 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onOpenExercise = {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
                 },
-                onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
-                onOpenCircuits = { navController.navigate(RoutineListDestination) },
-                onOpenModules = { navController.navigate(ModuleListDestination) },
+                onNewWorkout = {
+                    navController.navigate(ExerciseEditorDestination(choosingKind = true))
+                },
+                onEditCircuit = { navController.navigate(RoutineEditorDestination(it)) },
+                onNewModule = { navController.navigate(ModuleEditorDestination()) },
+                onEditModule = { navController.navigate(ModuleEditorDestination(it)) },
                 bottomBar = bottomBar,
             )
         }
@@ -183,8 +188,9 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         composable<LibraryPickerDestination> {
             LibraryPickerRoute(
                 onScheduled = { navController.popBackStack() },
-                onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
-                onNewCircuit = { navController.navigate(RoutineEditorDestination()) },
+                onNewWorkout = {
+                    navController.navigate(ExerciseEditorDestination(choosingKind = true))
+                },
                 onNewModule = { navController.navigate(ModuleEditorDestination()) },
                 onOpenExercise = {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
@@ -194,8 +200,16 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onBack = { navController.popBackStack() },
             )
         }
-        composable<ExerciseEditorDestination> {
+        composable<ExerciseEditorDestination> { entry ->
+            val destination = entry.toRoute<ExerciseEditorDestination>()
             ExerciseEditorRoute(
+                // Switching kind replaces this editor rather than stacking the other on top, so
+                // back still leads to wherever the new workout was asked for.
+                onSwitchToCircuit = {
+                    navController.navigate(RoutineEditorDestination(choosingKind = true)) {
+                        popUpTo<ExerciseEditorDestination> { inclusive = true }
+                    }
+                }.takeIf { destination.choosingKind },
                 onDone = { createdId ->
                     // Handed back to whoever opened the editor, so a screen that asked for a new
                     // exercise can use it straight away. Screens that did not ask never read it.
@@ -222,30 +236,31 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         composable<LoggerDestination> {
             LoggerRoute(onBack = { navController.popBackStack() })
         }
-        composable<RoutineListDestination> {
-            RoutineListRoute(
-                onNewRoutine = { navController.navigate(RoutineEditorDestination()) },
-                onEditRoutine = { navController.navigate(RoutineEditorDestination(it)) },
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable<RoutineEditorDestination> {
+        composable<RoutineEditorDestination> { entry ->
+            val destination = entry.toRoute<RoutineEditorDestination>()
             RoutineEditorRoute(
+                onSwitchToExercise = {
+                    navController.navigate(ExerciseEditorDestination(choosingKind = true)) {
+                        popUpTo<RoutineEditorDestination> { inclusive = true }
+                    }
+                }.takeIf { destination.choosingKind },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
-                onDone = { navController.popBackStack() },
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable<ModuleListDestination> {
-            ModuleListRoute(
-                onNewModule = { navController.navigate(ModuleEditorDestination()) },
-                onEditModule = { navController.navigate(ModuleEditorDestination(it)) },
+                onDone = { createdId ->
+                    // Handed back like a new exercise, for a module waiting on this circuit.
+                    if (createdId != null) {
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(CREATED_CIRCUIT_ID, createdId)
+                    }
+                    navController.popBackStack()
+                },
                 onBack = { navController.popBackStack() },
             )
         }
         composable<ModuleEditorDestination> {
             ModuleEditorRoute(
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
+                onNewCircuit = { navController.navigate(RoutineEditorDestination()) },
                 onDone = { navController.popBackStack() },
                 onBack = { navController.popBackStack() },
             )

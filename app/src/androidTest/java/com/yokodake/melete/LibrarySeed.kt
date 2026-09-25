@@ -86,6 +86,7 @@ class LibrarySeed {
         val transitionSeconds: Int,
         val roundRestSeconds: Int,
         val stations: List<Pick>,
+        val category: ExerciseCategory? = null,
     )
 
     /** A module entry is an exercise [Pick] or, when [circuit] is set, a saved circuit by name. */
@@ -122,6 +123,7 @@ class LibrarySeed {
         // The ordinary case: reps, a hold and reps, with both rests.
         CircuitSeed(
             "Pull + core", rounds = 3, transitionSeconds = 30, roundRestSeconds = 120,
+            category = STRENGTH_CONDITIONING,
             stations = listOf(
                 Pick("Pull-up", PrescriptionPayload(sets = 1, targetReps = 5)),
                 Pick("Plank", PrescriptionPayload(sets = 1, targetDurationSeconds = 45)),
@@ -131,6 +133,7 @@ class LibrarySeed {
         // Every station one side at a time, so the switch rests appear inside the rounds.
         CircuitSeed(
             "Leg circuit", rounds = 4, transitionSeconds = 20, roundRestSeconds = 90,
+            category = STRENGTH_CONDITIONING,
             stations = listOf(
                 Pick("Bulgarian split squat", PrescriptionPayload(sets = 1, targetReps = 8, sideSwitchSeconds = 0)),
                 Pick("Pistol squat", PrescriptionPayload(sets = 1, targetReps = 5)),
@@ -140,6 +143,7 @@ class LibrarySeed {
         // A repeater station, a plain hold, and a timed station with no length that must wait.
         CircuitSeed(
             "Hangboard density", rounds = 3, transitionSeconds = 60, roundRestSeconds = 180,
+            category = FINGER_TRAINING,
             stations = listOf(
                 Pick(
                     "7/3 repeaters 20 mm",
@@ -222,7 +226,10 @@ class LibrarySeed {
             }
             if (entries.isEmpty()) return@forEach
             repository.createRoutine(
-                RoutineDraft(seed.name, seed.rounds, seed.transitionSeconds, seed.roundRestSeconds, entries)
+                RoutineDraft(
+                    seed.name, seed.rounds, seed.transitionSeconds, seed.roundRestSeconds, entries,
+                    category = seed.category,
+                )
             )
         }
 
