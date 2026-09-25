@@ -16,9 +16,11 @@ import com.yokodake.melete.data.Routine
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
+import com.yokodake.melete.ui.CREATED_CIRCUIT_ID
 import com.yokodake.melete.ui.CREATED_EXERCISE_ID
 import com.yokodake.melete.ui.ModuleEditorDestination
 import com.yokodake.melete.ui.components.PrescriptionFormState
+import com.yokodake.melete.ui.routine.routineSummary
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +50,11 @@ data class ModuleEntryUi(
     /** For a circuit: its shape in one line. */
     val circuitSummary: String? = null,
     val expanded: Boolean = false,
+    /**
+     * The exercise or circuit it came from is gone or retired. Scheduling leaves it out, so the
+     * editor says so and offers to replace it.
+     */
+    val unavailable: Boolean = false,
 ) {
     val isCircuit: Boolean get() = routineId != null
 }
@@ -66,6 +73,8 @@ data class ModuleEditorUiState(
     val picking: ModulePick? = null,
     /** An exercise with variations, waiting for its plan to be chosen. */
     val choosingPlanFor: LibraryExercise? = null,
+    /** The entry the open picker is replacing, or null when it adds a new one. */
+    val replacing: Int? = null,
 ) {
     val canSave: Boolean get() = name.isNotBlank() && entries.isNotEmpty()
 
@@ -125,6 +134,15 @@ class ModuleEditorViewModel(
                     repository.getLibraryExercise(createdId)?.let { addExercise(it, null) }
                 }
         }
+        // The same for a circuit created from the circuit picker.
+        viewModelScope.launch {
+            savedStateHandle.getStateFlow<String?>(CREATED_CIRCUIT_ID, null)
+                .filterNotNull()
+                .collect { createdId ->
+                    savedStateHandle[CREATED_CIRCUIT_ID] = null
+                    repository.getRoutine(createdId)?.let(::pickCircuit)
+                }
+        }
         if (moduleId != null) {
             viewModelScope.launch {
                 val module = repository.getModule(moduleId)
@@ -146,6 +164,7 @@ class ModuleEditorViewModel(
                                 category = entry.category,
                                 form = PrescriptionFormState.from(entry.prescription),
                                 circuitSummary = entry.routine?.let(::circuitLine),
+                                unavailable = entry.definitionMissing,
                             )
                         },
                     )
@@ -157,9 +176,22 @@ class ModuleEditorViewModel(
     fun setName(value: String) = form.update { it.copy(name = value) }
     fun setDescription(value: String) = form.update { it.copy(description = value) }
 
-    fun openPicker(kind: ModulePick) = form.update { it.copy(picking = kind) }
+    fun openPicker(kind: ModulePick) =
+        form.update { it.copy(picking = kind, replacing = null) }
 
-    fun dismissPicker() = form.update { it.copy(picking = null, choosingPlanFor = null) }
+    /** Opens the picker to put something in place of an unavailable entry. */
+    fun openReplace(index: Int) {
+        val entry = form.value.entries.getOrNull(index) ?: return
+        form.update {
+            it.copy(
+                picking = if (entry.isCircuit) ModulePick.CIRCUIT else ModulePick.EXERCISE,
+                replacing = index,
+            )
+        }
+    }
+
+    fun dismissPicker() =
+        form.update { it.copy(picking = null, choosingPlanFor = null, replacing = null) }
 
     /** Leaves the picker to create an exercise; it comes back as the next entry. */
     fun createExercise(onOpenEditor: () -> Unit) {
@@ -167,11 +199,29 @@ class ModuleEditorViewModel(
         onOpenEditor()
     }
 
+    /** Leaves the picker to create a circuit; it comes back as the next entry. */
+    fun createCircuit(onOpenEditor: () -> Unit) {
+        dismissPicker()
+        onOpenEditor()
+    }
+
+    /** Appends [entry], or puts it in place of the entry being replaced. */
+    private fun ModuleEditorUiState.place(entry: ModuleEntryUi): ModuleEditorUiState {
+        val at = replacing
+        val placed = if (at != null && at in entries.indices) {
+            entries.mapIndexed { i, existing -> if (i == at) entry else existing }
+        } else {
+            entries + entry
+        }
+        return copy(entries = placed, picking = null, choosingPlanFor = null, replacing = null)
+    }
+
     /** An exercise picked from the list: added at once, or after its plan is chosen. */
     fun pickExercise(exercise: LibraryExercise) {
         if (exercise.variations.isEmpty()) {
             addExercise(exercise, null)
         } else {
+            // Keeps `replacing`, so the plan chosen next still lands in the right place.
             form.update { it.copy(picking = null, choosingPlanFor = exercise) }
         }
     }
@@ -184,10 +234,8 @@ class ModuleEditorViewModel(
     private fun addExercise(exercise: LibraryExercise, variationId: String?) {
         val variation = exercise.variations.firstOrNull { it.id == variationId }
         form.update { current ->
-            current.copy(
-                picking = null,
-                choosingPlanFor = null,
-                entries = current.entries + ModuleEntryUi(
+            current.place(
+                ModuleEntryUi(
                     exerciseId = exercise.id,
                     variationId = variation?.id,
                     variationTag = variation?.tag,
@@ -199,20 +247,20 @@ class ModuleEditorViewModel(
                     form = PrescriptionFormState.from(
                         if (variation != null) variation.prescription else exercise.defaultPrescription
                     ),
-                ),
+                )
             )
         }
     }
 
     fun pickCircuit(circuit: Routine) {
         form.update { current ->
-            current.copy(
-                picking = null,
-                entries = current.entries + ModuleEntryUi(
+            current.place(
+                ModuleEntryUi(
                     routineId = circuit.id,
                     name = circuit.name,
+                    category = circuit.category,
                     circuitSummary = circuitLine(circuit),
-                ),
+                )
             )
         }
     }
@@ -278,6 +326,5 @@ class ModuleEditorViewModel(
     }
 }
 
-/** A circuit in one line: how many times round and what is in it. */
-internal fun circuitLine(circuit: Routine): String =
-    "${circuit.rounds} × " + circuit.entries.joinToString(" → ") { it.name }.ifEmpty { "empty" }
+/** A circuit in one line, exactly as the library lists it. */
+internal fun circuitLine(circuit: Routine): String = routineSummary(circuit)

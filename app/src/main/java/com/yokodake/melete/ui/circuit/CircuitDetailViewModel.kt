@@ -76,7 +76,9 @@ class CircuitDetailViewModel(
         val program = circuit?.let(::programOf)
         val shares = program?.estimatedSecondsByEntry().orEmpty()
         CircuitDetailUiState(
-            loading = circuit == null,
+            // Reaching here means the query has answered. Loading belongs to the initial value
+            // alone, so a circuit that is gone says so instead of spinning forever.
+            loading = false,
             circuit = circuit,
             stations = circuit?.stations.orEmpty().mapIndexed { index, station ->
                 CircuitStation(station, shares.getOrElse(index) { 0 })

@@ -98,7 +98,11 @@ class WeekViewModel(
     fun deleteOccurrenceAndLog(occurrenceId: String, sets: Int) {
         viewModelScope.launch {
             repository.deleteOccurrenceAndLog(occurrenceId)
-            _message.value = "Removed, along with $sets logged set${if (sets == 1) "" else "s"}"
+            _message.value = if (sets == 0) {
+                "Removed, along with its log"
+            } else {
+                "Removed, along with $sets logged set${if (sets == 1) "" else "s"}"
+            }
         }
     }
 

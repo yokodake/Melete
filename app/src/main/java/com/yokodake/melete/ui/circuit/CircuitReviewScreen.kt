@@ -35,6 +35,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.yokodake.melete.ui.components.TrainingDateCard
+import com.yokodake.melete.ui.components.TrainingDatePickerDialog
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +84,14 @@ fun CircuitReviewScreen(
     onBack: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    var showDatePicker by remember { mutableStateOf(false) }
+    if (showDatePicker) {
+        TrainingDatePickerDialog(
+            initial = state.targetDate,
+            onPick = viewModel::setTargetDate,
+            onDismiss = { showDatePicker = false },
+        )
+    }
     LaunchedEffect(state.message) {
         state.message?.let {
             snackbarHostState.showSnackbar(it)
@@ -121,7 +133,16 @@ fun CircuitReviewScreen(
             )
         },
     ) { padding ->
-        val circuit = state.circuit ?: return@Scaffold
+        val circuit = state.circuit ?: run {
+            if (!state.loading) {
+                Text(
+                    text = "This circuit is no longer in the week.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(padding).padding(16.dp),
+                )
+            }
+            return@Scaffold
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -132,6 +153,17 @@ fun CircuitReviewScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // An unscheduled circuit is filed under a day when it is logged. Say which, and let
+            // it be changed, exactly as the single-exercise logger does.
+            if (circuit.trainingDate == null) {
+                item {
+                    TrainingDateCard(
+                        targetDate = state.targetDate,
+                        today = state.today,
+                        onChangeDate = { showDatePicker = true },
+                    )
+                }
+            }
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),

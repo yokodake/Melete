@@ -4,20 +4,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -32,22 +29,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.LibraryExercise
+import com.yokodake.melete.data.TrainingModule
 import com.yokodake.melete.ui.components.VariationChoiceDialog
 import com.yokodake.melete.ui.module.ModuleRow
+import com.yokodake.melete.ui.module.unavailableNote
 import com.yokodake.melete.ui.routine.RoutineRow
 
 /**
- * Adding something saved to one slot of the week: an exercise, a circuit or a module.
+ * Adding something saved to one slot of the week: a workout — exercise or circuit — or a module.
  *
- * Exercises first, because they are what is added most. The button at the bottom always creates
- * whichever kind is on screen, and a tap on a row copies it straight into the slot — after asking
- * which plan, for an exercise that has variations.
+ * A tap on a row copies it straight into the slot, after asking which plan for an exercise that
+ * has variations, and after saying what will be left out for a module with unavailable entries.
+ * The button at the bottom creates whichever kind the tab lists.
  */
 @Composable
 fun LibraryPickerRoute(
     onScheduled: () -> Unit,
-    onNewExercise: () -> Unit,
-    onNewCircuit: () -> Unit,
+    onNewWorkout: () -> Unit,
     onNewModule: () -> Unit,
     onOpenExercise: (String) -> Unit,
     onEditCircuit: (String) -> Unit,
@@ -58,14 +56,13 @@ fun LibraryPickerRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LibraryPickerScreen(
         state = state,
-        onShowView = viewModel::showView,
+        onShowTab = viewModel::showTab,
         onPickExercise = { id, variationId -> viewModel.schedule(id, variationId, onScheduled) },
         onPickCircuit = { viewModel.scheduleCircuit(it, onScheduled) },
         onPickModule = { viewModel.scheduleModule(it, onScheduled) },
-        onNew = when (state.view) {
-            PickerView.EXERCISES -> onNewExercise
-            PickerView.CIRCUITS -> onNewCircuit
-            PickerView.MODULES -> onNewModule
+        onNew = when (state.tab) {
+            LibraryTab.WORKOUTS -> onNewWorkout
+            LibraryTab.MODULES -> onNewModule
         },
         onOpenExercise = onOpenExercise,
         onEditCircuit = onEditCircuit,
@@ -78,7 +75,7 @@ fun LibraryPickerRoute(
 @Composable
 fun LibraryPickerScreen(
     state: LibraryPickerUiState,
-    onShowView: (PickerView) -> Unit,
+    onShowTab: (LibraryTab) -> Unit,
     onPickExercise: (exerciseId: String, variationId: String?) -> Unit,
     onPickCircuit: (String) -> Unit,
     onPickModule: (String) -> Unit,
@@ -90,6 +87,8 @@ fun LibraryPickerScreen(
 ) {
     // An exercise with variations, waiting for its plan to be chosen.
     var choosingPlanFor by remember { mutableStateOf<LibraryExercise?>(null) }
+    // A module with unavailable entries, waiting for a yes before they are left out.
+    var confirmingModule by remember { mutableStateOf<TrainingModule?>(null) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -115,24 +114,7 @@ fun LibraryPickerScreen(
                             }
                         },
                     )
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                    ) {
-                        PickerView.entries.forEachIndexed { index, view ->
-                            SegmentedButton(
-                                selected = state.view == view,
-                                onClick = { onShowView(view) },
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = PickerView.entries.size,
-                                ),
-                                // The label says it; a tick as well only costs width.
-                                icon = {},
-                            ) { Text(view.label) }
-                        }
-                    }
+                    LibraryTabs(selected = state.tab, onSelect = onShowTab)
                 }
             }
         },
@@ -141,10 +123,9 @@ fun LibraryPickerScreen(
                 onClick = onNew,
                 text = {
                     Text(
-                        when (state.view) {
-                            PickerView.EXERCISES -> "New exercise"
-                            PickerView.CIRCUITS -> "New circuit"
-                            PickerView.MODULES -> "New module"
+                        when (state.tab) {
+                            LibraryTab.WORKOUTS -> "New workout"
+                            LibraryTab.MODULES -> "New module"
                         }
                     )
                 },
@@ -162,21 +143,17 @@ fun LibraryPickerScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val empty = when (state.view) {
-                PickerView.EXERCISES -> state.exercises.isEmpty()
-                PickerView.CIRCUITS -> state.circuits.isEmpty()
-                PickerView.MODULES -> state.modules.isEmpty()
+            val empty = when (state.tab) {
+                LibraryTab.WORKOUTS -> state.workouts.isEmpty()
+                LibraryTab.MODULES -> state.modules.isEmpty()
             }
             if (empty) {
                 item {
                     Text(
-                        text = when (state.view) {
-                            PickerView.EXERCISES ->
-                                "The library is empty. Create an exercise to get started."
-                            PickerView.CIRCUITS ->
-                                "No circuits yet. A circuit is an order of library exercises " +
-                                    "you run round, with its own rests."
-                            PickerView.MODULES ->
+                        text = when (state.tab) {
+                            LibraryTab.WORKOUTS ->
+                                "No workouts yet. Create an exercise or a circuit to get started."
+                            LibraryTab.MODULES ->
                                 "No modules yet. Create a module to plan exercises and circuits as a group."
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -184,33 +161,39 @@ fun LibraryPickerScreen(
                     )
                 }
             }
-            when (state.view) {
-                PickerView.EXERCISES -> items(items = state.exercises, key = { it.id }) { exercise ->
-                    LibraryRow(
-                        exercise = exercise,
-                        onClick = {
-                            if (exercise.variations.isEmpty()) {
-                                onPickExercise(exercise.id, null)
-                            } else {
-                                choosingPlanFor = exercise
-                            }
-                        },
-                        secondaryAction = onOpenExercise to "Open",
-                    )
+            when (state.tab) {
+                LibraryTab.WORKOUTS -> items(items = state.workouts, key = { it.id }) { workout ->
+                    when (workout) {
+                        is Workout.Exercise -> LibraryRow(
+                            exercise = workout.exercise,
+                            onClick = {
+                                if (workout.exercise.variations.isEmpty()) {
+                                    onPickExercise(workout.exercise.id, null)
+                                } else {
+                                    choosingPlanFor = workout.exercise
+                                }
+                            },
+                            secondaryAction = onOpenExercise to "Open",
+                        )
+
+                        is Workout.Circuit -> RoutineRow(
+                            routine = workout.routine,
+                            onClick = { onPickCircuit(workout.routine.id) },
+                            secondaryAction = { onEditCircuit(workout.routine.id) } to "Edit",
+                        )
+                    }
                 }
 
-                PickerView.CIRCUITS -> items(items = state.circuits, key = { it.id }) { circuit ->
-                    RoutineRow(
-                        routine = circuit,
-                        onClick = { onPickCircuit(circuit.id) },
-                        secondaryAction = { onEditCircuit(circuit.id) } to "Edit",
-                    )
-                }
-
-                PickerView.MODULES -> items(items = state.modules, key = { it.id }) { module ->
+                LibraryTab.MODULES -> items(items = state.modules, key = { it.id }) { module ->
                     ModuleRow(
                         module = module,
-                        onClick = { onPickModule(module.id) },
+                        onClick = {
+                            if (module.unavailableEntries.isEmpty()) {
+                                onPickModule(module.id)
+                            } else {
+                                confirmingModule = module
+                            }
+                        },
                         secondaryAction = { onEditModule(module.id) } to "Edit",
                     )
                 }
@@ -226,6 +209,31 @@ fun LibraryPickerScreen(
                 onPickExercise(exercise.id, variationId)
             },
             onDismiss = { choosingPlanFor = null },
+        )
+    }
+
+    confirmingModule?.let { module ->
+        AlertDialog(
+            onDismissRequest = { confirmingModule = null },
+            title = { Text("Add ${module.name}?") },
+            text = {
+                Text(
+                    (unavailableNote(module) ?: "") + "\n" +
+                        module.unavailableEntries.joinToString("\n") { "· ${it.name}" }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingModule = null
+                    onPickModule(module.id)
+                }) { Text("Add the rest") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    confirmingModule = null
+                    onEditModule(module.id)
+                }) { Text("Edit module") }
+            },
         )
     }
 }

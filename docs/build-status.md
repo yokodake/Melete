@@ -28,7 +28,7 @@ the two ever disagree, the code and the first half win.
 | 5B — daily notes, metrics, export and restore | not started |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **3**, and one schema only until phase 6 — see *No migration chain* below.
+Schema version **4**, and one schema only until phase 6 — see *No migration chain* below.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -39,17 +39,22 @@ highlighted and the list opens near it. Previous/next week and a *Today* action.
 
 Each day's `+` offers two things:
 
-- **From library** opens the picker for that slot, with three tabs under its header —
-  *Exercises* · *Circuits* · *Modules* — and a bottom button that creates whichever kind is on
-  screen. An exercise copies its definition and prescription into the slot (asking which plan
-  first, when it has variations); a circuit copies in as a container plus one real occurrence per
-  station; a module copies in as a named group plus each of its entries as that real work. The
-  slot is fixed for the life of the picker, across switching tabs and detours to create
-  something.
+- **From library** opens the picker for that slot, with the library's own two tabs —
+  *Workouts* (exercises and circuits together, alphabetical, a circuit carrying a small *Circuit*
+  label) and *Modules* — and a bottom button that creates whichever kind the tab lists. An
+  exercise copies its definition and prescription into the slot (asking which plan first, when it
+  has variations); a circuit copies in as a container plus one real occurrence per station; a
+  module copies in as a named group plus each of its entries as that real work, first saying
+  which unavailable entries it will leave out and offering to edit it instead. The slot is fixed
+  for the life of the picker, across switching tabs and detours to create something.
 - **Other activity**, typed in by name with optional minutes — no library entry is created.
 
-The circuit and module lists reached from the Library tab are for managing them only; scheduling
-goes through the picker.
+**The Library tab** has the same two tabs, *Workouts* and *Modules*, with one search over the
+tab on screen. A tap opens an exercise and edits a circuit or module; a long press offers *Add to
+plan*, edit, duplicate and remove. *New workout* opens the exercise editor with **Exercise |
+Circuit** at the top, and the rest of the form follows that choice — switching replaces the editor
+rather than stacking one on the other. Editing an existing exercise or circuit never offers the
+switch.
 
 A card is tapped to open what it is, and long-pressed for its menu: move to any week and day (or
 back to unscheduled), duplicate, nudge up and down within its slot, remove. A circuit is one card
@@ -90,13 +95,18 @@ happened. The stronger answer exists and names what it would destroy.
   and copies the plan by value; the variation's notes are read live, like the exercise's own.
   Editing or deleting a variation never reaches a copy already in a week.
 - **A routine** is a saved, named circuit: ordered library exercises, each with its own copied
-  prescription, plus a round count, a rest between exercises and a rest between rounds. Reached
-  from *Circuits* in the library's top bar, and scheduled from the picker's *Circuits* tab.
+  prescription, plus a round count, a rest between exercises and a rest between rounds. Listed
+  among the library's workouts. A station's form asks only what a circuit does not override: its
+  target, side switch, pulses and effort — not sets, set rest or total time, which the circuit
+  replaces with one set per round, its own rests and one clock for the whole thing.
 - **A module** is a saved, named group of planned work: ordered exercises (each with its own
   copied plan, optionally cut from a variation) and whole saved circuits, plus an optional
   purpose / description. Organisational only: it is not trained, timed or counted, and adds no time of
-  its own. Reached from *Modules* in the library's top bar. Template edits never reach scheduled
-  copies; removing a template that was ever scheduled leaves a tombstone for their lineage.
+  its own. The library's *Modules* tab. Template edits never reach scheduled copies; removing a
+  template that was ever scheduled leaves a tombstone for their lineage. An entry whose exercise or
+  circuit is gone or retired says *Unavailable — replace or remove* in the editor, with *Replace*,
+  and scheduling leaves it out. The circuit picker offers *New circuit*, which comes back as the
+  next entry with the module as it was left.
 - **Adding to a plan from the library** — a row's menu, or *Add to plan* in an exercise's own menu
   — asks which plan when there are variations, then which week, from a list that scrolls without
   end.
@@ -714,7 +724,15 @@ These are the ones no test can make.
       inside in order, the circuit as its own card within.
 - [ ] **Move the group**, **take one member out**, **ungroup**, **remove** — with and without a
       logged member (a logged one refuses *unscheduled* and asks before deleting).
-- [ ] **The three tabs** in the picker, and the bottom button following them.
+- [ ] **Workouts | Modules** in the library and the picker, the *Circuit* label, and the bottom
+      button following the tab. *New workout* → switch to *Circuit* → back leads out, not to the
+      exercise form.
+- [ ] **An unavailable module entry**: retire an exercise used in a module; the editor flags it
+      with *Replace*, the list and picker warn, and scheduling asks before leaving it out.
+- [ ] **Circuit fixes**: a station's form has no sets / rest / total time; the review has one row
+      per round; an unscheduled circuit's review says *Logging for …* with *Change*.
+- [ ] **Remove a completed activity** from the week: it offers *Delete activity and log*, and it
+      works.
 
 ### 6. Background and audio
 
@@ -977,6 +995,44 @@ all 14 module and variation tests among them. The one failure,
 `aCueDoesNotTakeAudioFocusFromWhateverElseIsPlaying`, failed at its own precondition — a phone call
 held audio focus, so the test could not take it to begin with. Not yet re-run outside a call.
 
+## Workouts and modules; fixes from a review (2026-09-26)
+
+- **The library is *Workouts | Modules*.** Exercises and circuits are one alphabetical list; the
+  separate Circuits and Modules screens are gone, their rows reused. *New workout* chooses Exercise
+  or Circuit at the top of the editor. The week's picker has the same two tabs.
+- **Circuit rows and rounds agree.** A station's form no longer shows the sets, set rest and total
+  time the circuit overrides, and the review seeds one row per **round** rather than per station
+  set.
+- **A completed activity can be removed.** The dialog judged "logged" by set count alone, offered a
+  plain removal, and the repository refused it with a message pointing at a logger action that
+  does not exist. It now counts completion too and offers *Delete activity and log*; the move
+  dialog applies the same test before offering *unscheduled*.
+- **Circuit review asks the date** for an unscheduled circuit, with the logger's own card and
+  picker, now shared (`TrainingDate.kt`).
+- **Unavailable module entries** are flagged, replaceable, warned about before scheduling, and
+  left out consistently — retired exercises and circuits included, which scheduling used to copy.
+- **Module editor → *New circuit***, handed back through `CREATED_CIRCUIT_ID` like a new exercise.
+- **Rendering:** a manual duration showed as nothing (operator precedence); a missing circuit
+  spun on "Loading…" forever, in the detail and the review.
+- **Timer:** the previous button is announced as *Restart this interval* or *Previous interval* by
+  the same rule the transition uses; the cue explanation describes the interval on screen while
+  one is counting, not the create form's numbers.
+
+- **Circuits look like exercises.** A circuit has its own category (schema **v4**, snapshotted onto
+  scheduled copies), chosen with the same chips as an exercise. Library rows and week cards are
+  built like an exercise's: the category dot and name, no *Circuit* chip, the same background, and
+  one line underneath — "3 rounds · Pull-up → Plank → Push-up", with the library's estimate at
+  its end rather than beside the name.
+- **One editor header** (`EditorTopBar`) for the exercise, circuit and module editors: the same
+  title size, *Save* in the same place — the exercise editor's bottom button is gone — and the
+  Exercise | Circuit switch in the header, so swapping kinds no longer shifts the screen.
+- **"Timer finished"** sits on the timer screen itself rather than in a card.
+
+**Checks run:** 164 unit tests pass (4 new). All three APKs build. On the Pixel 9, 65 of 65
+instrumented tests pass, including the audio-focus cue test outside a call, a retired exercise
+being flagged and left out of its module, and a circuit's category surviving save, duplication and
+recategorisation of its template. Backup before the v4 wipe: `backups/pre-v4-20260926-004622/`.
+
 ## Next step
 
 **Phase 5B — daily notes, metrics, export and restore.**
@@ -986,7 +1042,6 @@ Owed before or alongside it:
 - **Everything in *What still needs a phone*.** None of 5A, the timer extensions, variations or
   modules has been walked through by hand. `LibrarySeed` refills a wiped debug database with the
   library, variations, circuits and modules.
-- **Re-run the audio-focus cue test** with no call in progress.
 - **Gating the planner behind an edit mode**, so cards only move when you have said you are
   reorganising, with move-up/down crossing day boundaries. Explicitly asked for, still not built.
 - The 4A acceptance scenarios end to end. The instrumented suite exercises the database, not the

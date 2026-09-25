@@ -265,8 +265,9 @@ fun ExerciseDetailScreen(
             state.loggedDurationSeconds?.let { seconds ->
                 Section("Duration")
                 Text(
-                    text = if (state.loggedDurationManual) "" else "≈"
-                            + PrescriptionSummary.duration(seconds),
+                    // A typed number is stated plainly; a worked-out one is marked as approximate.
+                    text = (if (state.loggedDurationManual) "" else "≈ ") +
+                        PrescriptionSummary.duration(seconds),
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }

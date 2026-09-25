@@ -59,90 +59,108 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.ExerciseRemoval
 import com.yokodake.melete.data.LibraryExercise
+import com.yokodake.melete.data.TrainingModule
+import com.yokodake.melete.ui.module.ModuleRow
+import com.yokodake.melete.ui.module.unavailableNote
+import com.yokodake.melete.ui.routine.RoutineRow
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.Chip
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
+/** Everything the library tab can be asked to do. */
+data class LibraryActions(
+    val onShowTab: (LibraryTab) -> Unit = {},
+    val onQueryChange: (String) -> Unit = {},
+    val onOpenExercise: (String) -> Unit = {},
+    val onEditCircuit: (String) -> Unit = {},
+    val onEditModule: (String) -> Unit = {},
+    val onNewWorkout: () -> Unit = {},
+    val onNewModule: () -> Unit = {},
+    val onScheduleExercise: (exerciseId: String, weekStart: LocalDate, variationId: String?) -> Unit =
+        { _, _, _ -> },
+    val onScheduleCircuit: (routineId: String, weekStart: LocalDate) -> Unit = { _, _ -> },
+    val onScheduleModule: (moduleId: String, weekStart: LocalDate) -> Unit = { _, _ -> },
+    val onAskRemoveExercise: (LibraryExercise) -> Unit = {},
+    val onConfirmRemoveExercise: () -> Unit = {},
+    val onCancelRemoveExercise: () -> Unit = {},
+    val onDuplicateCircuit: (String) -> Unit = {},
+    val onAskRemoveCircuit: (String) -> Unit = {},
+    val onConfirmRemoveCircuit: () -> Unit = {},
+    val onCancelRemoveCircuit: () -> Unit = {},
+    val onDuplicateModule: (String) -> Unit = {},
+    val onAskRemoveModule: (String) -> Unit = {},
+    val onConfirmRemoveModule: () -> Unit = {},
+    val onCancelRemoveModule: () -> Unit = {},
+    val onMessageShown: () -> Unit = {},
+)
+
 /**
- * The library as a tab: browse what exists. A tap opens the exercise, not a form — what it is
- * comes first, and editing it is a button on that screen.
+ * The library as a tab: workouts — exercises and circuits together — and the modules that group
+ * them. A tap on an exercise opens it, not a form: what it is comes first, and editing it is a
+ * button on that screen. A circuit or a module has no such page, so a tap edits it.
  */
 @Composable
 fun LibraryRoute(
     onOpenExercise: (String) -> Unit,
-    onNewExercise: () -> Unit,
-    onOpenCircuits: () -> Unit = {},
-    onOpenModules: () -> Unit = {},
+    onNewWorkout: () -> Unit,
+    onEditCircuit: (String) -> Unit,
+    onNewModule: () -> Unit,
+    onEditModule: (String) -> Unit,
     bottomBar: @Composable () -> Unit = {},
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LibraryScreen(
-        title = "Library",
-        subtitle = null,
-        exercises = state.exercises,
-        emptyMessage = if (state.noMatches) {
-            "Nothing matches \"${state.query}\"."
-        } else {
-            "No exercises yet. Create an exercise to get started."
-        },
-        query = state.query,
-        onQueryChange = viewModel::setQuery,
-        message = state.message,
-        onMessageShown = viewModel::consumeMessage,
-        today = state.today,
-        defaultWeekStart = viewModel.currentWeekStart,
-        onSchedule = viewModel::schedule,
-        removal = state.removal,
-        onAskRemove = viewModel::askToRemove,
-        onConfirmRemove = viewModel::confirmRemoval,
-        onCancelRemove = viewModel::cancelRemoval,
-        onRowClick = onOpenExercise,
-        onNewExercise = onNewExercise,
-        // Circuits and modules are made of library exercises and are edited the same way, so this
-        // is where they belong; they are not more tabs, because they are used far less often.
-        headerActions = listOf("Circuits" to onOpenCircuits, "Modules" to onOpenModules),
-        onBack = null,
+        state = state,
+        actions = LibraryActions(
+            onShowTab = viewModel::showTab,
+            onQueryChange = viewModel::setQuery,
+            onOpenExercise = onOpenExercise,
+            onEditCircuit = onEditCircuit,
+            onEditModule = onEditModule,
+            onNewWorkout = onNewWorkout,
+            onNewModule = onNewModule,
+            onScheduleExercise = viewModel::schedule,
+            onScheduleCircuit = viewModel::scheduleCircuit,
+            onScheduleModule = viewModel::scheduleModule,
+            onAskRemoveExercise = viewModel::askToRemove,
+            onConfirmRemoveExercise = viewModel::confirmRemoval,
+            onCancelRemoveExercise = viewModel::cancelRemoval,
+            onDuplicateCircuit = viewModel::duplicateCircuit,
+            onAskRemoveCircuit = viewModel::askToRemoveCircuit,
+            onConfirmRemoveCircuit = viewModel::confirmCircuitRemoval,
+            onCancelRemoveCircuit = viewModel::cancelCircuitRemoval,
+            onDuplicateModule = viewModel::duplicateModule,
+            onAskRemoveModule = viewModel::askToRemoveModule,
+            onConfirmRemoveModule = viewModel::confirmModuleRemoval,
+            onCancelRemoveModule = viewModel::cancelModuleRemoval,
+            onMessageShown = viewModel::consumeMessage,
+        ),
         bottomBar = bottomBar,
     )
+}
+
+/** Something from the library waiting for a week to be added to. */
+private sealed interface Scheduling {
+    data class Exercise(val exercise: LibraryExercise) : Scheduling
+    data class Circuit(val id: String, val name: String) : Scheduling
+    data class Module(val module: TrainingModule) : Scheduling
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
-    title: String,
-    subtitle: String?,
-    exercises: List<LibraryExercise>,
-    emptyMessage: String,
-    onRowClick: (String) -> Unit,
-    /** Creates whichever kind of thing the screen is listing; [newLabel] says which. */
-    onNewExercise: () -> Unit,
-    onBack: (() -> Unit)?,
-    onSecondaryAction: Pair<(String) -> Unit, String>? = null,
-    query: String? = null,
-    onQueryChange: (String) -> Unit = {},
-    message: String? = null,
-    onMessageShown: () -> Unit = {},
-    today: LocalDate = LocalDate.now(),
-    defaultWeekStart: LocalDate = WeekMath.weekStartOf(today),
-    onSchedule: (exerciseId: String, weekStart: LocalDate, variationId: String?) -> Unit =
-        { _, _, _ -> },
-    /** What removing the exercise under consideration would cost; null when nothing is pending. */
-    removal: ExerciseRemoval? = null,
-    onAskRemove: (LibraryExercise) -> Unit = {},
-    onConfirmRemove: () -> Unit = {},
-    onCancelRemove: () -> Unit = {},
-    /** Text buttons at the right of the header: each a label and what it does. */
-    headerActions: List<Pair<String, () -> Unit>> = emptyList(),
+    state: LibraryUiState,
+    actions: LibraryActions,
     bottomBar: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    var scheduling by remember { mutableStateOf<LibraryExercise?>(null) }
+    var scheduling by remember { mutableStateOf<Scheduling?>(null) }
 
-    LaunchedEffect(message) {
-        message?.let {
+    LaunchedEffect(state.message) {
+        state.message?.let {
             snackbarHostState.showSnackbar(it)
-            onMessageShown()
+            actions.onMessageShown()
         }
     }
 
@@ -151,39 +169,32 @@ fun LibraryScreen(
         bottomBar = bottomBar,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                title = {
-                    Column {
-                        Text(title, style = MaterialTheme.typography.titleMedium)
-                        if (subtitle != null) {
-                            Text(subtitle, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier.semantics { contentDescription = "Back" },
-                        ) {
-                            Text("‹", style = MaterialTheme.typography.headlineMedium)
-                        }
-                    }
-                },
-                actions = {
-                    headerActions.forEach { (label, action) ->
-                        TextButton(onClick = action) { Text(label) }
-                    }
-                },
-            )
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+                Column {
+                    TopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
+                        title = { Text("Library", style = MaterialTheme.typography.titleMedium) },
+                    )
+                    LibraryTabs(selected = state.tab, onSelect = actions.onShowTab)
+                }
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = onNewExercise,
-                text = { Text("New exercise") },
+                onClick = when (state.tab) {
+                    LibraryTab.WORKOUTS -> actions.onNewWorkout
+                    LibraryTab.MODULES -> actions.onNewModule
+                },
+                text = {
+                    Text(
+                        when (state.tab) {
+                            LibraryTab.WORKOUTS -> "New workout"
+                            LibraryTab.MODULES -> "New module"
+                        }
+                    )
+                },
                 icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
             )
         },
@@ -198,57 +209,169 @@ fun LibraryScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (query != null) {
-                item {
-                    CompactTextField(
-                        value = query,
-                        onValueChange = onQueryChange,
-                        label = "Search",
-                        minHeight = 48,
-                        trailingIcon = {
-                            if (query.isNotEmpty()) {
-                                TextButton(onClick = { onQueryChange("") }) { Text("Clear") }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+            item {
+                CompactTextField(
+                    value = state.query,
+                    onValueChange = actions.onQueryChange,
+                    label = "Search",
+                    minHeight = 48,
+                    trailingIcon = {
+                        if (state.query.isNotEmpty()) {
+                            TextButton(onClick = { actions.onQueryChange("") }) { Text("Clear") }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
-            if (exercises.isEmpty()) {
+            val empty = when (state.tab) {
+                LibraryTab.WORKOUTS -> state.workouts.isEmpty()
+                LibraryTab.MODULES -> state.modules.isEmpty()
+            }
+            if (empty) {
                 item {
                     Text(
-                        text = emptyMessage,
+                        text = when {
+                            state.noMatches -> "Nothing matches \"${state.query.trim()}\"."
+                            state.tab == LibraryTab.WORKOUTS ->
+                                "No workouts yet. Create an exercise or a circuit to get started."
+                            else ->
+                                "No modules yet. Create a module to plan exercises and circuits as a group."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            items(items = exercises, key = { it.id }) { exercise ->
-                LibraryRow(
-                    exercise = exercise,
-                    onClick = { onRowClick(exercise.id) },
-                    secondaryAction = onSecondaryAction,
-                    onAddToPlan = { scheduling = exercise },
-                    onRetire = { onAskRemove(exercise) },
-                )
+            when (state.tab) {
+                LibraryTab.WORKOUTS -> items(items = state.workouts, key = { it.id }) { workout ->
+                    when (workout) {
+                        is Workout.Exercise -> LibraryRow(
+                            exercise = workout.exercise,
+                            onClick = { actions.onOpenExercise(workout.exercise.id) },
+                            secondaryAction = null,
+                            onAddToPlan = { scheduling = Scheduling.Exercise(workout.exercise) },
+                            onRetire = { actions.onAskRemoveExercise(workout.exercise) },
+                        )
+
+                        is Workout.Circuit -> RoutineRow(
+                            routine = workout.routine,
+                            onClick = { actions.onEditCircuit(workout.routine.id) },
+                            onEdit = { actions.onEditCircuit(workout.routine.id) },
+                            onDuplicate = { actions.onDuplicateCircuit(workout.routine.id) },
+                            onRemove = { actions.onAskRemoveCircuit(workout.routine.id) },
+                            onAddToPlan = {
+                                scheduling = Scheduling.Circuit(workout.routine.id, workout.routine.name)
+                            },
+                        )
+                    }
+                }
+
+                LibraryTab.MODULES -> items(items = state.modules, key = { it.id }) { module ->
+                    ModuleRow(
+                        module = module,
+                        onClick = { actions.onEditModule(module.id) },
+                        onEdit = { actions.onEditModule(module.id) },
+                        onDuplicate = { actions.onDuplicateModule(module.id) },
+                        onRemove = { actions.onAskRemoveModule(module.id) },
+                        onAddToPlan = { scheduling = Scheduling.Module(module) },
+                    )
+                }
             }
         }
     }
 
-    scheduling?.let { exercise ->
-        // Unscheduled: the week is the decision, the day is the planner's job.
-        AddToPlanFlow(
-            exercise = exercise,
-            today = today,
+    // Unscheduled throughout: the week is the decision, the day is the planner's job.
+    when (val target = scheduling) {
+        is Scheduling.Exercise -> AddToPlanFlow(
+            exercise = target.exercise,
+            today = state.today,
             onSchedule = { week, variationId ->
                 scheduling = null
-                onSchedule(exercise.id, week, variationId)
+                actions.onScheduleExercise(target.exercise.id, week, variationId)
             },
             onDismiss = { scheduling = null },
         )
+
+        is Scheduling.Circuit -> WeekTargetDialog(
+            title = "Add ${target.name} to",
+            today = state.today,
+            onConfirm = { week ->
+                scheduling = null
+                actions.onScheduleCircuit(target.id, week)
+            },
+            onDismiss = { scheduling = null },
+        )
+
+        is Scheduling.Module -> WeekTargetDialog(
+            // What will be left out is said before the week is chosen, not discovered after.
+            title = "Add ${target.module.name} to" +
+                (unavailableNote(target.module)?.let { "\n$it" } ?: ""),
+            today = state.today,
+            onConfirm = { week ->
+                scheduling = null
+                actions.onScheduleModule(target.module.id, week)
+            },
+            onDismiss = { scheduling = null },
+        )
+
+        null -> Unit
     }
 
-    removal?.let { RemovalDialog(it, onConfirmRemove, onCancelRemove) }
+    state.exerciseRemoval?.let {
+        RemovalDialog(it, actions.onConfirmRemoveExercise, actions.onCancelRemoveExercise)
+    }
+
+    state.circuitRemoval?.let { removal ->
+        AlertDialog(
+            onDismissRequest = actions.onCancelRemoveCircuit,
+            title = { Text(removal.routine.name) },
+            text = {
+                Text(
+                    text = when {
+                        removal.recordedCopies > 0 ->
+                            "This has been logged ${removal.recordedCopies} " +
+                                "${if (removal.recordedCopies == 1) "time" else "times"}. " +
+                                "Removing it takes it out of this list only — every scheduled " +
+                                "copy and everything logged stays exactly as it is."
+
+                        removal.scheduledCopies > 0 ->
+                            "${removal.scheduledCopies} ${if (removal.scheduledCopies == 1) "copy is" else "copies are"} scheduled. Removing it takes " +
+                                "it out of this list only; those copies stay in their weeks."
+
+                        else -> "Nothing has been cut from this, so it goes completely."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = actions.onConfirmRemoveCircuit) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = actions.onCancelRemoveCircuit) { Text("Cancel") }
+            },
+        )
+    }
+
+    state.moduleRemoval?.let { removal ->
+        AlertDialog(
+            onDismissRequest = actions.onCancelRemoveModule,
+            title = { Text("Remove ${removal.module.name}?") },
+            text = {
+                Text(
+                    if (removal.scheduledCopies > 0) {
+                        "Remove this saved module? Modules already in your plan will stay."
+                    } else {
+                        "Remove this saved module?"
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = actions.onConfirmRemoveModule) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = actions.onCancelRemoveModule) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 /**
@@ -451,14 +574,8 @@ private val previewLibrary = listOf(
 private fun LibraryPopulatedPreview() {
     MeleteTheme {
         LibraryScreen(
-            title = "Library",
-            subtitle = null,
-            exercises = previewLibrary,
-            emptyMessage = "",
-            query = "",
-            onRowClick = {},
-            onNewExercise = {},
-            onBack = null,
+            state = LibraryUiState(workouts = previewLibrary.map(Workout::Exercise)),
+            actions = LibraryActions(),
         )
     }
 }
@@ -468,14 +585,11 @@ private fun LibraryPopulatedPreview() {
 private fun LibrarySearchPreview() {
     MeleteTheme {
         LibraryScreen(
-            title = "Library",
-            subtitle = null,
-            exercises = previewLibrary.filter { it.name.contains("ha", ignoreCase = true) },
-            emptyMessage = "",
-            query = "ha",
-            onRowClick = {},
-            onNewExercise = {},
-            onBack = null,
+            state = LibraryUiState(
+                query = "ha",
+                workouts = workoutsOf(previewLibrary, emptyList(), "ha"),
+            ),
+            actions = LibraryActions(),
         )
     }
 }
@@ -492,13 +606,14 @@ private fun LibrarySearchPreview() {
 private fun LibraryRetiredPreview() {
     MeleteTheme {
         LibraryScreen(
-            title = "Previously trained",
-            subtitle = "Removed from the library",
-            exercises = listOf(previewExercise("Pull-up", ExerciseCategory.STRENGTH_CONDITIONING, retired = true)),
-            emptyMessage = "",
-            onRowClick = {},
-            onNewExercise = {},
-            onBack = {},
+            state = LibraryUiState(
+                workouts = listOf(
+                    Workout.Exercise(
+                        previewExercise("Pull-up", ExerciseCategory.STRENGTH_CONDITIONING, retired = true)
+                    )
+                ),
+            ),
+            actions = LibraryActions(),
         )
     }
 }

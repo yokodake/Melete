@@ -10,8 +10,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.toRoute
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.core.WeekMath
-import com.yokodake.melete.data.LibraryExercise
-import com.yokodake.melete.data.Routine
 import com.yokodake.melete.data.TrainingModule
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.ui.LibraryPickerDestination
@@ -22,27 +20,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** Which kind of saved thing the picker is showing. */
-enum class PickerView(val label: String) {
-    EXERCISES("Exercises"),
-    CIRCUITS("Circuits"),
-    MODULES("Modules"),
-}
-
 data class LibraryPickerUiState(
     val targetLabel: String,
-    val view: PickerView = PickerView.EXERCISES,
-    val exercises: List<LibraryExercise> = emptyList(),
-    val circuits: List<Routine> = emptyList(),
+    val tab: LibraryTab = LibraryTab.WORKOUTS,
+    /** Exercises and circuits together, alphabetical — the same list as the library tab. */
+    val workouts: List<Workout> = emptyList(),
     val modules: List<TrainingModule> = emptyList(),
 )
 
 /**
- * The library as a picker: one place to add anything saved to a slot of the week — an exercise,
- * a circuit or a module — rather than one entry on the plus per kind, each leading to a lookalike
- * list.
+ * The library as a picker: anything saved, added to one slot of the week. The same two tabs as
+ * the library itself, so a thing is found in the same place whichever screen you start from.
  *
- * The slot is fixed by the route for the life of the screen, so switching views or detouring to
+ * The slot is fixed by the route for the life of the screen, so switching tabs or detouring to
  * create something never loses where the pick is going.
  */
 class LibraryPickerViewModel(
@@ -58,22 +48,22 @@ class LibraryPickerViewModel(
         trainingDate?.let(WeekMath::dayLabel) ?: "Unscheduled · ${WeekMath.weekLabel(weekStart)}"
 
     val uiState: StateFlow<LibraryPickerUiState> = combine(
-        // Saved state rather than a field, so the view you chose is still the one showing after a
+        // Saved state rather than a field, so the tab you chose is still the one showing after a
         // trip to an editor and back, or after the process is recreated.
-        savedStateHandle.getStateFlow(VIEW_KEY, PickerView.EXERCISES),
+        savedStateHandle.getStateFlow(TAB_KEY, LibraryTab.WORKOUTS),
         repository.observeLibrary(),
         repository.observeRoutines(),
         repository.observeModules(),
-    ) { view, exercises, circuits, modules ->
-        LibraryPickerUiState(targetLabel, view, exercises, circuits, modules)
+    ) { tab, exercises, circuits, modules ->
+        LibraryPickerUiState(targetLabel, tab, workoutsOf(exercises, circuits), modules)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = LibraryPickerUiState(targetLabel),
     )
 
-    fun showView(view: PickerView) {
-        savedStateHandle[VIEW_KEY] = view
+    fun showTab(tab: LibraryTab) {
+        savedStateHandle[TAB_KEY] = tab
     }
 
     /** Copies an exercise into the slot, cut from the default plan or from the chosen variation. */
@@ -92,7 +82,7 @@ class LibraryPickerViewModel(
         }
     }
 
-    /** Copies the module, and everything in it, into the slot. */
+    /** Copies the module, and everything in it that still exists, into the slot. */
     fun scheduleModule(moduleId: String, onScheduled: () -> Unit) {
         viewModelScope.launch {
             repository.scheduleModule(moduleId, weekStart, trainingDate)
@@ -101,7 +91,7 @@ class LibraryPickerViewModel(
     }
 
     companion object {
-        private const val VIEW_KEY = "pickerView"
+        private const val TAB_KEY = "pickerTab"
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

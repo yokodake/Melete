@@ -430,14 +430,21 @@ object TimerTransitions {
         nextRunId: String,
     ): TimerState {
         val interval = intervalOf(state) ?: return state
-        val elapsed = elapsedMs(state, nowElapsedMs)
-        val target = if (elapsed != null && elapsed > RESTART_WINDOW_MS) {
+        val target = if (previousRestarts(elapsedMs(state, nowElapsedMs))) {
             interval.stepIndex
         } else {
             interval.stepIndex - 1
         }
         return goToStep(interval, target, settings, nowElapsedMs, nextRunId)
     }
+
+    /**
+     * Whether [previous] would restart the interval rather than step back, given how long it has
+     * been running. The one rule, so the button's spoken label cannot promise the other thing.
+     * Null — a set of reps, nothing counting — always steps back.
+     */
+    fun previousRestarts(elapsedMs: Long?): Boolean =
+        elapsedMs != null && elapsedMs > RESTART_WINDOW_MS
 
     /**
      * Moves to an interval by index, clamping at the start and ending the program past the end.

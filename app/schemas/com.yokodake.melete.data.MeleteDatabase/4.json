@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 3,
-    "identityHash": "a62fece682298ad2afbe7fbd9a062cb6",
+    "version": 4,
+    "identityHash": "5be25f0e21e4c94d32f82a778855a25e",
     "entities": [
       {
         "tableName": "exercises",
@@ -524,7 +524,7 @@
       },
       {
         "tableName": "routines",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `rounds` INTEGER NOT NULL, `transitionSeconds` INTEGER NOT NULL, `roundRestSeconds` INTEGER NOT NULL, `structureVersion` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `deletedAtEpochMs` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `rounds` INTEGER NOT NULL, `transitionSeconds` INTEGER NOT NULL, `roundRestSeconds` INTEGER NOT NULL, `structureVersion` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `deletedAtEpochMs` INTEGER, `category` TEXT, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -572,6 +572,11 @@
             "fieldPath": "deletedAtEpochMs",
             "columnName": "deletedAtEpochMs",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -683,7 +688,7 @@
       },
       {
         "tableName": "circuit_instances",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `routineId` TEXT NOT NULL, `routineNameSnapshot` TEXT NOT NULL, `structureVersion` INTEGER NOT NULL, `structureSnapshotJson` TEXT NOT NULL, `weekStartEpochDay` INTEGER NOT NULL, `trainingDateEpochDay` INTEGER, `orderIndex` INTEGER NOT NULL, `rounds` INTEGER NOT NULL, `transitionSeconds` INTEGER NOT NULL, `roundRestSeconds` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `moduleInstanceId` TEXT, `modulePosition` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `routineId` TEXT NOT NULL, `routineNameSnapshot` TEXT NOT NULL, `structureVersion` INTEGER NOT NULL, `structureSnapshotJson` TEXT NOT NULL, `weekStartEpochDay` INTEGER NOT NULL, `trainingDateEpochDay` INTEGER, `orderIndex` INTEGER NOT NULL, `rounds` INTEGER NOT NULL, `transitionSeconds` INTEGER NOT NULL, `roundRestSeconds` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `moduleInstanceId` TEXT, `modulePosition` INTEGER, `categorySnapshot` TEXT, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -765,6 +770,11 @@
             "fieldPath": "modulePosition",
             "columnName": "modulePosition",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "categorySnapshot",
+            "columnName": "categorySnapshot",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -1152,7 +1162,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a62fece682298ad2afbe7fbd9a062cb6')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5be25f0e21e4c94d32f82a778855a25e')"
     ]
   }
 }
