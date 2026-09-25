@@ -3,6 +3,7 @@ package com.yokodake.melete.ui.circuit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +39,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -139,8 +142,9 @@ fun CircuitReviewScreen(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("Planned", style = MaterialTheme.typography.labelMedium)
                         Text(
-                            text = "${circuit.rounds} rounds of ${circuit.stations.size} " +
-                                "exercises, one set of each per round",
+                            text = "${circuit.rounds} ${if (circuit.rounds == 1) "round" else "rounds"} of " +
+                                "${circuit.stations.size} ${if (circuit.stations.size == 1) "exercise" else "exercises"}, " +
+                                "one set of each per round",
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(
@@ -190,7 +194,7 @@ fun CircuitReviewScreen(
 private fun timingLine(state: CircuitReviewUiState): String {
     val total = state.stations.sumOf { it.suggestedDurationSeconds }
     val parts = mutableListOf<String>()
-    if (total > 0) parts += "about ${PrescriptionSummary.duration(total)}"
+    if (total > 0) parts += "≈ ${PrescriptionSummary.duration(total)}"
     state.circuit?.transitionSeconds?.takeIf { it > 0 }?.let {
         parts += "${PrescriptionSummary.duration(it)} between exercises"
     }
@@ -225,6 +229,7 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DoneCheck(
+                    label = station.occurrence.name,
                     done = station.completed,
                     onToggle = { viewModel.toggleStation(id) },
                 )
@@ -232,7 +237,9 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = 10.dp)
-                        .clickable { viewModel.toggleExpanded(id) },
+                        .clickable(
+                            onClickLabel = "${if (station.expanded) "Collapse" else "Expand"} ${station.occurrence.name}",
+                        ) { viewModel.toggleExpanded(id) },
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -260,7 +267,9 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                         value = station.table.maxLoad,
                         onValueChange = { viewModel.setMaxLoad(id, it) },
                         decimal = true,
-                        modifier = Modifier.width(88.dp),
+                        modifier = Modifier.width(88.dp).semantics {
+                            contentDescription = "${station.occurrence.name}, max load ($unit)"
+                        },
                     )
                 }
                 Text(
@@ -268,7 +277,10 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier
                         .padding(start = 4.dp)
-                        .clickable { viewModel.toggleExpanded(id) },
+                        .clickable { viewModel.toggleExpanded(id) }
+                        .semantics {
+                            contentDescription = "${if (station.expanded) "Collapse" else "Expand"} ${station.occurrence.name}"
+                        },
                 )
             }
 
@@ -297,6 +309,7 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         DoneCheck(
+                            label = "${station.occurrence.name}, round ${row.number}",
                             done = row.done,
                             onToggle = { viewModel.toggleSet(id, row.number) },
                         )
@@ -313,7 +326,10 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                                     viewModel.setRowLoad(id, row.number, value)
                                 },
                                 decimal = true,
-                                modifier = Modifier.width(80.dp),
+                                modifier = Modifier.width(80.dp).semantics {
+                                    contentDescription = "${station.occurrence.name}, round ${row.number}, " +
+                                        "${if (station.occurrence.unilateral) "left load" else "load"} ($it)"
+                                },
                             )
                             if (station.occurrence.unilateral) {
                                 NumberField(
@@ -323,7 +339,9 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                                         viewModel.setRowLoad(id, row.number, value, right = true)
                                     },
                                     decimal = true,
-                                    modifier = Modifier.width(80.dp),
+                                    modifier = Modifier.width(80.dp).semantics {
+                                        contentDescription = "${station.occurrence.name}, round ${row.number}, right load ($it)"
+                                    },
                                 )
                             }
                         }
@@ -364,7 +382,7 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
  * it is the difference between a plan and a record.
  */
 @Composable
-private fun DoneCheck(done: Boolean, onToggle: () -> Unit) {
+private fun DoneCheck(label: String, done: Boolean, onToggle: () -> Unit) {
     val (container, content) = doneColors()
     Box(
         modifier = Modifier
@@ -378,8 +396,11 @@ private fun DoneCheck(done: Boolean, onToggle: () -> Unit) {
                 color = if (done) container else MaterialTheme.colorScheme.outline,
                 shape = CircleShape,
             )
-            .clickable(onClick = onToggle)
-            .semantics { contentDescription = if (done) "Done" else "Not done" },
+            .toggleable(value = done, role = Role.Checkbox, onValueChange = { onToggle() })
+            .semantics {
+                contentDescription = label
+                stateDescription = if (done) "Done" else "Not done"
+            },
         contentAlignment = Alignment.Center,
     ) {
         if (done) {

@@ -84,7 +84,7 @@ fun LibraryRoute(
         emptyMessage = if (state.noMatches) {
             "Nothing matches \"${state.query}\"."
         } else {
-            "No exercises yet. Everything here is yours to define — nothing is built in."
+            "No exercises yet. Create an exercise to get started."
         },
         query = state.query,
         onQueryChange = viewModel::setQuery,
@@ -267,7 +267,6 @@ private fun RemovalDialog(
 ) {
     val name = removal.exercise.name
     val copies = removal.plannedCopies
-    val sets = removal.loggedSets
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -283,17 +282,12 @@ private fun RemovalDialog(
             Text(
                 when (removal.kind) {
                     ExerciseRemoval.Kind.UNUSED ->
-                        "You have never planned or logged it, so it goes completely — " +
-                            "nothing refers to it."
+                        "Delete this exercise from your library?"
                     ExerciseRemoval.Kind.PLANNED_NEVER_LOGGED ->
-                        "You have never logged it. It goes completely, and so do the " +
-                            "$copies planned ${if (copies == 1) "copy" else "copies"} " +
-                            "still sitting in your weeks."
+                        "This will delete the exercise and its $copies planned " +
+                            "${if (copies == 1) "entry" else "entries"}."
                     ExerciseRemoval.Kind.LOGGED ->
-                        "You have logged $sets ${if (sets == 1) "set" else "sets"} of this, " +
-                            "so it is kept. It stops being offered when you plan, and " +
-                            "everything already scheduled or logged stays exactly as it is — " +
-                            "including in previous results."
+                        "Remove this exercise from your library? Existing plans and logs will stay."
                 }
             )
         },
@@ -302,13 +296,13 @@ private fun RemovalDialog(
                 Text(
                     when (removal.kind) {
                         ExerciseRemoval.Kind.UNUSED -> "Delete"
-                        ExerciseRemoval.Kind.PLANNED_NEVER_LOGGED -> "Delete it and the plans"
+                        ExerciseRemoval.Kind.PLANNED_NEVER_LOGGED -> "Delete exercise and plans"
                         ExerciseRemoval.Kind.LOGGED -> "Remove from library"
                     }
                 )
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 

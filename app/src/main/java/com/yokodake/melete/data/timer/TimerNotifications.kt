@@ -87,20 +87,17 @@ class TimerNotifications(context: Context) {
 
             else -> builder.setContentTitle(state.phaseTitleOrDefault())
         }
-        builder.addAction(0, "Cancel", actionIntent(TimerActionReceiver.ACTION_CANCEL))
+        builder.addAction(0, "Stop timer", actionIntent(TimerActionReceiver.ACTION_CANCEL))
         return builder.build()
     }
 
     fun postFinished(state: TimerState.Finished) {
         val notification = base(CHANNEL_ALERT)
-            .setContentTitle(
-                if (state.program.sets > 1) {
-                    "${state.setsCompleted} sets done"
-                } else {
-                    "${state.phase.title()} finished"
-                }
+            .setContentTitle("Timer finished")
+            .setContentText(
+                "Open Melete to review and save your log."
+                    .takeIf { state.program.circuitInstanceId != null || state.program.occurrenceId != null }
             )
-            .setContentText("Nothing has been recorded — open the logger to confirm a set.")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -205,6 +202,6 @@ internal fun formatRemaining(remainingMs: Long): String {
     return if (minutes > 0) {
         "$minutes:${seconds.toString().padStart(2, '0')}"
     } else {
-        "${seconds}s"
+        "$seconds s"
     }
 }

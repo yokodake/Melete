@@ -26,7 +26,7 @@ enum class ExerciseCategory(val label: String, val shortLabel: String = label) {
     FINGER_TRAINING("Finger training", "FNGR"),
 
     /** Strength and conditioning: lifts, pulls, core, everything off the wall. */
-    STRENGTH_CONDITIONING("Strength & Conditioning", "S&C"),
+    STRENGTH_CONDITIONING("Strength & conditioning", "S&C"),
 
     /** Flexibility and mobility. */
     FLEXIBILITY("Flexibility", "FLEX"),

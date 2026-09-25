@@ -177,8 +177,7 @@ fun LibraryPickerScreen(
                                 "No circuits yet. A circuit is an order of library exercises " +
                                     "you run round, with its own rests."
                             PickerView.MODULES ->
-                                "No modules yet. A module is a named group of exercises and " +
-                                    "circuits you plan together, like \"Fingers + mobility\"."
+                                "No modules yet. Create a module to plan exercises and circuits as a group."
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

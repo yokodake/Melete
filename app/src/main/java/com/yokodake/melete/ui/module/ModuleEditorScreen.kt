@@ -148,7 +148,7 @@ fun ModuleEditorScreen(state: ModuleEditorUiState, actions: ModuleEditorActions)
                 CompactTextField(
                     value = state.description,
                     onValueChange = actions.onDescription,
-                    label = "Purpose / description (optional)",
+                    label = "Description (optional)",
                     placeholder = "Base block finger strength, before climbing.",
                     singleLine = false,
                     minLines = 2,
@@ -219,7 +219,7 @@ fun ModuleEditorScreen(state: ModuleEditorUiState, actions: ModuleEditorActions)
             title = { Text("Add a circuit") },
             text = {
                 if (state.circuits.isEmpty()) {
-                    Text("No circuits yet. Make one from the library's Circuits list.")
+                    Text("No circuits yet.")
                 } else {
                     LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
                         items(items = state.circuits, key = { it.id }) { circuit ->
@@ -328,25 +328,37 @@ private fun EntryCard(
                 IconButton(
                     onClick = { onMove(-1) },
                     enabled = !first,
-                    modifier = Modifier.semantics { contentDescription = "Move up" },
+                    modifier = Modifier.semantics { contentDescription = "Move ${entry.name} up" },
                 ) { Text("↑") }
                 IconButton(
                     onClick = { onMove(1) },
                     enabled = !last,
-                    modifier = Modifier.semantics { contentDescription = "Move down" },
+                    modifier = Modifier.semantics { contentDescription = "Move ${entry.name} down" },
                 ) { Text("↓") }
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.semantics { contentDescription = "Remove" },
+                    modifier = Modifier.semantics { contentDescription = "Remove ${entry.name} from module" },
                 ) { Text("×", style = MaterialTheme.typography.titleLarge) }
             }
             if (entry.expanded && !entry.isCircuit) {
+                Text(
+                    text = "Changes apply to this module only",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 PrescriptionFields(
                     state = entry.form,
                     onStateChange = onForm,
                     mode = entry.mode,
                     unilateral = entry.unilateral,
                     modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            if (entry.isCircuit && entry.circuitSummary != null) {
+                Text(
+                    text = "Uses the saved circuit when added to your plan.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

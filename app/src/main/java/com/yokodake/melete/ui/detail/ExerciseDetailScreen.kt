@@ -189,25 +189,19 @@ fun ExerciseDetailScreen(
                 return@Column
             }
 
-            Section("Description")
             val description = state.description?.takeIf { it.isNotBlank() }
             val notes = state.notes?.takeIf { it.isNotBlank() }
             // Why there is no explanation, when that needs saying. A missing description with
             // variation notes underneath is not an empty section, so it gets no apology.
             val absence = when {
                 description != null -> null
-                state.isOneOff ->
-                    "An activity you typed in, so there is no library entry behind it. " +
-                        "Create one in the library if it is something you will plan again."
-
-                state.definitionMissing ->
-                    "The library entry this came from no longer exists, so there is " +
-                        "nothing left to explain it. What was planned and what was " +
-                        "logged are intact."
+                state.definitionMissing && state.occurrenceId != null ->
+                    "The library exercise is unavailable. Your plan and log are still saved."
 
                 notes != null -> null
-                else -> "No explanation written yet."
+                else -> null
             }
+            if (description != null || absence != null || notes != null) Section("Description")
             (description ?: absence)?.let {
                 Text(
                     text = it,
@@ -284,7 +278,7 @@ fun ExerciseDetailScreen(
 
             if (state.occurrenceState == OccurrenceState.SKIPPED) {
                 Text(
-                    text = "Marked skipped.",
+                    text = "Skipped",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -297,7 +291,7 @@ fun ExerciseDetailScreen(
         AlertDialog(
             onDismissRequest = onDismissPlan,
             title = {
-                Text(if (state.occurrenceId == null) "Default plan" else "Plan for this copy")
+                Text(if (state.occurrenceId == null) "Default plan" else "Edit planned exercise")
             },
             text = {
                 Column {
@@ -341,18 +335,18 @@ fun ExerciseDetailScreen(
         }
     }
 
-    state.replacePrompt?.let { running ->
+    state.replacePrompt?.let {
         AlertDialog(
             onDismissRequest = onDismissReplace,
-            title = { Text("Start a new workout?") },
+            title = { Text("Replace current timer?") },
             text = {
-                Text("The current timer will be stopped and progress will be lost.")
+                Text("This stops the current timer and starts a new one. Saved logs will stay.")
             },
             confirmButton = {
-                TextButton(onClick = onConfirmReplace) { Text("START") }
+                TextButton(onClick = onConfirmReplace) { Text("Replace timer") }
             },
             dismissButton = {
-                TextButton(onClick = onDismissReplace) { Text("CANCEL") }
+                TextButton(onClick = onDismissReplace) { Text("Cancel") }
             },
         )
     }

@@ -135,8 +135,7 @@ fun ExerciseEditorScreen(
             CompactTextField(
                 value = state.description,
                 onValueChange = onDescriptionChange,
-                label = "What it is, and how to do it",
-                placeholder = "The explanation you want to read before a set.",
+                label = "Instructions (optional)",
                 singleLine = false,
                 minLines = 3,
                 minHeight = 48,
@@ -149,7 +148,7 @@ fun ExerciseEditorScreen(
                 options = ExerciseMode.entries,
                 optionLabel = ExerciseMode::label,
                 onSelect = onModeChange,
-                label = "How is a set measured?",
+                label = "Exercise type",
                 modifier = Modifier.fillMaxWidth(),
             )
             // Sides and a load belong to sets. An activity has neither, so it is not asked — and
@@ -171,7 +170,7 @@ fun ExerciseEditorScreen(
                 CompactTextField(
                     value = state.unit,
                     onValueChange = onUnitChange,
-                    label = "Unit (empty for none)",
+                    label = "Unit (optional)",
                     placeholder = "kg",
                     supportingText = "",
                     minHeight = 48,
@@ -183,14 +182,14 @@ fun ExerciseEditorScreen(
                         options = MeasurementMeaning.entries,
                         optionLabel = MeasurementMeaning::label,
                         onSelect = onMeaningChange,
-                        label = "What the number means",
+                        label = "Load type",
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
 
             HorizontalDivider()
-            Text("Default prescription", style = MaterialTheme.typography.titleSmall)
+            Text("Default plan", style = MaterialTheme.typography.titleSmall)
             PrescriptionFields(
                 state = state.prescription,
                 onStateChange = onPrescriptionChange,
@@ -201,7 +200,7 @@ fun ExerciseEditorScreen(
             CompactTextField(
                 value = state.notes,
                 onValueChange = onNotesChange,
-                label = "Variation notes (optional)",
+                label = "Exercise notes (optional)",
                 placeholder = "Grip, board, tempo, shoes…",
                 singleLine = false,
                 minLines = 2,
