@@ -171,7 +171,7 @@ fun PrescriptionFields(
         }
 
         HorizontalDivider()
-        Text("Target RPE", style = MaterialTheme.typography.bodyMedium)
+        Text("Target effort", style = MaterialTheme.typography.bodyMedium)
         EffortSelector(
             modifier = Modifier.fillMaxWidth(),
             selected = state.effort,
@@ -211,7 +211,7 @@ private fun SetStructureFields(
             )
 
             ExerciseMode.DURATION -> NumberField(
-                label = "Target (s)",
+                label = "Set duration (s)",
                 value = state.targetDurationSeconds,
                 onValueChange = { onStateChange(state.copy(targetDurationSeconds = it)) },
                 modifier = Modifier.weight(1f),
@@ -224,14 +224,14 @@ private fun SetStructureFields(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         NumberField(
-            label = "Rest (s)",
+            label = "Between sets (s)",
             value = state.restSeconds,
             onValueChange = { onStateChange(state.copy(restSeconds = it)) },
             modifier = Modifier.weight(1f),
         )
         if (unilateral) {
             NumberField(
-                label = "Side switch",
+                label = "Switch sides (s)",
                 value = state.sideSwitchSeconds,
                 onValueChange = { onStateChange(state.copy(sideSwitchSeconds = it)) },
                 placeholder = TimerProgram.DEFAULT_SIDE_SWITCH_SECONDS.toString(),
@@ -247,7 +247,7 @@ private fun SetStructureFields(
 
     HorizontalDivider()
     NumberField(
-        label = "Planned minutes",
+        label = "Total time (min)",
         value = state.plannedDurationMinutes,
         onValueChange = { onStateChange(state.copy(plannedDurationMinutes = it)) },
         // The estimate, shown where the answer would go. Typing overrules it; clearing the
@@ -257,7 +257,7 @@ private fun SetStructureFields(
     )
     Text(
         text = estimate
-            ?.let { "${PrescriptionSummary.duration(it)} estimated." }
+            ?.let { "≈ ${PrescriptionSummary.duration(it)} total" }
             ?: "",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -273,16 +273,16 @@ private fun StationCard(
                 IconButton(
                     onClick = { onMove(-1) },
                     enabled = index > 0,
-                    modifier = Modifier.semantics { contentDescription = "Move up" },
+                    modifier = Modifier.semantics { contentDescription = "Move ${station.name} up" },
                 ) { Text("↑") }
                 IconButton(
                     onClick = { onMove(1) },
                     enabled = !last,
-                    modifier = Modifier.semantics { contentDescription = "Move down" },
+                    modifier = Modifier.semantics { contentDescription = "Move ${station.name} down" },
                 ) { Text("↓") }
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.semantics { contentDescription = "Remove" },
+                    modifier = Modifier.semantics { contentDescription = "Remove ${station.name} from circuit" },
                 ) { Text("×", style = MaterialTheme.typography.titleLarge) }
             }
             if (station.expanded) {
@@ -311,7 +311,7 @@ private fun stationLine(station: StationDraft): String {
     }
     if (payload.repeater == null) {
         payload.targetDurationSeconds?.let { parts += PrescriptionSummary.duration(it) }
-        payload.targetReps?.let { parts += "$it reps" }
+        payload.targetReps?.let { parts += "$it ${if (it == 1) "rep" else "reps"}" }
     }
     if (station.unilateral) parts += "both sides"
     if (parts.isEmpty()) parts += "one set per round"

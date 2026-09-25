@@ -211,7 +211,6 @@ fun TimerScreen(
                 )
 
                 is TimerState.Interrupted -> InterruptedCard(
-                    phase = current.phase,
                     onDismiss = viewModel::dismiss,
                 )
 
@@ -268,7 +267,7 @@ private fun CueMenu(state: TimerUiState, onCues: (CueSettings) -> Unit) {
         CueItem("3 – 2 – 1", state.cues.finalCountdown) {
             onCues(state.cues.copy(finalCountdown = it))
         }
-        CueItem("¼ ½ ¾ of a work set", state.cues.quarterCues) {
+        CueItem("Quarter marks during timed work", state.cues.quarterCues) {
             onCues(state.cues.copy(quarterCues = it))
         }
         Text(
@@ -377,7 +376,7 @@ private fun ActiveCountdown(
         onPrimary = if (state.isRunning) onPause else onResume,
         onNext = onNext,
     )
-    OutlinedButton(onClick = onCancel) { Text("Cancel") }
+    OutlinedButton(onClick = onCancel) { Text("Stop timer") }
 }
 
 /**
@@ -478,7 +477,7 @@ private fun AwaitingSet(
         onPrimary = onNext,
         onNext = onNext,
     )
-    OutlinedButton(onClick = onCancel) { Text("Cancel") }
+    OutlinedButton(onClick = onCancel) { Text("Stop timer") }
 }
 
 @Composable
@@ -499,34 +498,29 @@ private fun FinishedCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = if (state.program.sets > 1) {
-                    val unit = if (state.program.isCircuit) "rounds" else "sets"
-                    "${state.setsCompleted} $unit done"
-                } else if (state.phase == TimerPhase.WORK) {
-                    "Work finished"
-                } else {
-                    "Rest finished"
-                },
+                text = "Timer finished",
                 style = MaterialTheme.typography.headlineSmall,
             )
             state.program.label?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium)
             }
-            Text(
-                text = "Nothing was recorded here. Only you can say the work happened.",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-            )
+            if (state.program.circuitInstanceId != null || state.program.occurrenceId != null) {
+                Text(
+                    text = "Review and save your log.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onDismiss) { Text("OK") }
+                OutlinedButton(onClick = onDismiss) { Text("Close") }
                 // Offered only when the countdown came from planned work; a timer built on this
                 // screen has nothing to open. A circuit opens its review, which is where all of
                 // its exercises are confirmed at once.
                 val circuitId = state.program.circuitInstanceId
                 when {
-                    circuitId != null -> Button(onClick = { onReview(circuitId) }) { Text("Review") }
+                    circuitId != null -> Button(onClick = { onReview(circuitId) }) { Text("Log circuit") }
                     state.program.occurrenceId != null ->
-                        Button(onClick = { onLog(state.program.occurrenceId) }) { Text("Log") }
+                        Button(onClick = { onLog(state.program.occurrenceId) }) { Text("Log exercise") }
                 }
             }
         }
@@ -534,7 +528,7 @@ private fun FinishedCard(
 }
 
 @Composable
-private fun InterruptedCard(phase: TimerPhase, onDismiss: () -> Unit) {
+private fun InterruptedCard(onDismiss: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -550,8 +544,7 @@ private fun InterruptedCard(phase: TimerPhase, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.headlineSmall,
             )
             Text(
-                text = "The phone restarted while a ${phase.name.lowercase()} countdown was " +
-                    "running, so its remaining time is unknown. Start it again if you need it.",
+                text = "Your phone restarted. Start a new timer to continue.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
@@ -620,7 +613,7 @@ private fun IdleControls(
                 when (state.mode) {
                     TimerCreateMode.TIMED -> {
                         NumberField("min", state.work.minutes, onWorkMinutes, Modifier.weight(1f))
-                        NumberField("sec", state.work.seconds, onWorkSeconds, Modifier.weight(1f))
+                        NumberField("s", state.work.seconds, onWorkSeconds, Modifier.weight(1f))
                     }
 
                     // Untimed by nature, so the row says why rather than standing empty.
@@ -643,16 +636,16 @@ private fun IdleControls(
 
             FieldRow("Rest") {
                 NumberField("min", state.rest.minutes, onRestMinutes, Modifier.weight(1f))
-                NumberField("sec", state.rest.seconds, onRestSeconds, Modifier.weight(1f))
+                NumberField("s", state.rest.seconds, onRestSeconds, Modifier.weight(1f))
             }
 
-            FieldRow("Sets") {
+            FieldRow(if (state.unilateral) "Sets per side" else "Sets") {
                 NumberField(null, state.setsText, onSets, Modifier.weight(1f))
                 // The gutter is held whether or not the switch is shown, so turning unilateral on
                 // widens nothing and moves nothing.
                 if (state.unilateral) {
                     NumberField(
-                        "switch",
+                        "Switch sides (s)",
                         state.sideSwitchText,
                         onSideSwitch,
                         Modifier.weight(1f),
@@ -755,7 +748,7 @@ private fun DurationRow(
         )
         Text(":", style = MaterialTheme.typography.titleLarge)
         NumberField(
-            label = "sec",
+            label = "s",
             value = value.seconds,
             onValueChange = onSeconds,
             modifier = Modifier.width(96.dp),
@@ -830,7 +823,7 @@ private fun summarise(state: TimerUiState): String {
 private fun cueExplanation(state: TimerUiState): String {
     val notes = mutableListOf<String>()
     if (state.cues.thirtySecondWarning && !state.thirtySecondWarningApplies) {
-        notes += "too short for a 30s warning"
+        notes += "too short for a 30 s warning"
     }
     if (state.cues.quarterCues && !state.quarterCuesApply) {
         notes += if (state.shownPhase != TimerPhase.WORK) {
@@ -865,7 +858,7 @@ internal fun formatClock(millis: Long): String {
  */
 private fun TimerProgram.workLabel(unknownReps: String = "a set"): String = when (work) {
     // A rep count is optional even for a reps program: one built on this screen has no number.
-    WorkKind.REPS -> workReps?.let { "$it reps" } ?: unknownReps
+    WorkKind.REPS -> workReps?.let { "$it ${if (it == 1) "rep" else "reps"}" } ?: unknownReps
     WorkKind.TIMED -> PrescriptionSummary.duration(workSeconds)
     WorkKind.NONE -> PrescriptionSummary.duration(restSeconds)
 }
@@ -887,7 +880,7 @@ private fun nextUp(state: TimerUiState): String? {
     } ?: return null
     val entry = program.entries.getOrNull(next.entryIndex)
     return when {
-        next.untimed -> entry?.workReps?.let { "$it reps" } ?: "a set"
+        next.untimed -> entry?.workReps?.let { "$it ${if (it == 1) "rep" else "reps"}" } ?: "a set"
         next.phase == TimerPhase.WORK -> buildString {
             append(PrescriptionSummary.duration(next.seconds))
             // In a circuit the interesting thing about what comes next is which exercise it is.

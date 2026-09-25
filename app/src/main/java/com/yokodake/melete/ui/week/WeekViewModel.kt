@@ -77,7 +77,7 @@ class WeekViewModel(
     fun removeOccurrence(occurrenceId: String) {
         viewModelScope.launch {
             if (!repository.deleteOccurrenceIfEmpty(occurrenceId)) {
-                _message.value = "Sets are recorded for this. Delete them in the logger first."
+                _message.value = "This entry has a log and can’t be removed without deleting it."
             }
         }
     }
@@ -98,7 +98,7 @@ class WeekViewModel(
     fun deleteOccurrenceAndLog(occurrenceId: String, sets: Int) {
         viewModelScope.launch {
             repository.deleteOccurrenceAndLog(occurrenceId)
-            _message.value = "Removed, along with $sets recorded set${if (sets == 1) "" else "s"}"
+            _message.value = "Removed, along with $sets logged set${if (sets == 1) "" else "s"}"
         }
     }
 
@@ -113,7 +113,7 @@ class WeekViewModel(
         viewModelScope.launch {
             val moved = repository.moveOccurrence(occurrenceId, weekStart, trainingDate)
             _message.value = when {
-                !moved -> "That has been trained, so it needs a day"
+                !moved -> "Logged training needs a date."
                 trainingDate == null -> "Moved to unscheduled"
                 else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
             }
@@ -124,7 +124,7 @@ class WeekViewModel(
     fun duplicateOccurrence(occurrenceId: String) {
         viewModelScope.launch {
             repository.duplicateOccurrence(occurrenceId)
-            _message.value = "Duplicated into unscheduled"
+            _message.value = "Copy added to Unscheduled"
         }
     }
 
@@ -171,7 +171,7 @@ class WeekViewModel(
         viewModelScope.launch {
             val moved = repository.moveCircuit(circuitId, weekStart, trainingDate)
             _message.value = when {
-                !moved -> "That has been trained, so it needs a day"
+                !moved -> "Logged training needs a date."
                 trainingDate == null -> "Moved to unscheduled"
                 else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
             }
@@ -185,7 +185,7 @@ class WeekViewModel(
     fun removeCircuit(circuitId: String) {
         viewModelScope.launch {
             if (!repository.deleteCircuitIfEmpty(circuitId)) {
-                _message.value = "Work is recorded in this circuit. Delete it with its log instead."
+                _message.value = "This circuit has logs. Delete the plan and logs to remove it."
             }
         }
     }
@@ -194,7 +194,7 @@ class WeekViewModel(
         viewModelScope.launch {
             repository.deleteCircuitAndLogs(circuitId)
             _message.value =
-                "Circuit removed, along with $recorded recorded exercise" +
+                "Circuit removed, including logs for $recorded exercise" +
                     if (recorded == 1) "" else "s"
         }
     }
@@ -206,7 +206,7 @@ class WeekViewModel(
         viewModelScope.launch {
             val moved = repository.moveModule(moduleInstanceId, weekStart, trainingDate)
             _message.value = when {
-                !moved -> "That has been trained, so it needs a day"
+                !moved -> "Logged training needs a date."
                 trainingDate == null -> "Moved to unscheduled"
                 else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
             }
@@ -236,7 +236,7 @@ class WeekViewModel(
     fun removeModule(moduleInstanceId: String) {
         viewModelScope.launch {
             if (!repository.removeModuleIfEmpty(moduleInstanceId)) {
-                _message.value = "Work is recorded in this module. Delete it with its log instead."
+                _message.value = "This module has logs. Delete the plan and logs to remove it."
             }
         }
     }
@@ -245,7 +245,7 @@ class WeekViewModel(
         viewModelScope.launch {
             repository.deleteModuleAndLogs(moduleInstanceId)
             _message.value =
-                "Module removed, along with $recorded recorded exercise" +
+                "Module removed, including logs for $recorded exercise" +
                     if (recorded == 1) "" else "s"
         }
     }

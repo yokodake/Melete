@@ -57,7 +57,7 @@ fun VariationChoiceDialog(
     exercise: LibraryExercise,
     onChoose: (variationId: String?) -> Unit,
     onDismiss: () -> Unit,
-    title: String = "Which plan?",
+    title: String = "Choose a plan for ${exercise.name}",
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -132,7 +132,7 @@ fun AddToPlanFlow(
     when (val pick = chosen) {
         null -> VariationChoiceDialog(
             exercise = exercise,
-            title = "Add ${exercise.name} with which plan?",
+            title = "Choose a plan for ${exercise.name}",
             onChoose = { chosen = PlanPick(it) },
             onDismiss = onDismiss,
         )
@@ -189,7 +189,7 @@ fun VariationEditorDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (state.variationId == null) "New variation" else "Variation") },
+        title = { Text(if (state.variationId == null) "New variation" else "Edit variation") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -201,7 +201,7 @@ fun VariationEditorDialog(
                     onValueChange = { onChange(state.copy(tag = VariationTag.normalise(it), error = null)) },
                     label = "Tag",
                     placeholder = "PWR",
-                    supportingText = state.error ?: "Up to 4 capitals or digits",
+                    supportingText = state.error ?: "1–4 letters or digits",
                     minHeight = 48,
                     modifier = Modifier.fillMaxWidth(0.5f),
                 )
@@ -214,7 +214,7 @@ fun VariationEditorDialog(
                 CompactTextField(
                     value = state.notes,
                     onValueChange = { onChange(state.copy(notes = it)) },
-                    label = "How this variation is done (optional)",
+                    label = "Instructions (optional)",
                     placeholder = "First 3 reps at 40% of 5RM, fast; then RIR 1–2 for the last 3.",
                     singleLine = false,
                     minLines = 3,

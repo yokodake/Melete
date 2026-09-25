@@ -157,7 +157,8 @@ fun CircuitDetailScreen(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "${circuit.rounds} rounds of ${state.stations.size} exercises",
+                        text = "${circuit.rounds} ${if (circuit.rounds == 1) "round" else "rounds"} of " +
+                            "${state.stations.size} ${if (state.stations.size == 1) "exercise" else "exercises"}",
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Text(
@@ -220,7 +221,7 @@ fun CircuitDetailScreen(
                 Section("Recorded")
                 Text(
                     text = if (state.completed) {
-                        "All ${state.stations.size} exercises are logged. Each counts once, " +
+                        "${state.stations.size} ${if (state.stations.size == 1) "exercise is" else "exercises are"} logged. Each counts once, " +
                             "however many rounds it took."
                     } else {
                         "${state.recorded} of ${state.stations.size} exercises are logged."
@@ -231,14 +232,14 @@ fun CircuitDetailScreen(
         }
     }
 
-    state.replacePrompt?.let { label ->
+    state.replacePrompt?.let {
         AlertDialog(
             onDismissRequest = onDismissReplace,
-            title = { Text("Another timer is running") },
-            text = { Text("Starting this circuit calls off $label. Nothing recorded is affected.") },
-            confirmButton = { TextButton(onClick = onConfirmReplace) { Text("Start anyway") } },
+            title = { Text("Replace current timer?") },
+            text = { Text("This stops the current timer and starts a new one. Saved logs will stay.") },
+            confirmButton = { TextButton(onClick = onConfirmReplace) { Text("Replace timer") } },
             dismissButton = {
-                TextButton(onClick = onDismissReplace) { Text("Keep the current one") }
+                TextButton(onClick = onDismissReplace) { Text("Cancel") }
             },
         )
     }

@@ -326,12 +326,8 @@ fun WeekScreen(
     planning?.let { action ->
         val occurrence = action.occurrence
         PlanTargetDialog(
-            title = if (action.loggedSets > 0) {
-                "Move ${occurrence.name} and its ${action.loggedSets} logged " +
-                    "${if (action.loggedSets == 1) "set" else "sets"} to"
-            } else {
-                "Move ${occurrence.name} to"
-            },
+            title = "Move ${occurrence.name}",
+            supportingText = "Its logs will move to the selected date.".takeIf { action.loggedSets > 0 },
             initial = PlanTarget(state.weekStart, occurrence.trainingDate),
             confirmLabel = "Move",
             today = state.today,
@@ -375,12 +371,8 @@ fun WeekScreen(
 
     movingCircuit?.let { item ->
         PlanTargetDialog(
-            title = if (item.recordedStations > 0) {
-                "Move ${item.circuit.name} and its ${item.recordedStations} recorded " +
-                    "${if (item.recordedStations == 1) "exercise" else "exercises"} to"
-            } else {
-                "Move ${item.circuit.name} to"
-            },
+            title = "Move ${item.circuit.name}",
+            supportingText = "Its logs will move to the selected date.".takeIf { item.recordedStations > 0 },
             initial = PlanTarget(state.weekStart, item.circuit.trainingDate),
             confirmLabel = "Move",
             today = state.today,
@@ -395,12 +387,8 @@ fun WeekScreen(
 
     movingModule?.let { item ->
         PlanTargetDialog(
-            title = if (item.recordedExercises > 0) {
-                "Move ${item.module.name} and its ${item.recordedExercises} recorded " +
-                    "${if (item.recordedExercises == 1) "exercise" else "exercises"} to"
-            } else {
-                "Move ${item.module.name} to"
-            },
+            title = "Move ${item.module.name}",
+            supportingText = "Its logs will move to the selected date.".takeIf { item.recordedExercises > 0 },
             initial = PlanTarget(state.weekStart, item.module.trainingDate),
             confirmLabel = "Move",
             today = state.today,
@@ -421,11 +409,12 @@ fun WeekScreen(
             text = {
                 Text(
                     if (recorded > 0) {
-                        "$recorded of its exercises have been recorded. Removing the module " +
-                            "would destroy that too. Ungrouping keeps everything."
+                        "This will remove ${item.module.name} and its exercises from this week, " +
+                            "including logs for $recorded ${if (recorded == 1) "exercise" else "exercises"}. " +
+                            "To keep the exercises and logs, choose Ungroup."
                     } else {
-                        "Nothing has been recorded here, so removing it loses only the plan. " +
-                            "To keep the exercises and lose only the group, ungroup it instead."
+                        "Remove ${item.module.name} from this week? " +
+                            "This also removes its exercises and circuits. Choose Ungroup to keep them."
                     }
                 )
             },
@@ -436,7 +425,7 @@ fun WeekScreen(
                         onDeleteModuleWithLog(item.module.id, recorded)
                     }) {
                         Text(
-                            text = "Delete it and the $recorded recorded",
+                            text = "Delete plan and logs",
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -444,10 +433,10 @@ fun WeekScreen(
                     TextButton(onClick = {
                         removingModule = null
                         onRemoveModule(item.module.id)
-                    }) { Text("Remove from the week") }
+                    }) { Text("Remove from week") }
                 }
             },
-            dismissButton = { TextButton(onClick = { removingModule = null }) { Text("Keep it") } },
+            dismissButton = { TextButton(onClick = { removingModule = null }) { Text("Cancel") } },
         )
     }
 
@@ -498,17 +487,15 @@ private fun RemoveDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (loggedSets == 0) "Remove ${occurrence.name}?" else "This has been trained")
+            Text(if (loggedSets == 0) "Remove ${occurrence.name}?" else "Delete ${occurrence.name} and its log?")
         },
         text = {
             Text(
                 if (loggedSets == 0) {
-                    "It leaves the plan. Nothing has been logged against it, so nothing is lost."
+                    "Remove ${occurrence.name} from this week?"
                 } else {
-                    "$loggedSets recorded set${if (loggedSets == 1) "" else "s"} " +
-                        "belong${if (loggedSets == 1) "s" else ""} to this. Removing it from the " +
-                        "plan would take them with it, because they are filed under this " +
-                        "placement. Keeping it costs nothing."
+                    "This will delete ${occurrence.name} from your plan and its " +
+                        "$loggedSets logged ${if (loggedSets == 1) "set" else "sets"}."
                 }
             )
         },
@@ -518,13 +505,13 @@ private fun RemoveDialog(
             } else {
                 TextButton(onClick = onDeleteWithLog) {
                     Text(
-                        text = "Delete it and $loggedSets set${if (loggedSets == 1) "" else "s"}",
+                        text = "Delete plan and log",
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
@@ -560,7 +547,7 @@ private fun AddButton(
                 },
             )
             DropdownMenuItem(
-                text = { Text("Other activity") },
+                text = { Text("Add activity") },
                 onClick = {
                     expanded = false
                     onAddActivity()
@@ -771,7 +758,7 @@ private fun OccurrenceCard(
             }
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Remove workout") },
+                text = { Text("Remove from week") },
                 onClick = { menuExpanded = false; onRemove() },
             )
         }
@@ -861,7 +848,7 @@ private fun CircuitCard(
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
-                text = { Text("Move") },
+                text = { Text("Move to…") },
                 onClick = {
                     menuOpen = false
                     onMove()
@@ -877,7 +864,7 @@ private fun CircuitCard(
                 )
             }
             DropdownMenuItem(
-                text = { Text("Remove from the week") },
+                text = { Text("Remove from week") },
                 onClick = {
                     menuOpen = false
                     onRemove()
@@ -933,7 +920,7 @@ private fun ModuleCard(
                     ) { Text("⋮", style = MaterialTheme.typography.titleMedium) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("Move") },
+                            text = { Text("Move to…") },
                             onClick = { menuOpen = false; onMove() },
                         )
                         DropdownMenuItem(
@@ -942,14 +929,14 @@ private fun ModuleCard(
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text("Remove from the week") },
+                            text = { Text("Remove from week") },
                             onClick = { menuOpen = false; onRemove() },
                         )
                     }
                 }
             }
             if (item.members.isEmpty()) {
-                Hint("Empty: everything in it has been moved out.")
+                Hint("No items in this module.")
             }
             item.members.forEach { member(it) }
         }
@@ -959,15 +946,15 @@ private fun ModuleCard(
 /** The shape of a circuit in one line: how many times round, and what falls between. */
 private fun circuitSummary(item: WeekItem.Circuit): String {
     val parts = mutableListOf<String>()
-    parts += "${item.circuit.rounds} × ${item.stations.size} exercises"
+    parts += "${item.circuit.rounds} × ${item.stations.size} ${if (item.stations.size == 1) "exercise" else "exercises"}"
     if (item.circuit.transitionSeconds > 0) {
-        parts += "${PrescriptionSummary.duration(item.circuit.transitionSeconds)} between"
+        parts += "${PrescriptionSummary.duration(item.circuit.transitionSeconds)} between exercises"
     }
     if (item.circuit.roundRestSeconds > 0) {
-        parts += "${PrescriptionSummary.duration(item.circuit.roundRestSeconds)} per round"
+        parts += "${PrescriptionSummary.duration(item.circuit.roundRestSeconds)} between rounds"
     }
     if (item.recordedStations in 1 until item.stations.size) {
-        parts += "${item.recordedStations} of ${item.stations.size} recorded"
+        parts += "${item.recordedStations} of ${item.stations.size} logged"
     }
     return parts.joinToString(" · ")
 }
@@ -989,25 +976,25 @@ private fun ActivityDialog(
     var minutes by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Other activity") },
+        title = { Text("Add activity") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = date?.let { "On ${WeekMath.dayLabel(it)}." }
-                        ?: "Waiting in this week, with no date yet.",
+                        ?: "Unscheduled this week",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 CompactTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = "What was it",
+                    label = "Activity",
                     placeholder = "Outdoor bouldering",
                     minHeight = 48,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 NumberField(
-                    label = "Minutes (optional)",
+                    label = "Planned minutes (optional)",
                     value = minutes,
                     onValueChange = { minutes = it },
                     modifier = Modifier.fillMaxWidth(0.6f),
@@ -1045,23 +1032,23 @@ private fun CircuitRemoveDialog(
         text = {
             Text(
                 text = if (recorded > 0) {
-                    "$recorded of its ${item.stations.size} exercises have been recorded. " +
-                        "Removing the circuit would destroy that too."
+                    "This will remove ${item.circuit.name} and its exercises from this week, " +
+                        "including logs for $recorded ${if (recorded == 1) "exercise" else "exercises"}."
                 } else {
-                    "Nothing has been recorded here, so removing it loses only the plan."
+                    "Remove ${item.circuit.name} from this week?"
                 },
             )
         },
         confirmButton = {
             if (recorded > 0) {
                 TextButton(onClick = onDeleteWithLog) {
-                    Text("Delete it and the $recorded recorded")
+                    Text("Delete plan and logs")
                 }
             } else {
-                TextButton(onClick = onRemovePlan) { Text("Remove from the week") }
+                TextButton(onClick = onRemovePlan) { Text("Remove from week") }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep it") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 /** Flattened list rows, so that "scroll near today" is a plain list index. */
@@ -1095,7 +1082,7 @@ private fun WeekUiState.toRows(): List<WeekRow> = buildList {
         )
     )
     if (unscheduled.isEmpty()) {
-        add(WeekRow.Hint("hint-unscheduled", "Nothing waiting without a date."))
+        add(WeekRow.Hint("hint-unscheduled", "Nothing unscheduled."))
     } else {
         unscheduled.forEach { add(WeekRow.Item(it)) }
     }

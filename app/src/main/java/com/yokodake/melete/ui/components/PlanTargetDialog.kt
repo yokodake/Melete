@@ -59,6 +59,7 @@ fun PlanTargetDialog(
      * the truth.
      */
     allowUnscheduled: Boolean = true,
+    supportingText: String? = null,
 ) {
     var weekStart by remember { mutableStateOf(WeekMath.weekStartOf(initial.weekStart)) }
     var trainingDate by remember { mutableStateOf(initial.trainingDate) }
@@ -68,6 +69,13 @@ fun PlanTargetDialog(
         title = { Text(title) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                supportingText?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,

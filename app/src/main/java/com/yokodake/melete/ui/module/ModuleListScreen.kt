@@ -127,9 +127,7 @@ fun ModuleListScreen(
             if (state.modules.isEmpty() && !state.loading) {
                 item {
                     Text(
-                        text = "No modules yet. A module is a named group of exercises and " +
-                            "circuits you plan together — the exercises themselves stay in the " +
-                            "library.",
+                        text = "No modules yet. Create a module to plan exercises and circuits as a group.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -150,19 +148,18 @@ fun ModuleListScreen(
     state.removal?.let { removal ->
         AlertDialog(
             onDismissRequest = onCancelRemove,
-            title = { Text(removal.module.name) },
+            title = { Text("Remove ${removal.module.name}?") },
             text = {
                 Text(
                     if (removal.scheduledCopies > 0) {
-                        "${removal.scheduledCopies} copies are scheduled. Removing it takes it " +
-                            "out of this list only; those copies stay in their weeks."
+                        "Remove this saved module? Modules already in your plan will stay."
                     } else {
-                        "Nothing has been scheduled from this, so it goes completely."
+                        "Remove this saved module?"
                     }
                 )
             },
             confirmButton = { TextButton(onClick = onConfirmRemove) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = onCancelRemove) { Text("Keep it") } },
+            dismissButton = { TextButton(onClick = onCancelRemove) { Text("Cancel") } },
         )
     }
 }
@@ -209,7 +206,7 @@ internal fun ModuleRow(
                     }
                 }
                 Text(
-                    text = module.entries.joinToString(" · ") { it.name }.ifEmpty { "empty" },
+                    text = module.entries.joinToString(" · ") { it.name }.ifEmpty { "No exercises or circuits" },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

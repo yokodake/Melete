@@ -103,31 +103,15 @@ data class ExerciseDetailUiState(
      * different words.
      */
     val logButtonLabel: String
-        get() = if (occurrenceState == OccurrenceState.COMPLETED) "Update log" else "Log the workout"
+        get() = when {
+            occurrenceState == OccurrenceState.COMPLETED -> "Update log"
+            mode == ExerciseMode.ACTIVITY -> "Log activity"
+            else -> "Log exercise"
+        }
 
     /** What the start button offers, spelled out so pressing it holds no surprise. */
     val timerButtonLabel: String
-        get() {
-            val program = timerProgram ?: return "Start the timer"
-            val repeater = program.entry.repeater
-            return when {
-                program.work == WorkKind.NONE ->
-                    "Start ${PrescriptionSummary.duration(program.restSeconds)} rest"
-
-                // A repeater set is a series, so saying its total length would be a different
-                // promise from the one the timer is about to keep.
-                repeater != null -> "Start ${program.sets} × ${repeater.repsPerSet} × " +
-                    PrescriptionSummary.duration(repeater.workSecondsPerRep)
-
-                program.sets == 1 && program.work == WorkKind.TIMED ->
-                    "Start ${PrescriptionSummary.duration(program.workSeconds)}"
-
-                program.work == WorkKind.REPS -> "Start ${program.sets} sets"
-
-                else ->
-                    "Start ${program.sets} × ${PrescriptionSummary.duration(program.workSeconds)}"
-            }
-        }
+        get() = "Start timer"
 
     /** The whole sequence in one line, so both sides and every pulse are accounted for. */
     val timerShapeLine: String?
@@ -135,7 +119,7 @@ data class ExerciseDetailUiState(
             val program = timerProgram ?: return null
             val parts = buildList {
                 plannedDurationSeconds?.let {
-                    add("~ ${PrescriptionSummary.duration(it)} total")
+                    add("≈ ${PrescriptionSummary.duration(it)} total")
                 }
             }
             return parts.takeIf { it.isNotEmpty() }?.joinToString(" \u00b7 ")
@@ -403,7 +387,7 @@ class ExerciseDetailViewModel(
                         variationEditor = editor.copy(error = "${editor.tag} is already used here"),
                     )
                     VariationSave.TAG_INVALID -> it.copy(
-                        variationEditor = editor.copy(error = "Up to 4 capitals or digits"),
+                        variationEditor = editor.copy(error = "1–4 letters or digits"),
                     )
                 }
             }

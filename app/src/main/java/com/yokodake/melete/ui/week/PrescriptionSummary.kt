@@ -40,8 +40,8 @@ object PrescriptionSummary {
         unilateral: Boolean,
         unreadable: Boolean,
     ): String {
-        if (unreadable) return "Prescription could not be read"
-        if (prescription == null) return "No prescription"
+        if (unreadable) return "Couldn’t load this plan"
+        if (prescription == null) return "No plan set"
         val parts = mutableListOf<String>()
         parts += volume(prescription, mode, unilateral)
         prescription.measurement?.let { parts += measurement(it) }
@@ -75,7 +75,7 @@ object PrescriptionSummary {
         if (mode == ExerciseMode.ACTIVITY) return target ?: "Duration not set"
         if (mode == ExerciseMode.REPEATERS && repeater == null) return "Repeaters not set up"
         val base = if (target == null) {
-            "${prescription.sets} sets"
+            "${prescription.sets} ${if (prescription.sets == 1) "set" else "sets"}"
         } else {
             "${prescription.sets} × $target"
         }

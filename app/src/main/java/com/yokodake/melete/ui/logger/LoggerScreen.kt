@@ -1,6 +1,6 @@
 package com.yokodake.melete.ui.logger
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -60,7 +60,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -295,14 +297,9 @@ fun LoggerScreen(
     state.prescriptionEditor?.let { form ->
         AlertDialog(
             onDismissRequest = viewModel::dismissPrescriptionEditor,
-            title = { Text("Plan for this copy") },
+            title = { Text("Edit planned exercise") },
             text = {
                 Column {
-                    Text(
-                        text = "Changes stay in this week. The library default is untouched.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     PrescriptionFields(
                         state = form,
                         onStateChange = viewModel::updatePrescriptionEditor,
@@ -406,7 +403,7 @@ private fun UnscheduledCard(targetDate: LocalDate, today: LocalDate, onChangeDat
             Column(modifier = Modifier.weight(1f)) {
                 Text("No date yet", style = MaterialTheme.typography.labelMedium)
                 Text(
-                    text = "Will be filed under ${WeekMath.dayLabel(targetDate)}" +
+                    text = "Logging for ${WeekMath.dayLabel(targetDate)}" +
                         if (targetDate == today) " (today)" else "",
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -506,7 +503,7 @@ private fun DurationRow(
         TextButton(onClick = onToggle) {
             Text(
                 state.inferredDurationSeconds
-                    ?.let { "+  Time taken (${PrescriptionSummary.duration(it)})" }
+                    ?.let { "+  Time taken (≈ ${PrescriptionSummary.duration(it)})" }
                     ?: "+  Time taken"
             )
         }
@@ -569,7 +566,7 @@ private fun LoggerMenu(state: OccurrenceState, onMark: (OccurrenceState) -> Unit
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = {
-                    Text(if (state == OccurrenceState.SKIPPED) "Not skipped after all" else "Skip")
+                    Text(if (state == OccurrenceState.SKIPPED) "Undo skip" else "Skip")
                 },
                 onClick = {
                     expanded = false
@@ -610,12 +607,18 @@ private fun MaxLoadRow(
         )
         if (unilateral) {
             SideLabel("L")
-            LoadField(table.maxLoad, modifier = Modifier.width(76.dp)) { onMaxLoad(it, false) }
+            LoadField(table.maxLoad, modifier = Modifier.width(76.dp).semantics {
+                contentDescription = "Left max load ($unit)"
+            }) { onMaxLoad(it, false) }
             Spacer(Modifier.width(8.dp))
             SideLabel("R")
-            LoadField(table.maxLoadRight, modifier = Modifier.width(76.dp)) { onMaxLoad(it, true) }
+            LoadField(table.maxLoadRight, modifier = Modifier.width(76.dp).semantics {
+                contentDescription = "Right max load ($unit)"
+            }) { onMaxLoad(it, true) }
         } else {
-            LoadField(table.maxLoad, modifier = Modifier.width(120.dp)) { onMaxLoad(it, false) }
+            LoadField(table.maxLoad, modifier = Modifier.width(120.dp).semantics {
+                contentDescription = "Max load ($unit)"
+            }) { onMaxLoad(it, false) }
         }
     }
 }
@@ -694,19 +697,23 @@ private fun SetTableRow(
             if (unit != null) {
                 // A recorded row stays editable. The tick says the set happened; the load says
                 // what it weighed, and correcting the second is not a statement about the first.
-                LoadField(row.load, modifier = Modifier.weight(1f)) {
+                LoadField(row.load, modifier = Modifier.weight(1f).semantics {
+                    contentDescription = "Set ${row.number}, ${if (unilateral) "left load" else "load"} ($unit)"
+                }) {
                     onLoad(row.number, it, false)
                 }
                 if (unilateral) {
                     Spacer(Modifier.width(8.dp))
-                    LoadField(row.loadRight, modifier = Modifier.weight(1f)) {
+                    LoadField(row.loadRight, modifier = Modifier.weight(1f).semantics {
+                        contentDescription = "Set ${row.number}, right load ($unit)"
+                    }) {
                         onLoad(row.number, it, true)
                     }
                 }
             } else {
                 Spacer(Modifier.weight(1f))
             }
-            DoneCheck(done = row.done, onToggle = onToggle, modifier = Modifier.width(56.dp))
+            DoneCheck(number = row.number, done = row.done, onToggle = onToggle, modifier = Modifier.width(56.dp))
         }
     }
 }
@@ -740,7 +747,7 @@ private fun LoadField(
 
 /** The tick. Green and filled once the set has happened, an empty outline until then. */
 @Composable
-private fun DoneCheck(done: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+private fun DoneCheck(number: Int, done: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val (container, content) = doneColors()
     // Not an IconButton: that enforces a 48dp touch target, and with a 40dp field beside it the
     // tick alone was setting the height of every row. 40dp is still a comfortable target.
@@ -748,9 +755,10 @@ private fun DoneCheck(done: Boolean, onToggle: () -> Unit, modifier: Modifier = 
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(40.dp)
-            .clickable(onClick = onToggle)
+            .toggleable(value = done, role = Role.Checkbox, onValueChange = { onToggle() })
             .semantics {
-                contentDescription = if (done) "Recorded, tap to take it back" else "Record this set"
+                contentDescription = "Set $number"
+                stateDescription = if (done) "Done" else "Not done"
             },
     ) {
         Box(
@@ -780,7 +788,7 @@ private fun DoneCheck(done: Boolean, onToggle: () -> Unit, modifier: Modifier = 
 /** Compact rendering of one performed set. Absent values are simply not shown. */
 private fun formatSet(payload: ActualSetPayload, side: BodySide?, unit: String?): String {
     val parts = mutableListOf<String>()
-    payload.reps?.let { parts += "$it reps" }
+    payload.reps?.let { parts += "$it ${if (it == 1) "rep" else "reps"}" }
     payload.durationSeconds?.let { parts += PrescriptionSummary.duration(it) }
     payload.measurement?.let { measurement ->
         val value = trimNumber(measurement.value)

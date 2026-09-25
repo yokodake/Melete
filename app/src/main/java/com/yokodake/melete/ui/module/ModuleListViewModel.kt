@@ -74,12 +74,7 @@ class ModuleListViewModel(private val repository: TrainingRepository) : ViewMode
             transient.update {
                 it.copy(
                     removal = null,
-                    message = if (removal.scheduledCopies > 0) {
-                        "Removed from the list. The ${removal.scheduledCopies} already scheduled " +
-                            "are untouched."
-                    } else {
-                        "Removed"
-                    },
+                    message = "Module removed",
                 )
             }
         }

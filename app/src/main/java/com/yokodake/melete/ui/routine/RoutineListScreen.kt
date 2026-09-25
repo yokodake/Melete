@@ -163,13 +163,13 @@ fun RoutineListScreen(
                 Text(
                     text = when {
                         removal.recordedCopies > 0 ->
-                            "This has been trained ${removal.recordedCopies} " +
+                            "This has been logged ${removal.recordedCopies} " +
                                 "${if (removal.recordedCopies == 1) "time" else "times"}. " +
                                 "Removing it takes it out of this list only — every scheduled " +
                                 "copy and everything logged stays exactly as it is."
 
                         removal.scheduledCopies > 0 ->
-                            "${removal.scheduledCopies} copies are scheduled. Removing it takes " +
+                            "${removal.scheduledCopies} ${if (removal.scheduledCopies == 1) "copy is" else "copies are"} scheduled. Removing it takes " +
                                 "it out of this list only; those copies stay in their weeks."
 
                         else -> "Nothing has been cut from this, so it goes completely."
@@ -177,7 +177,7 @@ fun RoutineListScreen(
                 )
             },
             confirmButton = { TextButton(onClick = onConfirmRemove) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = onCancelRemove) { Text("Keep it") } },
+            dismissButton = { TextButton(onClick = onCancelRemove) { Text("Cancel") } },
         )
     }
 }
@@ -230,7 +230,7 @@ internal fun RoutineRow(
                     }
                 }
                 Text(
-                    text = "${routine.rounds} rounds · " +
+                    text = "${routine.rounds} ${if (routine.rounds == 1) "round" else "rounds"} · " +
                         routine.entries.joinToString(" → ") { it.name },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -285,5 +285,5 @@ internal fun routineLength(routine: Routine): String {
             )
         },
     )
-    return "about ${PrescriptionSummary.duration(program.estimatedSeconds())}"
+    return "≈ ${PrescriptionSummary.duration(program.estimatedSeconds())}"
 }
