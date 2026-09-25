@@ -8,12 +8,18 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.yokodake.melete.data.dao.LibraryDao
 import com.yokodake.melete.data.dao.LoggingDao
+import com.yokodake.melete.data.dao.ModuleDao
 import com.yokodake.melete.data.dao.RoutineDao
 import com.yokodake.melete.data.dao.TrainingDao
+import com.yokodake.melete.data.dao.VariationDao
 import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
+import com.yokodake.melete.data.entity.ExerciseVariationEntity
+import com.yokodake.melete.data.entity.ModuleEntity
+import com.yokodake.melete.data.entity.ModuleEntryEntity
+import com.yokodake.melete.data.entity.ModuleInstanceEntity
 import com.yokodake.melete.data.entity.PrescriptionEntity
 import com.yokodake.melete.data.entity.RoutineEntity
 import com.yokodake.melete.data.entity.RoutineEntryEntity
@@ -22,7 +28,10 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
 /**
  * The training record.
  *
- * **One schema, no migration chain, until phase 6.** The app has never been installed by anyone
+ * **One schema, no migration chain, until phase 6.** The version still has to move when the schema
+ * does — Room refuses a changed schema under an unchanged number — but only the current schema is
+ * exported and nothing migrates between them.
+ * The app has never been installed by anyone
  * but its author and the database is disposable until the first real training block, so the five
  * migrations that carried it from v1 to v6 were ceremony: two hundred lines and six tests proving
  * that upgrades work for a record nobody would mind losing. They are gone, along with the schemas
@@ -46,8 +55,12 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         RoutineEntity::class,
         RoutineEntryEntity::class,
         CircuitInstanceEntity::class,
+        ExerciseVariationEntity::class,
+        ModuleEntity::class,
+        ModuleEntryEntity::class,
+        ModuleInstanceEntity::class,
     ],
-    version = 1,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)
@@ -60,6 +73,10 @@ abstract class MeleteDatabase : RoomDatabase() {
     abstract fun loggingDao(): LoggingDao
 
     abstract fun routineDao(): RoutineDao
+
+    abstract fun variationDao(): VariationDao
+
+    abstract fun moduleDao(): ModuleDao
 
     companion object {
         const val DATABASE_NAME = "melete.db"

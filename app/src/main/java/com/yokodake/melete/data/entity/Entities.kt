@@ -162,6 +162,17 @@ data class ExerciseOccurrenceEntity(
     val circuitInstanceId: String? = null,
     /** Position within that circuit, so the order survives independently of the day's ordering. */
     val circuitPosition: Int? = null,
+    /**
+     * The library variation this copy was cut from, when it was one. Lineage only, like
+     * [exerciseId]: the variation may be renamed or deleted and this copy stays what it was.
+     */
+    val variationId: String? = null,
+    /** The variation's tag as it stood when scheduled, so the chip survives the variation going. */
+    val variationTagSnapshot: String? = null,
+    /** The scheduled module this belongs to, when it was placed as part of one. */
+    val moduleInstanceId: String? = null,
+    /** Position within that module, among its exercises and circuits alike. */
+    val modulePosition: Int? = null,
 )
 
 /**
@@ -251,6 +262,130 @@ data class CircuitInstanceEntity(
     val rounds: Int,
     val transitionSeconds: Int,
     val roundRestSeconds: Int,
+    val createdAtEpochMs: Long,
+    /** The scheduled module this circuit belongs to, when it was placed as part of one. */
+    val moduleInstanceId: String? = null,
+    /** Position within that module, among its exercises and circuits alike. */
+    val modulePosition: Int? = null,
+)
+
+/**
+ * A named alternative plan for one library exercise: `PWR`, `END`, `A`.
+ *
+ * Not a second exercise. It is the same movement planned another way, so every copy of it keeps
+ * the exercise's identity and history groups across variations. What a variation adds is its own
+ * prescription and its own notes — the part of "how" that changes between phases.
+ */
+@Entity(
+    tableName = "exercise_variations",
+    foreignKeys = [
+        ForeignKey(
+            entity = ExerciseEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["exerciseId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = PrescriptionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["prescriptionId"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [
+        // One exercise cannot have two variations answering to the same chip.
+        Index(value = ["exerciseId", "tag"], unique = true),
+        Index("prescriptionId"),
+    ],
+)
+data class ExerciseVariationEntity(
+    @PrimaryKey val id: String,
+    val exerciseId: String,
+    /** Capitals and digits, four at most. See [com.yokodake.melete.data.model.VariationTag]. */
+    val tag: String,
+    /** How this variation is done, when that differs: loads, tempo, a sequence within the set. */
+    val notes: String?,
+    val prescriptionId: String?,
+    val orderIndex: Int,
+    val createdAtEpochMs: Long,
+)
+
+/**
+ * A reusable named group of planned work: "Fingers + mobility", "Taper day".
+ *
+ * An *organisational* group, where a routine is an *execution* pattern. A module is not trained
+ * and not timed; its contents are. It never counts as a workout or adds time of its own.
+ */
+@Entity(tableName = "modules")
+data class ModuleEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    /** What it is for, in the user's own words. Optional. */
+    val description: String? = null,
+    val createdAtEpochMs: Long,
+    /** Retired from the list of modules, while staying the anchor for scheduled copies. */
+    val deletedAtEpochMs: Long? = null,
+)
+
+/**
+ * One entry of a module template: an exercise with its own prescription copy, or a saved circuit.
+ *
+ * Exactly one of [exerciseId] and [routineId] is set. A circuit is referenced rather than copied,
+ * because it is copied into the week when the module is — by the same code that schedules a
+ * circuit on its own. Groups do not nest: a module entry is never another module.
+ */
+@Entity(
+    tableName = "module_entries",
+    foreignKeys = [
+        ForeignKey(
+            entity = ModuleEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["moduleId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = PrescriptionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["prescriptionId"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [Index("moduleId"), Index("prescriptionId"), Index("exerciseId"), Index("routineId")],
+)
+data class ModuleEntryEntity(
+    @PrimaryKey val id: String,
+    val moduleId: String,
+    val orderIndex: Int,
+    /** Lineage into the library, deliberately without a foreign key. */
+    val exerciseId: String? = null,
+    val exerciseNameSnapshot: String? = null,
+    /** The variation this entry was cut from, when it was one. */
+    val variationId: String? = null,
+    val variationTagSnapshot: String? = null,
+    /** This entry's own copy of the plan. Editing it reaches neither the library nor the week. */
+    val prescriptionId: String? = null,
+    val routineId: String? = null,
+    val routineNameSnapshot: String? = null,
+)
+
+/**
+ * A module copied into a week: the named group its occurrences and circuits hang from.
+ *
+ * Like a circuit container, deliberately not an occurrence, and it counts nothing. Ungrouping
+ * deletes this row and leaves every member exactly where it was.
+ */
+@Entity(
+    tableName = "module_instances",
+    indices = [Index("weekStartEpochDay"), Index("trainingDateEpochDay"), Index("moduleId")],
+)
+data class ModuleInstanceEntity(
+    @PrimaryKey val id: String,
+    /** Stable template identity, kept for later analysis even after the template is edited. */
+    val moduleId: String,
+    val moduleNameSnapshot: String,
+    val weekStartEpochDay: Long,
+    val trainingDateEpochDay: Long?,
+    val orderIndex: Int,
     val createdAtEpochMs: Long,
 )
 

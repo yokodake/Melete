@@ -10,7 +10,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.toRoute
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.ExerciseVariation
 import com.yokodake.melete.data.LibraryExercise
+import com.yokodake.melete.data.VariationSave
 import com.yokodake.melete.data.OccurrenceDetail
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.data.entity.OccurrenceState
@@ -26,6 +28,7 @@ import com.yokodake.melete.data.timer.TimerState
 import com.yokodake.melete.data.timer.WorkKind
 import com.yokodake.melete.ui.ExerciseDetailDestination
 import com.yokodake.melete.ui.components.PrescriptionFormState
+import com.yokodake.melete.ui.components.VariationEditorState
 import com.yokodake.melete.ui.week.PrescriptionSummary
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +42,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /** What is already counting, when the user asks for a new countdown. */
 data class RunningCountdown(val phase: TimerPhase, val label: String?)
@@ -77,6 +81,19 @@ data class ExerciseDetailUiState(
     val loggedDurationSeconds: Int? = null,
     /** Whether that logged number was typed rather than worked out. */
     val loggedDurationManual: Boolean = false,
+    /** The library entry's named alternative plans, shown when browsing the library entry. */
+    val variations: List<ExerciseVariation> = emptyList(),
+    /** The variation a planned copy was cut from, as its snapshotted tag. */
+    val variationTag: String? = null,
+    /** That variation's notes, read live from the library like the exercise's own. */
+    val variationNotes: String? = null,
+    /** The live library entry, when it can still be planned; what "Add to plan" copies. */
+    val libraryExercise: LibraryExercise? = null,
+    /** Non-null while a variation is being created or changed. */
+    val variationEditor: VariationEditorState? = null,
+    val today: LocalDate = LocalDate.now(),
+    /** One-shot text for the snackbar. */
+    val message: String? = null,
 ) {
     /**
      * What the logging button offers.
@@ -144,6 +161,8 @@ class ExerciseDetailViewModel(
     private data class Transient(
         val replacePrompt: RunningCountdown? = null,
         val prescriptionEditor: PrescriptionFormState? = null,
+        val variationEditor: VariationEditorState? = null,
+        val message: String? = null,
     )
 
     private val transient = MutableStateFlow(Transient())
@@ -232,6 +251,15 @@ class ExerciseDetailViewModel(
                 ?: DurationEstimate.forPrescription(mode, unilateral, prescription),
             loggedDurationSeconds = occurrence?.loggedDurationSeconds,
             loggedDurationManual = occurrence?.loggedDurationManual == true,
+            variations = library?.variations.orEmpty(),
+            variationTag = occurrence?.variationTag,
+            variationNotes = occurrence?.variationId
+                ?.let { id -> library?.variations?.firstOrNull { it.id == id } }
+                ?.notes,
+            // A retired entry is history, not something to plan again.
+            libraryExercise = library?.takeIf { it.deletedAtEpochMs == null },
+            variationEditor = extras.variationEditor,
+            message = extras.message,
         )
     }
 
@@ -332,6 +360,77 @@ class ExerciseDetailViewModel(
             }
             transient.update { it.copy(prescriptionEditor = null) }
         }
+    }
+
+    // ------------------------------------------------------------ variations
+
+    /** Opens the editor on an existing variation, or on a new one seeded from the default plan. */
+    fun openVariationEditor(variationId: String?) {
+        val state = uiState.value
+        val editor = if (variationId == null) {
+            VariationEditorState(form = PrescriptionFormState.from(state.libraryExercise?.defaultPrescription))
+        } else {
+            state.variations.firstOrNull { it.id == variationId }
+                ?.let(VariationEditorState::of)
+                ?: return
+        }
+        transient.update { it.copy(variationEditor = editor) }
+    }
+
+    fun updateVariationEditor(value: VariationEditorState) {
+        transient.update { it.copy(variationEditor = value) }
+    }
+
+    fun dismissVariationEditor() {
+        transient.update { it.copy(variationEditor = null) }
+    }
+
+    fun saveVariation() {
+        val state = uiState.value
+        val exerciseId = state.exerciseId ?: return
+        val editor = transient.value.variationEditor ?: return
+        val payload = editor.form.toPayload(state.mode)
+        viewModelScope.launch {
+            val result = if (editor.variationId == null) {
+                repository.createVariation(exerciseId, editor.tag, editor.notes, payload)
+            } else {
+                repository.updateVariation(editor.variationId, editor.tag, editor.notes, payload)
+            }
+            transient.update {
+                when (result) {
+                    VariationSave.SAVED -> it.copy(variationEditor = null)
+                    VariationSave.TAG_TAKEN -> it.copy(
+                        variationEditor = editor.copy(error = "${editor.tag} is already used here"),
+                    )
+                    VariationSave.TAG_INVALID -> it.copy(
+                        variationEditor = editor.copy(error = "Up to 4 capitals or digits"),
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteVariation() {
+        val id = transient.value.variationEditor?.variationId ?: return
+        viewModelScope.launch {
+            repository.deleteVariation(id)
+            transient.update { it.copy(variationEditor = null, message = "Variation deleted") }
+        }
+    }
+
+    // ------------------------------------------------------------- planning
+
+    /** Copies the library entry into a week's unscheduled area, with the plan that was chosen. */
+    fun schedule(weekStart: LocalDate, variationId: String?) {
+        val exerciseId = uiState.value.libraryExercise?.id ?: return
+        viewModelScope.launch {
+            repository.scheduleExercise(exerciseId, weekStart, trainingDate = null, variationId)
+            transient.update { it.copy(message = "Added to ${WeekMath.weekLabel(weekStart)}") }
+        }
+    }
+
+    fun consumeMessage() {
+        transient.update { it.copy(message = null) }
     }
 
     companion object {

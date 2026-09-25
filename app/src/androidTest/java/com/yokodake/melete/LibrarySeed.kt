@@ -4,6 +4,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yokodake.melete.data.ExerciseDraft
 import com.yokodake.melete.data.MeleteDatabase
+import com.yokodake.melete.data.ModuleDraft
+import com.yokodake.melete.data.ModuleEntryDraft
+import com.yokodake.melete.data.RoutineDraft
+import com.yokodake.melete.data.RoutineEntryDraft
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseCategory
@@ -42,7 +46,10 @@ import org.junit.runner.RunWith
  *         -e class com.yokodake.melete.LibrarySeed \
  *         com.yokodake.melete.test/androidx.test.runner.AndroidJUnitRunner
  *
- * Re-running adds only the names that are missing. Stands in until the importer exists.
+ * Also seeds variations, circuits and modules built from those exercises; pass
+ * `-e planning false` for the library alone.
+ *
+ * Re-running adds only what is missing, by name. Stands in until the importer exists.
  */
 @RunWith(AndroidJUnit4::class)
 class LibrarySeed {
@@ -56,8 +63,187 @@ class LibrarySeed {
             val repository = TrainingRepository(database)
             val existing = repository.observeLibrary().first().map { it.name }.toSet()
             exercises.filter { it.name !in existing }.forEach { repository.createExercise(it) }
+            if (InstrumentationRegistry.getArguments().getString("planning") != "false") {
+                seedPlanning(repository)
+            }
         } finally {
             database.close()
+        }
+    }
+
+    // ------------------------------------------------------------------ planning
+
+    /** One station or module entry: an exercise by name, with its plan or a variation's. */
+    private data class Pick(
+        val exercise: String,
+        val plan: PrescriptionPayload? = null,
+        val variation: String? = null,
+    )
+
+    private data class CircuitSeed(
+        val name: String,
+        val rounds: Int,
+        val transitionSeconds: Int,
+        val roundRestSeconds: Int,
+        val stations: List<Pick>,
+    )
+
+    /** A module entry is an exercise [Pick] or, when [circuit] is set, a saved circuit by name. */
+    private data class EntrySeed(val pick: Pick? = null, val circuit: String? = null)
+
+    private data class ModuleSeed(
+        val name: String,
+        val description: String?,
+        val entries: List<EntrySeed>,
+    )
+
+    private fun ex(name: String, plan: PrescriptionPayload? = null, variation: String? = null) =
+        EntrySeed(pick = Pick(name, plan, variation))
+
+    private fun circuit(name: String) = EntrySeed(circuit = name)
+
+    private val variationSeeds = listOf(
+        Triple("Back squat", "PWR", "Fast concentric at about 70% of 1RM.") to
+            PrescriptionPayload(sets = 5, targetReps = 3, restSeconds = 180),
+        Triple("Back squat", "STR", null) to
+            PrescriptionPayload(sets = 4, targetReps = 5, restSeconds = 240),
+        Triple("Max hangs 20 mm", "MAX", "Heaviest load that still gives a clean 10 s.") to
+            PrescriptionPayload(sets = 5, targetDurationSeconds = 10, restSeconds = 180),
+        Triple(
+            "Max hangs 20 mm", "END",
+            "First 3 reps at 60% with emphasis on speed, then add load for RIR 1–2 on the last 3.",
+        ) to PrescriptionPayload(sets = 6, targetDurationSeconds = 10, restSeconds = 90),
+        Triple("Pull-up", "A", null) to PrescriptionPayload(sets = 5, targetReps = 5, restSeconds = 150),
+        Triple("Pull-up", "B", "Pause 2 s at the top of every rep.") to
+            PrescriptionPayload(sets = 3, targetReps = 8, restSeconds = 120),
+    )
+
+    private val circuitSeeds = listOf(
+        // The ordinary case: reps, a hold and reps, with both rests.
+        CircuitSeed(
+            "Pull + core", rounds = 3, transitionSeconds = 30, roundRestSeconds = 120,
+            stations = listOf(
+                Pick("Pull-up", PrescriptionPayload(sets = 1, targetReps = 5)),
+                Pick("Plank", PrescriptionPayload(sets = 1, targetDurationSeconds = 45)),
+                Pick("Push-up", PrescriptionPayload(sets = 1, targetReps = 12)),
+            ),
+        ),
+        // Every station one side at a time, so the switch rests appear inside the rounds.
+        CircuitSeed(
+            "Leg circuit", rounds = 4, transitionSeconds = 20, roundRestSeconds = 90,
+            stations = listOf(
+                Pick("Bulgarian split squat", PrescriptionPayload(sets = 1, targetReps = 8, sideSwitchSeconds = 0)),
+                Pick("Pistol squat", PrescriptionPayload(sets = 1, targetReps = 5)),
+                Pick("Couch stretch", PrescriptionPayload(sets = 1, targetDurationSeconds = 60)),
+            ),
+        ),
+        // A repeater station, a plain hold, and a timed station with no length that must wait.
+        CircuitSeed(
+            "Hangboard density", rounds = 3, transitionSeconds = 60, roundRestSeconds = 180,
+            stations = listOf(
+                Pick(
+                    "7/3 repeaters 20 mm",
+                    PrescriptionPayload(
+                        sets = 1,
+                        repeater = RepeaterPrescription(repsPerSet = 6, workSecondsPerRep = 7, restSecondsBetweenReps = 3),
+                    ),
+                ),
+                Pick("Dead hang", PrescriptionPayload(sets = 1, targetDurationSeconds = 30)),
+                Pick("Front lever hold", PrescriptionPayload(sets = 1)),
+            ),
+        ),
+        // A superset: two stations back to back, rest only after the pair.
+        CircuitSeed(
+            "Pull/push superset", rounds = 5, transitionSeconds = 0, roundRestSeconds = 90,
+            stations = listOf(
+                Pick("Weighted pull-up", PrescriptionPayload(sets = 1, targetReps = 3)),
+                Pick("Push-up", PrescriptionPayload(sets = 1, targetReps = 10)),
+            ),
+        ),
+    )
+
+    private val moduleSeeds = listOf(
+        ModuleSeed(
+            "Fingers + core",
+            "Base block: finger strength first, then pulling and core while fresh enough.",
+            listOf(ex("Max hangs 20 mm", variation = "END"), circuit("Pull + core"), ex("Couch stretch")),
+        ),
+        ModuleSeed(
+            "Strength day",
+            "Max strength. Heavy, long rests, no climbing the same day.",
+            listOf(
+                ex("Back squat", variation = "STR"),
+                circuit("Leg circuit"),
+                ex("Weighted pull-up", PrescriptionPayload(sets = 4, targetReps = 3, restSeconds = 240)),
+            ),
+        ),
+        // Activities inside a module, beside a structured climbing exercise.
+        ModuleSeed(
+            "Climbing session",
+            "Performance.",
+            listOf(ex("Bouldering session"), ex("4×4 boulders"), ex("Yoga")),
+        ),
+        // No description: the empty case the list and editor must handle.
+        ModuleSeed(
+            "Recovery",
+            null,
+            listOf(ex("Run"), ex("Couch stretch"), ex("Yoga")),
+        ),
+        // Mostly a circuit, with a variation chosen for the standalone exercise.
+        ModuleSeed(
+            "Hangboard block",
+            "Finger endurance.",
+            listOf(circuit("Hangboard density"), ex("One-arm repeaters"), ex("Pull-up", variation = "B")),
+        ),
+    )
+
+    /**
+     * Variations, circuits and modules on top of the library, so the planning screens have
+     * something to show. Each piece is skipped when it already exists by name, and an entry whose
+     * exercise has been renamed or removed is left out rather than failing the whole seed.
+     */
+    private suspend fun seedPlanning(repository: TrainingRepository) {
+        variationSeeds.forEach { (key, plan) ->
+            val (name, tag, notes) = key
+            val exercise = repository.observeLibrary().first().firstOrNull { it.name == name }
+                ?: return@forEach
+            if (exercise.variations.none { it.tag == tag }) {
+                repository.createVariation(exercise.id, tag, notes, plan)
+            }
+        }
+
+        // Read once the variations exist, so picks can name them.
+        val library = repository.observeLibrary().first().associateBy { it.name }
+
+        val savedCircuits = repository.observeRoutines().first().map { it.name }.toSet()
+        circuitSeeds.filter { it.name !in savedCircuits }.forEach { seed ->
+            val entries = seed.stations.mapNotNull { pick ->
+                library[pick.exercise]?.let { RoutineEntryDraft(it.id, pick.plan ?: it.defaultPrescription) }
+            }
+            if (entries.isEmpty()) return@forEach
+            repository.createRoutine(
+                RoutineDraft(seed.name, seed.rounds, seed.transitionSeconds, seed.roundRestSeconds, entries)
+            )
+        }
+
+        val circuitsByName = repository.observeRoutines().first().associateBy { it.name }
+        val savedModules = repository.observeModules().first().map { it.name }.toSet()
+        moduleSeeds.filter { it.name !in savedModules }.forEach { seed ->
+            val entries = seed.entries.mapNotNull { entry ->
+                entry.circuit?.let { name ->
+                    return@mapNotNull circuitsByName[name]?.let { ModuleEntryDraft(routineId = it.id) }
+                }
+                val pick = entry.pick ?: return@mapNotNull null
+                val exercise = library[pick.exercise] ?: return@mapNotNull null
+                val variation = pick.variation?.let { tag -> exercise.variations.firstOrNull { it.tag == tag } }
+                ModuleEntryDraft(
+                    exerciseId = exercise.id,
+                    variationId = variation?.id,
+                    prescription = pick.plan ?: variation?.prescription ?: exercise.defaultPrescription,
+                )
+            }
+            if (entries.isEmpty()) return@forEach
+            repository.createModule(ModuleDraft(seed.name, seed.description, entries))
         }
     }
 

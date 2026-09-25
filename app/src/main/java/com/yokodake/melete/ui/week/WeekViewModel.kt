@@ -40,8 +40,9 @@ class WeekViewModel(
             combine(
                 repository.observeWeek(start),
                 repository.observeWeekCircuits(start),
-            ) { occurrences, circuits ->
-                WeekUiState.build(start, today, occurrences, circuits)
+                repository.observeWeekModules(start),
+            ) { occurrences, circuits, modules ->
+                WeekUiState.build(start, today, occurrences, circuits, modules)
             }
         }
         .stateIn(
@@ -194,6 +195,57 @@ class WeekViewModel(
             repository.deleteCircuitAndLogs(circuitId)
             _message.value =
                 "Circuit removed, along with $recorded recorded exercise" +
+                    if (recorded == 1) "" else "s"
+        }
+    }
+
+    // ------------------------------------------------------------- modules
+
+    /** Moves a module and the members still with it. Trained work is refused "unscheduled". */
+    fun moveModule(moduleInstanceId: String, weekStart: LocalDate, trainingDate: LocalDate?) {
+        viewModelScope.launch {
+            val moved = repository.moveModule(moduleInstanceId, weekStart, trainingDate)
+            _message.value = when {
+                !moved -> "That has been trained, so it needs a day"
+                trainingDate == null -> "Moved to unscheduled"
+                else -> "Moved to ${WeekMath.dayLabel(trainingDate)}"
+            }
+        }
+    }
+
+    /** Dissolves the group; every member stays where it is. */
+    fun ungroupModule(moduleInstanceId: String) {
+        viewModelScope.launch {
+            repository.ungroupModule(moduleInstanceId)
+            _message.value = "Ungrouped"
+        }
+    }
+
+    fun takeOutOfModule(occurrenceId: String) {
+        viewModelScope.launch { repository.takeOccurrenceOutOfModule(occurrenceId) }
+    }
+
+    fun takeCircuitOutOfModule(circuitId: String) {
+        viewModelScope.launch { repository.takeCircuitOutOfModule(circuitId) }
+    }
+
+    /** How many of a module's exercises carry evidence, so a deletion can say what it costs. */
+    suspend fun moduleRecordedExercises(moduleInstanceId: String): Int =
+        repository.moduleRecordedExercises(moduleInstanceId)
+
+    fun removeModule(moduleInstanceId: String) {
+        viewModelScope.launch {
+            if (!repository.removeModuleIfEmpty(moduleInstanceId)) {
+                _message.value = "Work is recorded in this module. Delete it with its log instead."
+            }
+        }
+    }
+
+    fun deleteModuleAndLogs(moduleInstanceId: String, recorded: Int) {
+        viewModelScope.launch {
+            repository.deleteModuleAndLogs(moduleInstanceId)
+            _message.value =
+                "Module removed, along with $recorded recorded exercise" +
                     if (recorded == 1) "" else "s"
         }
     }

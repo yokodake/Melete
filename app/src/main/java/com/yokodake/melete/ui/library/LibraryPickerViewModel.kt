@@ -12,6 +12,7 @@ import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.LibraryExercise
 import com.yokodake.melete.data.Routine
+import com.yokodake.melete.data.TrainingModule
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.ui.LibraryPickerDestination
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,19 +22,25 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** Which half of the library the picker is showing. */
-enum class PickerView { EXERCISES, CIRCUITS }
+/** Which kind of saved thing the picker is showing. */
+enum class PickerView(val label: String) {
+    EXERCISES("Exercises"),
+    CIRCUITS("Circuits"),
+    MODULES("Modules"),
+}
 
 data class LibraryPickerUiState(
     val targetLabel: String,
     val view: PickerView = PickerView.EXERCISES,
     val exercises: List<LibraryExercise> = emptyList(),
     val circuits: List<Routine> = emptyList(),
+    val modules: List<TrainingModule> = emptyList(),
 )
 
 /**
- * The library as a picker: one place to add anything saved to a slot of the week, exercises or
- * circuits, rather than two entries on the plus that lead to two lookalike lists.
+ * The library as a picker: one place to add anything saved to a slot of the week — an exercise,
+ * a circuit or a module — rather than one entry on the plus per kind, each leading to a lookalike
+ * list.
  *
  * The slot is fixed by the route for the life of the screen, so switching views or detouring to
  * create something never loses where the pick is going.
@@ -52,29 +59,27 @@ class LibraryPickerViewModel(
 
     val uiState: StateFlow<LibraryPickerUiState> = combine(
         // Saved state rather than a field, so the view you chose is still the one showing after a
-        // trip to the editor and back, or after the process is recreated.
+        // trip to an editor and back, or after the process is recreated.
         savedStateHandle.getStateFlow(VIEW_KEY, PickerView.EXERCISES),
         repository.observeLibrary(),
         repository.observeRoutines(),
-    ) { view, exercises, circuits ->
-        LibraryPickerUiState(targetLabel, view, exercises, circuits)
+        repository.observeModules(),
+    ) { view, exercises, circuits, modules ->
+        LibraryPickerUiState(targetLabel, view, exercises, circuits, modules)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = LibraryPickerUiState(targetLabel),
     )
 
-    fun toggleView() {
-        val current = savedStateHandle.get<PickerView>(VIEW_KEY) ?: PickerView.EXERCISES
-        savedStateHandle[VIEW_KEY] = when (current) {
-            PickerView.EXERCISES -> PickerView.CIRCUITS
-            PickerView.CIRCUITS -> PickerView.EXERCISES
-        }
+    fun showView(view: PickerView) {
+        savedStateHandle[VIEW_KEY] = view
     }
 
-    fun schedule(exerciseId: String, onScheduled: () -> Unit) {
+    /** Copies an exercise into the slot, cut from the default plan or from the chosen variation. */
+    fun schedule(exerciseId: String, variationId: String?, onScheduled: () -> Unit) {
         viewModelScope.launch {
-            repository.scheduleExercise(exerciseId, weekStart, trainingDate)
+            repository.scheduleExercise(exerciseId, weekStart, trainingDate, variationId)
             onScheduled()
         }
     }
@@ -83,6 +88,14 @@ class LibraryPickerViewModel(
     fun scheduleCircuit(routineId: String, onScheduled: () -> Unit) {
         viewModelScope.launch {
             repository.scheduleRoutine(routineId, weekStart, trainingDate)
+            onScheduled()
+        }
+    }
+
+    /** Copies the module, and everything in it, into the slot. */
+    fun scheduleModule(moduleId: String, onScheduled: () -> Unit) {
+        viewModelScope.launch {
+            repository.scheduleModule(moduleId, weekStart, trainingDate)
             onScheduled()
         }
     }

@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 1,
-    "identityHash": "ff101d315af66e015769e24880e88d87",
+    "version": 3,
+    "identityHash": "a62fece682298ad2afbe7fbd9a062cb6",
     "entities": [
       {
         "tableName": "exercises",
@@ -119,7 +119,7 @@
       },
       {
         "tableName": "exercise_occurrences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `weekStartEpochDay` INTEGER NOT NULL, `trainingDateEpochDay` INTEGER, `exerciseId` TEXT NOT NULL, `exerciseNameSnapshot` TEXT NOT NULL, `modeSnapshot` TEXT NOT NULL, `unilateralSnapshot` INTEGER NOT NULL, `measurementUnitSnapshot` TEXT, `measurementMeaningSnapshot` TEXT, `prescriptionId` TEXT, `orderIndex` INTEGER NOT NULL, `state` TEXT NOT NULL, `comment` TEXT, `createdAtEpochMs` INTEGER NOT NULL, `categorySnapshot` TEXT, `loggedDurationSeconds` INTEGER, `loggedDurationManual` INTEGER NOT NULL, `loggedEffort` TEXT, `isOneOff` INTEGER NOT NULL, `circuitInstanceId` TEXT, `circuitPosition` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`prescriptionId`) REFERENCES `prescriptions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `weekStartEpochDay` INTEGER NOT NULL, `trainingDateEpochDay` INTEGER, `exerciseId` TEXT NOT NULL, `exerciseNameSnapshot` TEXT NOT NULL, `modeSnapshot` TEXT NOT NULL, `unilateralSnapshot` INTEGER NOT NULL, `measurementUnitSnapshot` TEXT, `measurementMeaningSnapshot` TEXT, `prescriptionId` TEXT, `orderIndex` INTEGER NOT NULL, `state` TEXT NOT NULL, `comment` TEXT, `createdAtEpochMs` INTEGER NOT NULL, `categorySnapshot` TEXT, `loggedDurationSeconds` INTEGER, `loggedDurationManual` INTEGER NOT NULL, `loggedEffort` TEXT, `isOneOff` INTEGER NOT NULL, `circuitInstanceId` TEXT, `circuitPosition` INTEGER, `variationId` TEXT, `variationTagSnapshot` TEXT, `moduleInstanceId` TEXT, `modulePosition` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`prescriptionId`) REFERENCES `prescriptions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "id",
@@ -235,6 +235,26 @@
           {
             "fieldPath": "circuitPosition",
             "columnName": "circuitPosition",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "variationId",
+            "columnName": "variationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "variationTagSnapshot",
+            "columnName": "variationTagSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "moduleInstanceId",
+            "columnName": "moduleInstanceId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modulePosition",
+            "columnName": "modulePosition",
             "affinity": "INTEGER"
           }
         ],
@@ -663,7 +683,7 @@
       },
       {
         "tableName": "circuit_instances",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `routineId` TEXT NOT NULL, `routineNameSnapshot` TEXT NOT NULL, `structureVersion` INTEGER NOT NULL, `structureSnapshotJson` TEXT NOT NULL, `weekStartEpochDay` INTEGER NOT NULL, `trainingDateEpochDay` INTEGER, `orderIndex` INTEGER NOT NULL, `rounds` INTEGER NOT NULL, `transitionSeconds` INTEGER NOT NULL, `roundRestSeconds` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `routineId` TEXT NOT NULL, `routineNameSnapshot` TEXT NOT NULL, `structureVersion` INTEGER NOT NULL, `structureSnapshotJson` TEXT NOT NULL, `weekStartEpochDay` INTEGER NOT NULL, `trainingDateEpochDay` INTEGER, `orderIndex` INTEGER NOT NULL, `rounds` INTEGER NOT NULL, `transitionSeconds` INTEGER NOT NULL, `roundRestSeconds` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `moduleInstanceId` TEXT, `modulePosition` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -735,6 +755,16 @@
             "columnName": "createdAtEpochMs",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "moduleInstanceId",
+            "columnName": "moduleInstanceId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modulePosition",
+            "columnName": "modulePosition",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -772,11 +802,357 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_circuit_instances_routineId` ON `${TABLE_NAME}` (`routineId`)"
           }
         ]
+      },
+      {
+        "tableName": "exercise_variations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `exerciseId` TEXT NOT NULL, `tag` TEXT NOT NULL, `notes` TEXT, `prescriptionId` TEXT, `orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`exerciseId`) REFERENCES `exercises`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`prescriptionId`) REFERENCES `prescriptions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exerciseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tag",
+            "columnName": "tag",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "prescriptionId",
+            "columnName": "prescriptionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMs",
+            "columnName": "createdAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_exercise_variations_exerciseId_tag",
+            "unique": true,
+            "columnNames": [
+              "exerciseId",
+              "tag"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_exercise_variations_exerciseId_tag` ON `${TABLE_NAME}` (`exerciseId`, `tag`)"
+          },
+          {
+            "name": "index_exercise_variations_prescriptionId",
+            "unique": false,
+            "columnNames": [
+              "prescriptionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exercise_variations_prescriptionId` ON `${TABLE_NAME}` (`prescriptionId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "exercises",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "exerciseId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "prescriptions",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "prescriptionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "modules",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `createdAtEpochMs` INTEGER NOT NULL, `deletedAtEpochMs` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtEpochMs",
+            "columnName": "createdAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAtEpochMs",
+            "columnName": "deletedAtEpochMs",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "module_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `moduleId` TEXT NOT NULL, `orderIndex` INTEGER NOT NULL, `exerciseId` TEXT, `exerciseNameSnapshot` TEXT, `variationId` TEXT, `variationTagSnapshot` TEXT, `prescriptionId` TEXT, `routineId` TEXT, `routineNameSnapshot` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`moduleId`) REFERENCES `modules`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`prescriptionId`) REFERENCES `prescriptions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moduleId",
+            "columnName": "moduleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exerciseId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "exerciseNameSnapshot",
+            "columnName": "exerciseNameSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "variationId",
+            "columnName": "variationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "variationTagSnapshot",
+            "columnName": "variationTagSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "prescriptionId",
+            "columnName": "prescriptionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "routineId",
+            "columnName": "routineId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "routineNameSnapshot",
+            "columnName": "routineNameSnapshot",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_module_entries_moduleId",
+            "unique": false,
+            "columnNames": [
+              "moduleId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_entries_moduleId` ON `${TABLE_NAME}` (`moduleId`)"
+          },
+          {
+            "name": "index_module_entries_prescriptionId",
+            "unique": false,
+            "columnNames": [
+              "prescriptionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_entries_prescriptionId` ON `${TABLE_NAME}` (`prescriptionId`)"
+          },
+          {
+            "name": "index_module_entries_exerciseId",
+            "unique": false,
+            "columnNames": [
+              "exerciseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_entries_exerciseId` ON `${TABLE_NAME}` (`exerciseId`)"
+          },
+          {
+            "name": "index_module_entries_routineId",
+            "unique": false,
+            "columnNames": [
+              "routineId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_entries_routineId` ON `${TABLE_NAME}` (`routineId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "modules",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "moduleId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "prescriptions",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "prescriptionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "module_instances",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `moduleId` TEXT NOT NULL, `moduleNameSnapshot` TEXT NOT NULL, `weekStartEpochDay` INTEGER NOT NULL, `trainingDateEpochDay` INTEGER, `orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moduleId",
+            "columnName": "moduleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moduleNameSnapshot",
+            "columnName": "moduleNameSnapshot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weekStartEpochDay",
+            "columnName": "weekStartEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trainingDateEpochDay",
+            "columnName": "trainingDateEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMs",
+            "columnName": "createdAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_module_instances_weekStartEpochDay",
+            "unique": false,
+            "columnNames": [
+              "weekStartEpochDay"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_instances_weekStartEpochDay` ON `${TABLE_NAME}` (`weekStartEpochDay`)"
+          },
+          {
+            "name": "index_module_instances_trainingDateEpochDay",
+            "unique": false,
+            "columnNames": [
+              "trainingDateEpochDay"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_instances_trainingDateEpochDay` ON `${TABLE_NAME}` (`trainingDateEpochDay`)"
+          },
+          {
+            "name": "index_module_instances_moduleId",
+            "unique": false,
+            "columnNames": [
+              "moduleId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_module_instances_moduleId` ON `${TABLE_NAME}` (`moduleId`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ff101d315af66e015769e24880e88d87')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a62fece682298ad2afbe7fbd9a062cb6')"
     ]
   }
 }

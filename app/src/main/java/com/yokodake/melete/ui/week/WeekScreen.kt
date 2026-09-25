@@ -3,6 +3,7 @@ package com.yokodake.melete.ui.week
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -68,6 +69,7 @@ import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
 import com.yokodake.melete.ui.components.CategoryDot
+import com.yokodake.melete.ui.components.VariationChip
 import com.yokodake.melete.ui.theme.MeleteTheme
 import com.yokodake.melete.ui.theme.doneColors
 import java.time.LocalDate
@@ -104,6 +106,13 @@ fun WeekRoute(
         onRemoveCircuit = viewModel::removeCircuit,
         onDeleteCircuitWithLog = viewModel::deleteCircuitAndLogs,
         onCircuitRecordedStations = viewModel::circuitRecordedStations,
+        onTakeOutOfModule = viewModel::takeOutOfModule,
+        onTakeCircuitOutOfModule = viewModel::takeCircuitOutOfModule,
+        onMoveModule = viewModel::moveModule,
+        onUngroupModule = viewModel::ungroupModule,
+        onRemoveModule = viewModel::removeModule,
+        onDeleteModuleWithLog = viewModel::deleteModuleAndLogs,
+        onModuleRecordedExercises = viewModel::moduleRecordedExercises,
         bottomBar = bottomBar,
         modifier = modifier,
     )
@@ -132,6 +141,13 @@ fun WeekScreen(
     onRemoveCircuit: (String) -> Unit = {},
     onDeleteCircuitWithLog: (String, Int) -> Unit = { _, _ -> },
     onCircuitRecordedStations: suspend (String) -> Int = { 0 },
+    onTakeOutOfModule: (String) -> Unit = {},
+    onTakeCircuitOutOfModule: (String) -> Unit = {},
+    onMoveModule: (String, LocalDate, LocalDate?) -> Unit = { _, _, _ -> },
+    onUngroupModule: (String) -> Unit = {},
+    onRemoveModule: (String) -> Unit = {},
+    onDeleteModuleWithLog: (String, Int) -> Unit = { _, _ -> },
+    onModuleRecordedExercises: suspend (String) -> Int = { 0 },
     bottomBar: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -147,6 +163,70 @@ fun WeekScreen(
     var movingCircuit by remember { mutableStateOf<WeekItem.Circuit?>(null) }
     var removingCircuit by remember { mutableStateOf<WeekItem.Circuit?>(null) }
     var removingCircuitStations by remember { mutableIntStateOf(0) }
+    var movingModule by remember { mutableStateOf<WeekItem.Module?>(null) }
+    var removingModule by remember { mutableStateOf<WeekItem.Module?>(null) }
+    var removingModuleRecorded by remember { mutableIntStateOf(0) }
+
+    /**
+     * One card for one item, wherever it sits. A module draws its members with exactly this, so a
+     * member keeps every action it would have on its own, plus the one way out of the group.
+     */
+    @Composable
+    fun ItemCard(item: WeekItem, inModule: Boolean) {
+        when (item) {
+            is WeekItem.Single -> OccurrenceCard(
+                occurrence = item.occurrence,
+                onClick = { onOpenOccurrence(item.occurrence.id) },
+                onMove = {
+                    // Moving carries the log with it, so the dialog has to know whether there is
+                    // one before it can word itself honestly.
+                    scope.launch {
+                        planning = PlanAction(
+                            occurrence = item.occurrence,
+                            loggedSets = onLoggedSetCount(item.occurrence.id),
+                        )
+                    }
+                },
+                // A duplicate is a fresh plan and never inherits what was logged.
+                onDuplicate = { onDuplicateOccurrence(item.occurrence.id) },
+                onReorder = { onReorderOccurrence(item.occurrence.id, it) },
+                onRemove = {
+                    // Ask the record what a deletion would cost before offering one.
+                    scope.launch {
+                        removingSets = onLoggedSetCount(item.occurrence.id)
+                        removing = item.occurrence
+                    }
+                },
+                onTakeOut = { onTakeOutOfModule(item.occurrence.id) }.takeIf { inModule },
+            )
+
+            is WeekItem.Circuit -> CircuitCard(
+                item = item,
+                onClick = { onOpenCircuit(item.circuit.id) },
+                onMove = { movingCircuit = item },
+                onRemove = {
+                    scope.launch {
+                        removingCircuitStations = onCircuitRecordedStations(item.circuit.id)
+                        removingCircuit = item
+                    }
+                },
+                onTakeOut = { onTakeCircuitOutOfModule(item.circuit.id) }.takeIf { inModule },
+            )
+
+            is WeekItem.Module -> ModuleCard(
+                item = item,
+                onMove = { movingModule = item },
+                onUngroup = { onUngroupModule(item.module.id) },
+                onRemove = {
+                    scope.launch {
+                        removingModuleRecorded = onModuleRecordedExercises(item.module.id)
+                        removingModule = item
+                    }
+                },
+                member = { ItemCard(it, inModule = true) },
+            )
+        }
+    }
 
     LaunchedEffect(message) {
         message?.let {
@@ -235,45 +315,7 @@ fun WeekScreen(
                         onAddActivity = { addingActivityOn = row.date },
                     )
 
-                    is WeekRow.Item -> when (val item = row.item) {
-                        is WeekItem.Single -> OccurrenceCard(
-                            occurrence = item.occurrence,
-                            onClick = { onOpenOccurrence(item.occurrence.id) },
-                            onMove = {
-                                // Moving carries the log with it, so the dialog has to know
-                                // whether there is one before it can word itself honestly.
-                                scope.launch {
-                                    planning = PlanAction(
-                                        occurrence = item.occurrence,
-                                        loggedSets = onLoggedSetCount(item.occurrence.id),
-                                    )
-                                }
-                            },
-                            // A duplicate is a fresh plan and never inherits what was logged.
-                            onDuplicate = { onDuplicateOccurrence(item.occurrence.id) },
-                            onReorder = { onReorderOccurrence(item.occurrence.id, it) },
-                            onRemove = {
-                                // Ask the record what a deletion would cost before offering one.
-                                scope.launch {
-                                    removingSets = onLoggedSetCount(item.occurrence.id)
-                                    removing = item.occurrence
-                                }
-                            },
-                        )
-
-                        is WeekItem.Circuit -> CircuitCard(
-                            item = item,
-                            onClick = { onOpenCircuit(item.circuit.id) },
-                            onMove = { movingCircuit = item },
-                            onRemove = {
-                                scope.launch {
-                                    removingCircuitStations =
-                                        onCircuitRecordedStations(item.circuit.id)
-                                    removingCircuit = item
-                                }
-                            },
-                        )
-                    }
+                    is WeekRow.Item -> ItemCard(row.item, inModule = false)
 
                     is WeekRow.Hint -> Hint(row.text)
                 }
@@ -348,6 +390,64 @@ fun WeekScreen(
                 onMoveCircuit(item.circuit.id, target.weekStart, target.trainingDate)
             },
             onDismiss = { movingCircuit = null },
+        )
+    }
+
+    movingModule?.let { item ->
+        PlanTargetDialog(
+            title = if (item.recordedExercises > 0) {
+                "Move ${item.module.name} and its ${item.recordedExercises} recorded " +
+                    "${if (item.recordedExercises == 1) "exercise" else "exercises"} to"
+            } else {
+                "Move ${item.module.name} to"
+            },
+            initial = PlanTarget(state.weekStart, item.module.trainingDate),
+            confirmLabel = "Move",
+            today = state.today,
+            allowUnscheduled = item.recordedExercises == 0,
+            onConfirm = { target ->
+                movingModule = null
+                onMoveModule(item.module.id, target.weekStart, target.trainingDate)
+            },
+            onDismiss = { movingModule = null },
+        )
+    }
+
+    removingModule?.let { item ->
+        val recorded = removingModuleRecorded
+        AlertDialog(
+            onDismissRequest = { removingModule = null },
+            title = { Text(item.module.name) },
+            text = {
+                Text(
+                    if (recorded > 0) {
+                        "$recorded of its exercises have been recorded. Removing the module " +
+                            "would destroy that too. Ungrouping keeps everything."
+                    } else {
+                        "Nothing has been recorded here, so removing it loses only the plan. " +
+                            "To keep the exercises and lose only the group, ungroup it instead."
+                    }
+                )
+            },
+            confirmButton = {
+                if (recorded > 0) {
+                    TextButton(onClick = {
+                        removingModule = null
+                        onDeleteModuleWithLog(item.module.id, recorded)
+                    }) {
+                        Text(
+                            text = "Delete it and the $recorded recorded",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                } else {
+                    TextButton(onClick = {
+                        removingModule = null
+                        onRemoveModule(item.module.id)
+                    }) { Text("Remove from the week") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { removingModule = null }) { Text("Keep it") } },
         )
     }
 
@@ -561,6 +661,8 @@ private fun OccurrenceCard(
     onDuplicate: () -> Unit = {},
     onReorder: (Int) -> Unit = {},
     onRemove: () -> Unit,
+    /** Set only for a module member: leaves the group and stays where it is. */
+    onTakeOut: (() -> Unit)? = null,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
@@ -594,6 +696,7 @@ private fun OccurrenceCard(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f),
                     )
+                    occurrence.variationTag?.let { VariationChip(it) }
                     when (occurrence.state) {
                         OccurrenceState.PLANNED -> Unit
                         OccurrenceState.COMPLETED -> {
@@ -660,6 +763,12 @@ private fun OccurrenceCard(
                 text = { Text("Move down") },
                 onClick = { menuExpanded = false; onReorder(1) },
             )
+            onTakeOut?.let { takeOut ->
+                DropdownMenuItem(
+                    text = { Text("Take out of module") },
+                    onClick = { menuExpanded = false; takeOut() },
+                )
+            }
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Remove workout") },
@@ -695,6 +804,8 @@ private fun CircuitCard(
     onClick: () -> Unit,
     onMove: () -> Unit,
     onRemove: () -> Unit,
+    /** Set only for a module member: leaves the group and stays where it is. */
+    onTakeOut: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Box {
@@ -756,6 +867,15 @@ private fun CircuitCard(
                     onMove()
                 },
             )
+            onTakeOut?.let { takeOut ->
+                DropdownMenuItem(
+                    text = { Text("Take out of module") },
+                    onClick = {
+                        menuOpen = false
+                        takeOut()
+                    },
+                )
+            }
             DropdownMenuItem(
                 text = { Text("Remove from the week") },
                 onClick = {
@@ -763,6 +883,75 @@ private fun CircuitCard(
                     onRemove()
                 },
             )
+        }
+    }
+}
+
+/**
+ * A scheduled module: its name over an outlined group of the cards it holds.
+ *
+ * An outline rather than another filled card, so the members read as the cards they are — each
+ * opened, moved and logged on its own — sitting inside a named boundary, and the week stays
+ * compact. The group has its own menu for what applies to all of it at once.
+ */
+@Composable
+private fun ModuleCard(
+    item: WeekItem.Module,
+    onMove: () -> Unit,
+    onUngroup: () -> Unit,
+    onRemove: () -> Unit,
+    member: @Composable (WeekItem) -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = item.module.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 4.dp),
+                )
+                if (item.completed) {
+                    val colors = doneColors()
+                    Chip("Done", colors.first, colors.second)
+                }
+                Box {
+                    IconButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.semantics { contentDescription = "Module actions" },
+                    ) { Text("⋮", style = MaterialTheme.typography.titleMedium) }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Move") },
+                            onClick = { menuOpen = false; onMove() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Ungroup") },
+                            onClick = { menuOpen = false; onUngroup() },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Remove from the week") },
+                            onClick = { menuOpen = false; onRemove() },
+                        )
+                    }
+                }
+            }
+            if (item.members.isEmpty()) {
+                Hint("Empty: everything in it has been moved out.")
+            }
+            item.members.forEach { member(it) }
         }
     }
 }

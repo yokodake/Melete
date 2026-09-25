@@ -80,6 +80,7 @@ import com.yokodake.melete.ui.components.EffortSelector
 import com.yokodake.melete.ui.components.NumberField
 import com.yokodake.melete.ui.components.PrescriptionFields
 import com.yokodake.melete.ui.components.trimNumber
+import com.yokodake.melete.ui.components.VariationChip
 import com.yokodake.melete.ui.week.PrescriptionSummary
 import java.time.Instant
 import java.time.LocalDate
@@ -373,7 +374,13 @@ private fun PlannedCard(occurrence: PlannedOccurrence, onEdit: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Planned", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Planned", style = MaterialTheme.typography.labelMedium)
+                    occurrence.variationTag?.let { VariationChip(it) }
+                }
                 Text(
                     text = PrescriptionSummary.format(occurrence),
                     style = MaterialTheme.typography.bodyLarge,

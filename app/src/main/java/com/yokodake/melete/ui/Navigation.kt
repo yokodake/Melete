@@ -29,6 +29,8 @@ import com.yokodake.melete.ui.library.LibraryRoute
 import com.yokodake.melete.ui.circuit.CircuitDetailRoute
 import com.yokodake.melete.ui.circuit.CircuitReviewRoute
 import com.yokodake.melete.ui.logger.LoggerRoute
+import com.yokodake.melete.ui.module.ModuleEditorRoute
+import com.yokodake.melete.ui.module.ModuleListRoute
 import com.yokodake.melete.ui.routine.RoutineEditorRoute
 import com.yokodake.melete.ui.routine.RoutineListRoute
 import com.yokodake.melete.ui.timer.TimerRoute
@@ -89,6 +91,13 @@ data object RoutineListDestination
 
 @Serializable
 data class RoutineEditorDestination(val routineId: String? = null)
+
+/** The saved modules, as a list to manage. Adding one to a week goes through the library picker. */
+@Serializable
+data object ModuleListDestination
+
+@Serializable
+data class ModuleEditorDestination(val moduleId: String? = null)
 
 /**
  * What a scheduled circuit is, and the two things to do with it.
@@ -160,6 +169,7 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
                 onOpenCircuits = { navController.navigate(RoutineListDestination) },
+                onOpenModules = { navController.navigate(ModuleListDestination) },
                 bottomBar = bottomBar,
             )
         }
@@ -175,10 +185,12 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onScheduled = { navController.popBackStack() },
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
                 onNewCircuit = { navController.navigate(RoutineEditorDestination()) },
+                onNewModule = { navController.navigate(ModuleEditorDestination()) },
                 onOpenExercise = {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
                 },
                 onEditCircuit = { navController.navigate(RoutineEditorDestination(it)) },
+                onEditModule = { navController.navigate(ModuleEditorDestination(it)) },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -219,6 +231,20 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         }
         composable<RoutineEditorDestination> {
             RoutineEditorRoute(
+                onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
+                onDone = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ModuleListDestination> {
+            ModuleListRoute(
+                onNewModule = { navController.navigate(ModuleEditorDestination()) },
+                onEditModule = { navController.navigate(ModuleEditorDestination(it)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ModuleEditorDestination> {
+            ModuleEditorRoute(
                 onNewExercise = { navController.navigate(ExerciseEditorDestination()) },
                 onDone = { navController.popBackStack() },
                 onBack = { navController.popBackStack() },

@@ -27,6 +27,13 @@ object PrescriptionSummary {
         unreadable = false,
     )
 
+    /** A plan that belongs to no occurrence yet: a variation, or a module entry. */
+    fun formatPlan(
+        prescription: PrescriptionPayload?,
+        mode: ExerciseMode,
+        unilateral: Boolean,
+    ): String = format(prescription, mode, unilateral, unreadable = false)
+
     private fun format(
         prescription: PrescriptionPayload?,
         mode: ExerciseMode,
@@ -53,12 +60,12 @@ object PrescriptionSummary {
         val target = when {
             // A repeater is the shape of one set, so it is what a set is described as.
             repeater != null ->
-                "${repeater.repsPerSet} × ${duration(repeater.workSecondsPerRep)}" +
+                "${repeater.repsPerSet} × ${repeater.workSecondsPerRep}" +
                     if (repeater.restSecondsBetweenReps > 0) {
-                        "/${duration(repeater.restSecondsBetweenReps)}"
+                        "/${repeater.restSecondsBetweenReps}"
                     } else {
                         ""
-                    }
+                    } + "s"
 
             prescription.targetReps != null -> "${prescription.targetReps}"
             prescription.targetDurationSeconds != null -> duration(prescription.targetDurationSeconds)
