@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.DiaryDay
+import com.yokodake.melete.data.MetricDefinition
 import com.yokodake.melete.data.PlanItemKind
 import com.yokodake.melete.data.PlanItemRef
 import com.yokodake.melete.data.PlannedOccurrence
@@ -95,6 +97,7 @@ fun WeekRoute(
         onLoggedSetCount = viewModel::loggedSetCount,
         onDuplicateOccurrence = viewModel::duplicateOccurrence,
         onNudge = viewModel::nudge,
+        onSaveDiary = viewModel::saveDiary,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
         onCurrentWeek = viewModel::showCurrentWeek,
@@ -128,6 +131,7 @@ fun WeekScreen(
     onDuplicateOccurrence: (String) -> Unit = {},
     /** Moves a card one place, crossing into the next day at an edge. Offered in edit mode. */
     onNudge: (PlanItemRef, Int) -> Unit = { _, _ -> },
+    onSaveDiary: (LocalDate, String?, Map<String, Int?>) -> Unit = { _, _, _ -> },
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onCurrentWeek: () -> Unit,
@@ -159,6 +163,7 @@ fun WeekScreen(
     var removingCircuitStations by remember { mutableIntStateOf(0) }
     // Survives rotation and a trip into an exercise and back, so reorganising is not interrupted.
     var editing by rememberSaveable { mutableStateOf(false) }
+    var diaryFor by remember { mutableStateOf<LocalDate?>(null) }
     var removingModule by remember { mutableStateOf<WeekItem.Module?>(null) }
     var removingModuleRecorded by remember { mutableIntStateOf(0) }
 
@@ -299,8 +304,10 @@ fun WeekScreen(
 
                     is WeekRow.DayHeading -> DayHeading(
                         row = row,
+                        metrics = state.metrics,
                         onAddExercise = { onAddExercise(row.date) },
                         onAddActivity = { addingActivityOn = row.date },
+                        onOpenDiary = { diaryFor = row.date },
                     )
 
                     is WeekRow.Item -> if (editing) {
@@ -316,6 +323,19 @@ fun WeekScreen(
                 }
             }
         }
+    }
+
+    diaryFor?.let { date ->
+        DiaryDialog(
+            date = date,
+            metrics = state.metrics,
+            day = state.days.firstOrNull { it.date == date }?.diary,
+            onSave = { text, values ->
+                diaryFor = null
+                onSaveDiary(date, text, values)
+            },
+            onDismiss = { diaryFor = null },
+        )
     }
 
     removing?.let { occurrence ->
@@ -534,8 +554,10 @@ private fun SectionHeading(
 @Composable
 private fun DayHeading(
     row: WeekRow.DayHeading,
+    metrics: List<MetricDefinition>,
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
+    onOpenDiary: () -> Unit,
 ) {
     Column {
         Row(
@@ -559,6 +581,13 @@ private fun DayHeading(
                 Chip("Today", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
             }
             Spacer(modifier = Modifier.weight(1f))
+            // The diary for the day, a tap away and never in the way of planning it.
+            IconButton(
+                onClick = onOpenDiary,
+                modifier = Modifier.semantics {
+                    contentDescription = "Diary for ${WeekMath.dayLabel(row.date)}"
+                },
+            ) { Text("✎", style = MaterialTheme.typography.titleMedium) }
             AddButton(
                 description = "Add something to ${WeekMath.dayLabel(row.date)}",
                 onAddExercise = onAddExercise,
@@ -572,6 +601,7 @@ private fun DayHeading(
                 MaterialTheme.colorScheme.outlineVariant
             },
         )
+        row.diary?.takeIf { !it.isEmpty }?.let { DiaryLine(it, metrics, onOpenDiary) }
     }
 }
 
@@ -992,7 +1022,11 @@ sealed interface WeekRow {
         val subtitle: String?,
     ) : WeekRow
 
-    data class DayHeading(val date: LocalDate, val isToday: Boolean) : WeekRow {
+    data class DayHeading(
+        val date: LocalDate,
+        val isToday: Boolean,
+        val diary: DiaryDay? = null,
+    ) : WeekRow {
         override val key: String get() = "day-$date"
     }
 
@@ -1018,7 +1052,7 @@ private fun WeekUiState.toRows(): List<WeekRow> = buildList {
         unscheduled.forEach { add(WeekRow.Item(it)) }
     }
     days.forEach { day ->
-        add(WeekRow.DayHeading(day.date, day.isToday))
+        add(WeekRow.DayHeading(day.date, day.isToday, day.diary))
         if (day.items.isEmpty()) {
             add(WeekRow.Hint("hint-${day.date}", "Nothing planned."))
         } else {

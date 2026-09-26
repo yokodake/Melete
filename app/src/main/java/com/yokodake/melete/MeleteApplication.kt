@@ -2,6 +2,8 @@ package com.yokodake.melete
 
 import android.app.Application
 import android.content.Context
+import com.yokodake.melete.data.DiaryRepository
+import com.yokodake.melete.data.backup.BackupService
 import com.yokodake.melete.data.MeleteDatabase
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.data.timer.TimerController
@@ -22,6 +24,10 @@ class AppContainer(context: Context) {
     val database: MeleteDatabase by lazy { MeleteDatabase.build(applicationContext) }
 
     val trainingRepository: TrainingRepository by lazy { TrainingRepository(database) }
+
+    val diaryRepository: DiaryRepository by lazy { DiaryRepository(database) }
+
+    val backupService: BackupService by lazy { BackupService(database) }
 
     val timerNotifications: TimerNotifications by lazy { TimerNotifications(applicationContext) }
 

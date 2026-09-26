@@ -25,10 +25,10 @@ the two ever disagree, the code and the first half win.
 | Timer B — repeaters | ✅ |
 | Timer C — supersets/circuits and compact review | ✅ |
 | 4B — modules for planning | built; not yet run on a phone |
-| 5B — daily notes, metrics, export and restore | not started |
+| 5B — daily notes, metrics, export and restore | diary, export and restore built; importer to come; not yet run on a phone |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **6**, and one schema only until phase 6 — see *No migration chain* below.
+Schema version **7**, and one schema only until phase 6 — see *No migration chain* below.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -218,6 +218,33 @@ For a circuit the time is computed once from the circuit and then divided betwee
 side switch to the exercise being performed; transition and round rest to the exercise they follow.
 The shares sum back to the whole, which is what will keep a dashboard from counting a circuit and
 its parts both. The container itself carries no duration.
+
+## The diary
+
+A day's diary is a few lines and a couple of ratings, opened from the ✎ on the day's heading; a day
+with an entry shows it in one line under the heading. Metrics are data — a stable id, a label and
+the words for each point of the scale — seeded with **Energy** (Very low … Very high) and **Finger
+discomfort** (None, Slight, Noticeable, Painful, Severe). Each is optional, *Not set* included, and
+a day emptied completely is removed rather than kept blank. The diary has its own repository and
+tables; nothing counts it, and logging never asks for it.
+
+## Backup and restore
+
+*Backup & restore* is in the Library's ⋮ menu. **Export** writes the whole record to a file chosen
+with Android's picker: one human-readable JSON document (`format: "melete-backup"`,
+`formatVersion: 1`) holding every table with its stable ids — library, variations, circuits,
+modules, everything scheduled with its snapshots, every set, sessions, metrics and the diary.
+Tombstoned definitions are included, because history hangs from them. Dates are `2026-09-21`,
+enums are names, and plans, set payloads and circuit snapshots are embedded as the JSON objects
+they are stored as. The running timer lives outside the database and is never in it.
+
+**Restore** reads the chosen file and validates it whole before anything changes: format and
+version, unique ids, every reference the foreign keys enforce, one session per date and ordinal,
+readable dates, plans and payloads, diary ratings on their scale. A file that fails says why and
+nothing is touched. A sound one shows what it holds beside what is on the phone and asks; on yes,
+the current record is written to a safety copy inside the app, then replaced in one transaction.
+Safety copies are listed on the same screen with *Restore*, which is the undo — on a release build
+they cannot be reached any other way. There is no merge.
 
 ## Counting
 
@@ -600,8 +627,8 @@ the migration suite having gone.
 - `today` is computed when the UI state is built, so an app left open across midnight keeps the old
   highlight until the state is rebuilt.
 - The month abbreviation in week labels comes from the device locale. Unit tests pin `Locale.US`.
-- No diary, export or dashboard yet; those tables and screens are deliberately not created
-  speculatively.
+- No dashboard yet, and no importer for hand-written plans: restore takes only full backups.
+- **Export and restore go through the file picker, not a share sheet.**
 - **A module's members cannot be reordered in the week.** Edit mode moves the module as a
   whole; the order inside it is the template's, changed in the module editor.
 - **Circuit stations carry no variation.** A routine's stations copy the library default, as they
@@ -715,6 +742,15 @@ These are the ones no test can make.
 - [ ] **Move a recorded circuit** to another day: the stations and their sets move with it, and
       "anytime this week" is not offered.
 - [ ] **Remove the routine** from the Circuits list. The scheduled copy and its log stay.
+
+### 8. Diary, export and restore
+
+- [ ] **Diary**: ✎ on a day, write a line, rate energy; the line shows under the heading. Clear
+      everything and save: it goes.
+- [ ] **Export** to Downloads; open the file and read it — dates, names, plans as objects.
+- [ ] **Restore that file**: the summary matches, *Replace* works, a safety copy appears below.
+      Restore the safety copy: back as before.
+- [ ] **A broken file** (edit one date by hand): refused with the reason, nothing changed.
 
 ### 7. Variations and modules
 
@@ -1065,9 +1101,27 @@ instrumented tests passed; the one failure was a wrong expectation in the new `W
 second nudge carried a module on to Wednesday, as it should), since corrected. **The suite has not
 run on schema 6** — the phone was away.
 
+## Phase 5B, part one: diary, export and restore (2026-09-26)
+
+- **The diary**: `diary_entries`, `metric_definitions` and `diary_metric_values` (schema **v7**),
+  its own `DiaryRepository`, defaults seeded on first use; ✎ and a one-line summary per day.
+- **Export and restore** in `data/backup`, apart from the training repository and reading the
+  tables directly: `BackupFormat` (records and the mapping both ways), `BackupValidator` (pure,
+  every refusal in words), `BackupService` (export in one transaction, safety copy, atomic
+  restore). The *Backup & restore* screen drives it with the system file picker.
+
+**Checks run:** 172 unit tests pass — 6 new for the file format and validation, including every
+kind of row surviving the round trip unchanged. All three APKs build. **Not run on a phone:**
+`BackupRestoreTest` (5 tests: a mixed record — one-off activity, circuit, module, skipped work,
+manual, inferred and missing durations, unilateral loads, a tombstone, variations, the diary —
+exported, restored over other data, and exported again to the identical file; the restored week
+read back; unreadable and invalid files changing nothing; the safety copy restoring the record).
+
 ## Next step
 
-**Phase 5B — daily notes, metrics, export and restore.**
+**Phase 5B, part two: the importer** — hand-written files keyed by names (library, circuits,
+modules, weeks), per the agreed "one format, ids optional". The seed's list becomes the first such
+file.
 
 Owed before or alongside it:
 

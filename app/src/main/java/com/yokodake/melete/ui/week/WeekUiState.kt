@@ -1,6 +1,8 @@
 package com.yokodake.melete.ui.week
 
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.DiaryDay
+import com.yokodake.melete.data.MetricDefinition
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.WeekCircuit
 import com.yokodake.melete.data.WeekModule
@@ -69,6 +71,8 @@ data class DaySection(
     val date: LocalDate,
     val isToday: Boolean,
     val items: List<WeekItem>,
+    /** The day's diary, when it has one. Never counted, never part of the training. */
+    val diary: DiaryDay? = null,
 )
 
 data class WeekUiState(
@@ -77,6 +81,8 @@ data class WeekUiState(
     val weekLabel: String,
     val unscheduled: List<WeekItem>,
     val days: List<DaySection>,
+    /** The metrics the diary can record, for its dialog and its one-line summaries. */
+    val metrics: List<MetricDefinition> = emptyList(),
 ) {
     val isCurrentWeek: Boolean get() = WeekMath.contains(weekStart, today)
 
@@ -95,6 +101,8 @@ data class WeekUiState(
             occurrences: List<PlannedOccurrence>,
             circuits: List<WeekCircuit> = emptyList(),
             modules: List<WeekModule> = emptyList(),
+            diary: Map<LocalDate, DiaryDay> = emptyMap(),
+            metrics: List<MetricDefinition> = emptyList(),
         ): WeekUiState {
             val stationsByCircuit = occurrences
                 .filter { it.circuitInstanceId != null }
@@ -147,11 +155,13 @@ data class WeekUiState(
                 today = today,
                 weekLabel = WeekMath.weekLabel(weekStart),
                 unscheduled = itemsFor(null),
+                metrics = metrics,
                 days = WeekMath.daysOf(weekStart).map { date ->
                     DaySection(
                         date = date,
                         isToday = date == today,
                         items = itemsFor(date),
+                        diary = diary[date],
                     )
                 },
             )
