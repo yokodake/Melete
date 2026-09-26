@@ -269,7 +269,7 @@ class BackupRestoreTest {
     }
 
     @Test
-    fun theSafetyCopyIsTheWholeRecordAndRestoresToIt() = runBlocking {
+    fun theSafetyCopyIsTheWholeRecordAndRestoresToIt() = runBlocking<Unit> {
         populate(target)
         val service = BackupService(target)
         val before = service.export(at)
