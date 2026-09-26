@@ -267,7 +267,7 @@ private fun CueMenu(state: TimerUiState, onCues: (CueSettings) -> Unit) {
         CueItem("3 – 2 – 1", state.cues.finalCountdown) {
             onCues(state.cues.copy(finalCountdown = it))
         }
-        CueItem("Quarter marks during timed work", state.cues.quarterCues) {
+        CueItem("Quarter marks", state.cues.quarterCues) {
             onCues(state.cues.copy(quarterCues = it))
         }
         Text(
