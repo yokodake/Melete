@@ -4,17 +4,18 @@ import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.DiaryEntryEntity
-import com.yokodake.melete.data.entity.DiaryMetricValueEntity
+import com.yokodake.melete.data.entity.DiaryValueEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.ExerciseVariationEntity
-import com.yokodake.melete.data.entity.MetricDefinitionEntity
 import com.yokodake.melete.data.entity.ModuleEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.ModuleInstanceEntity
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.RoutineEntity
 import com.yokodake.melete.data.entity.RoutineEntryEntity
+import com.yokodake.melete.data.entity.TrackerEntity
+import com.yokodake.melete.data.entity.TrackerType
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseCategory
@@ -23,6 +24,8 @@ import com.yokodake.melete.data.model.MeasurementMeaning
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 import java.time.LocalDate
 
 /** What a backup file says it is, so a file of anything else is recognised before it is read. */
@@ -60,7 +63,7 @@ data class MeleteBackup(
     val occurrences: List<OccurrenceRecord> = emptyList(),
     val sessions: List<SessionRecord> = emptyList(),
     val sets: List<SetRecord> = emptyList(),
-    val metrics: List<MetricRecord> = emptyList(),
+    val trackers: List<TrackerRecord> = emptyList(),
     val diary: List<DiaryRecord> = emptyList(),
 )
 
@@ -221,12 +224,15 @@ data class SetRecord(
 )
 
 @Serializable
-data class MetricRecord(
+data class TrackerRecord(
     val id: String,
     val label: String,
-    /** The words for each point of the scale, lowest first; a value is a 1-based position. */
-    val scale: List<String>,
+    val type: TrackerType,
+    val scaleMin: Int? = null,
+    val scaleMax: Int? = null,
+    val unit: String? = null,
     val orderIndex: Int,
+    val createdAtEpochMs: Long,
     val deletedAtEpochMs: Long? = null,
 )
 
@@ -235,8 +241,23 @@ data class DiaryRecord(
     val date: String,
     val text: String? = null,
     val updatedAtEpochMs: Long,
-    /** Metric id → value, a 1-based position on that metric's scale. */
-    val values: Map<String, Int> = emptyMap(),
+    val values: List<DiaryValueRecord> = emptyList(),
+)
+
+/**
+ * One tracked value, with the tracker as it was on that day — the definition the value means
+ * something against, which may no longer be the tracker's current one.
+ */
+@Serializable
+data class DiaryValueRecord(
+    val tracker: String,
+    val label: String,
+    val type: TrackerType,
+    val scaleMin: Int? = null,
+    val scaleMax: Int? = null,
+    val unit: String? = null,
+    /** A number for a scale or a number, 1 for a checkmark, a string for a comment. */
+    val value: JsonElement,
 )
 
 /** The file's JSON: indented for reading, tolerant of fields a newer app added. */
@@ -328,11 +349,23 @@ internal fun ActualSetEntity.toRecord() = SetRecord(
     payloadVersion, BackupJson.parseToJsonElement(payloadJson), recordedAtEpochMs,
 )
 
-internal fun MetricDefinitionEntity.toRecord(scale: List<String>) =
-    MetricRecord(id, label, scale, orderIndex, deletedAtEpochMs)
+internal fun TrackerEntity.toRecord() = TrackerRecord(
+    id, label, type, scaleMin, scaleMax, unit, orderIndex, createdAtEpochMs, deletedAtEpochMs,
+)
 
-internal fun DiaryEntryEntity.toRecord(values: List<DiaryMetricValueEntity>) = DiaryRecord(
-    dateEpochDay.date(), text, updatedAtEpochMs, values.associate { it.metricId to it.value },
+internal fun DiaryEntryEntity.toRecord(values: List<DiaryValueEntity>) = DiaryRecord(
+    dateEpochDay.date(), text, updatedAtEpochMs,
+    values.sortedBy { it.trackerId }.map { value ->
+        DiaryValueRecord(
+            tracker = value.trackerId,
+            label = value.labelSnapshot,
+            type = value.typeSnapshot,
+            scaleMin = value.scaleMinSnapshot,
+            scaleMax = value.scaleMaxSnapshot,
+            unit = value.unitSnapshot,
+            value = value.text?.let(::JsonPrimitive) ?: JsonPrimitive(value.number),
+        )
+    },
 )
 
 // ------------------------------------------------------------------ records → rows
@@ -424,10 +457,24 @@ internal fun SetRecord.toEntity() = ActualSetEntity(
     recordedAtEpochMs = recordedAtEpochMs,
 )
 
-internal fun MetricRecord.toEntity(scaleJson: String) =
-    MetricDefinitionEntity(id, label, scaleJson, orderIndex, deletedAtEpochMs)
+internal fun TrackerRecord.toEntity() = TrackerEntity(
+    id, label, type, scaleMin, scaleMax, unit, orderIndex, createdAtEpochMs, deletedAtEpochMs,
+)
 
 internal fun DiaryRecord.toEntity() = DiaryEntryEntity(date.epochDay(), text, updatedAtEpochMs)
 
-internal fun DiaryRecord.valueEntities() =
-    values.map { (metric, value) -> DiaryMetricValueEntity(date.epochDay(), metric, value) }
+internal fun DiaryRecord.valueEntities() = values.map { record ->
+    val primitive = record.value as? JsonPrimitive
+    val isText = primitive != null && primitive.isString
+    DiaryValueEntity(
+        dateEpochDay = date.epochDay(),
+        trackerId = record.tracker,
+        labelSnapshot = record.label,
+        typeSnapshot = record.type,
+        scaleMinSnapshot = record.scaleMin,
+        scaleMaxSnapshot = record.scaleMax,
+        unitSnapshot = record.unit,
+        number = if (isText) null else primitive?.doubleOrNull,
+        text = if (isText) primitive.content else null,
+    )
+}

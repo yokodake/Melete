@@ -17,6 +17,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +45,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.yokodake.melete.R
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.timer.TimerPhase
@@ -397,7 +400,7 @@ private fun PlanCard(
                 onClick = onEdit,
                 modifier = Modifier.semantics { contentDescription = editDescription },
             ) {
-                Text("⚙", style = MaterialTheme.typography.titleLarge)
+                Icon(painterResource(R.drawable.ic_edit_plan), contentDescription = null)
             }
         }
     }

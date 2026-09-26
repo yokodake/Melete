@@ -58,7 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.DiaryDay
-import com.yokodake.melete.data.MetricDefinition
+import com.yokodake.melete.data.Tracker
 import com.yokodake.melete.data.PlanItemKind
 import com.yokodake.melete.data.PlanItemRef
 import com.yokodake.melete.data.PlannedOccurrence
@@ -82,6 +82,7 @@ fun WeekRoute(
     onOpenOccurrence: (String) -> Unit,
     onAddExercise: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit,
     onOpenCircuit: (String) -> Unit = {},
+    onOpenDiary: (LocalDate) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
@@ -97,7 +98,6 @@ fun WeekRoute(
         onLoggedSetCount = viewModel::loggedSetCount,
         onDuplicateOccurrence = viewModel::duplicateOccurrence,
         onNudge = viewModel::nudge,
-        onSaveDiary = viewModel::saveDiary,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
         onCurrentWeek = viewModel::showCurrentWeek,
@@ -105,6 +105,7 @@ fun WeekRoute(
         onAddExercise = { date -> onAddExercise(state.weekStart, date) },
         onAddActivity = viewModel::addActivity,
         onOpenCircuit = onOpenCircuit,
+        onOpenDiary = onOpenDiary,
         onRemoveCircuit = viewModel::removeCircuit,
         onDeleteCircuitWithLog = viewModel::deleteCircuitAndLogs,
         onCircuitRecordedStations = viewModel::circuitRecordedStations,
@@ -131,7 +132,7 @@ fun WeekScreen(
     onDuplicateOccurrence: (String) -> Unit = {},
     /** Moves a card one place, crossing into the next day at an edge. Offered in edit mode. */
     onNudge: (PlanItemRef, Int) -> Unit = { _, _ -> },
-    onSaveDiary: (LocalDate, String?, Map<String, Int?>) -> Unit = { _, _, _ -> },
+    onOpenDiary: (LocalDate) -> Unit = {},
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onCurrentWeek: () -> Unit,
@@ -163,7 +164,6 @@ fun WeekScreen(
     var removingCircuitStations by remember { mutableIntStateOf(0) }
     // Survives rotation and a trip into an exercise and back, so reorganising is not interrupted.
     var editing by rememberSaveable { mutableStateOf(false) }
-    var diaryFor by remember { mutableStateOf<LocalDate?>(null) }
     var removingModule by remember { mutableStateOf<WeekItem.Module?>(null) }
     var removingModuleRecorded by remember { mutableIntStateOf(0) }
 
@@ -263,14 +263,14 @@ fun WeekScreen(
                     }
                 },
                 actions = {
+                    if (!state.isCurrentWeek) {
+                        TextButton(onClick = onCurrentWeek) { Text("Today") }
+                    }
                     // Reorganising is a mode you enter on purpose, so cards only move when you
                     // have said that is what you are doing — never from a stray tap while
                     // reading the week.
                     TextButton(onClick = { editing = !editing }) {
                         Text(if (editing) "Done" else "Edit")
-                    }
-                    if (!state.isCurrentWeek) {
-                        TextButton(onClick = onCurrentWeek) { Text("Today") }
                     }
                     IconButton(
                         onClick = onNextWeek,
@@ -304,10 +304,10 @@ fun WeekScreen(
 
                     is WeekRow.DayHeading -> DayHeading(
                         row = row,
-                        metrics = state.metrics,
+                        trackers = state.trackers,
                         onAddExercise = { onAddExercise(row.date) },
                         onAddActivity = { addingActivityOn = row.date },
-                        onOpenDiary = { diaryFor = row.date },
+                        onOpenDiary = { onOpenDiary(row.date) },
                     )
 
                     is WeekRow.Item -> if (editing) {
@@ -323,19 +323,6 @@ fun WeekScreen(
                 }
             }
         }
-    }
-
-    diaryFor?.let { date ->
-        DiaryDialog(
-            date = date,
-            metrics = state.metrics,
-            day = state.days.firstOrNull { it.date == date }?.diary,
-            onSave = { text, values ->
-                diaryFor = null
-                onSaveDiary(date, text, values)
-            },
-            onDismiss = { diaryFor = null },
-        )
     }
 
     removing?.let { occurrence ->
@@ -488,6 +475,7 @@ private fun AddButton(
     description: String,
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
+    onOpenDiary: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -514,9 +502,21 @@ private fun AddButton(
                     onAddActivity()
                 },
             )
+            // Only a day has a diary; the undated area is a place for plans, not for notes.
+            if (onOpenDiary != null) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Daily notes") },
+                    onClick = {
+                        expanded = false
+                        onOpenDiary()
+                    },
+                )
+            }
         }
     }
 }
+
 
 @Composable
 private fun SectionHeading(
@@ -554,7 +554,7 @@ private fun SectionHeading(
 @Composable
 private fun DayHeading(
     row: WeekRow.DayHeading,
-    metrics: List<MetricDefinition>,
+    trackers: List<Tracker>,
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
     onOpenDiary: () -> Unit,
@@ -581,17 +581,11 @@ private fun DayHeading(
                 Chip("Today", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
             }
             Spacer(modifier = Modifier.weight(1f))
-            // The diary for the day, a tap away and never in the way of planning it.
-            IconButton(
-                onClick = onOpenDiary,
-                modifier = Modifier.semantics {
-                    contentDescription = "Diary for ${WeekMath.dayLabel(row.date)}"
-                },
-            ) { Text("✎", style = MaterialTheme.typography.titleMedium) }
             AddButton(
                 description = "Add something to ${WeekMath.dayLabel(row.date)}",
                 onAddExercise = onAddExercise,
                 onAddActivity = onAddActivity,
+                onOpenDiary = onOpenDiary,
             )
         }
         HorizontalDivider(
@@ -601,7 +595,7 @@ private fun DayHeading(
                 MaterialTheme.colorScheme.outlineVariant
             },
         )
-        row.diary?.takeIf { !it.isEmpty }?.let { DiaryLine(it, metrics, onOpenDiary) }
+        row.diary?.takeIf { !it.isEmpty }?.let { DiaryLine(it, trackers, onOpenDiary) }
     }
 }
 

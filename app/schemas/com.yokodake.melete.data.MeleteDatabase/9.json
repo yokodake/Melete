@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 7,
-    "identityHash": "b7ff34d3f4d61bcac8594e08216e3f83",
+    "version": 9,
+    "identityHash": "668aea72f58ec32158d5f564e4c1390c",
     "entities": [
       {
         "tableName": "exercises",
@@ -1022,8 +1022,8 @@
         ]
       },
       {
-        "tableName": "metric_definitions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `label` TEXT NOT NULL, `scaleLabelsJson` TEXT NOT NULL, `orderIndex` INTEGER NOT NULL, `deletedAtEpochMs` INTEGER, PRIMARY KEY(`id`))",
+        "tableName": "trackers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `label` TEXT NOT NULL, `type` TEXT NOT NULL, `scaleMin` INTEGER, `scaleMax` INTEGER, `unit` TEXT, `orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `deletedAtEpochMs` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -1038,14 +1038,35 @@
             "notNull": true
           },
           {
-            "fieldPath": "scaleLabelsJson",
-            "columnName": "scaleLabelsJson",
+            "fieldPath": "type",
+            "columnName": "type",
             "affinity": "TEXT",
             "notNull": true
           },
           {
+            "fieldPath": "scaleMin",
+            "columnName": "scaleMin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "scaleMax",
+            "columnName": "scaleMax",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "unit",
+            "columnName": "unit",
+            "affinity": "TEXT"
+          },
+          {
             "fieldPath": "orderIndex",
             "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMs",
+            "columnName": "createdAtEpochMs",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -1092,8 +1113,8 @@
         }
       },
       {
-        "tableName": "diary_metric_values",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`dateEpochDay` INTEGER NOT NULL, `metricId` TEXT NOT NULL, `value` INTEGER NOT NULL, PRIMARY KEY(`dateEpochDay`, `metricId`), FOREIGN KEY(`dateEpochDay`) REFERENCES `diary_entries`(`dateEpochDay`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`metricId`) REFERENCES `metric_definitions`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "tableName": "diary_values",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`dateEpochDay` INTEGER NOT NULL, `trackerId` TEXT NOT NULL, `labelSnapshot` TEXT NOT NULL, `typeSnapshot` TEXT NOT NULL, `scaleMinSnapshot` INTEGER, `scaleMaxSnapshot` INTEGER, `unitSnapshot` TEXT, `number` REAL, `text` TEXT, PRIMARY KEY(`dateEpochDay`, `trackerId`), FOREIGN KEY(`dateEpochDay`) REFERENCES `diary_entries`(`dateEpochDay`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`trackerId`) REFERENCES `trackers`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "dateEpochDay",
@@ -1102,34 +1123,65 @@
             "notNull": true
           },
           {
-            "fieldPath": "metricId",
-            "columnName": "metricId",
+            "fieldPath": "trackerId",
+            "columnName": "trackerId",
             "affinity": "TEXT",
             "notNull": true
           },
           {
-            "fieldPath": "value",
-            "columnName": "value",
-            "affinity": "INTEGER",
+            "fieldPath": "labelSnapshot",
+            "columnName": "labelSnapshot",
+            "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "typeSnapshot",
+            "columnName": "typeSnapshot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scaleMinSnapshot",
+            "columnName": "scaleMinSnapshot",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "scaleMaxSnapshot",
+            "columnName": "scaleMaxSnapshot",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "unitSnapshot",
+            "columnName": "unitSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "number",
+            "columnName": "number",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
           "autoGenerate": false,
           "columnNames": [
             "dateEpochDay",
-            "metricId"
+            "trackerId"
           ]
         },
         "indices": [
           {
-            "name": "index_diary_metric_values_metricId",
+            "name": "index_diary_values_trackerId",
             "unique": false,
             "columnNames": [
-              "metricId"
+              "trackerId"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_diary_metric_values_metricId` ON `${TABLE_NAME}` (`metricId`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_diary_values_trackerId` ON `${TABLE_NAME}` (`trackerId`)"
           }
         ],
         "foreignKeys": [
@@ -1145,11 +1197,11 @@
             ]
           },
           {
-            "table": "metric_definitions",
+            "table": "trackers",
             "onDelete": "RESTRICT",
             "onUpdate": "NO ACTION",
             "columns": [
-              "metricId"
+              "trackerId"
             ],
             "referencedColumns": [
               "id"
@@ -1160,7 +1212,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b7ff34d3f4d61bcac8594e08216e3f83')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '668aea72f58ec32158d5f564e4c1390c')"
     ]
   }
 }

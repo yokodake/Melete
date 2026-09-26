@@ -25,7 +25,7 @@ the two ever disagree, the code and the first half win.
 | Timer B — repeaters | ✅ |
 | Timer C — supersets/circuits and compact review | ✅ |
 | 4B — modules for planning | built; not yet run on a phone |
-| 5B — daily notes, metrics, export and restore | diary, export and restore built and tested on the phone; importer to come |
+| 5B — daily notes, trackers, export and restore | diary, export and restore built and tested on the phone; importer to come |
 | 6 — motivating overview dashboard | not started |
 
 Schema version **7**, and one schema only until phase 6 — see *No migration chain* below.
@@ -221,19 +221,33 @@ its parts both. The container itself carries no duration.
 
 ## The diary
 
-A day's diary is a few lines and a couple of ratings, opened from the ✎ on the day's heading; a day
-with an entry shows it in one line under the heading. Metrics are data — a stable id, a label and
-the words for each point of the scale — seeded with **Energy** (Very low … Very high) and **Finger
-discomfort** (None, Slight, Noticeable, Painful, Severe). Each is optional, *Not set* included, and
-a day emptied completely is removed rather than kept blank. The diary has its own repository and
-tables; nothing counts it, and logging never asks for it.
+A day's diary is a few lines and its trackers, on a page of its own (like the logger) opened from
+**Daily notes** in the day's **+** menu. *Save* at the bottom writes it and goes back. A day with an
+entry shows it in one line under the heading, and tapping that line opens the page too.
+
+Trackers are data, edited under **⋮ → Edit daily trackers** on that page; coming back keeps what was
+being written. Each has a name and a kind:
+
+- **Scale**: a whole number between a lowest and highest value the user picks (defaults 0–5).
+- **Number**: a decimal, with an optional unit such as kg.
+- **Checkmark**: done or not.
+- **Comment**: a short text.
+
+New databases start with **Energy** and **Finger discomfort**, both 0–5. Trackers can be renamed,
+changed to another kind, rescaled, reordered and retired — **from now on only**. Every recorded
+value carries the tracker as it was that day (name, kind, scale, unit), so a past 3 out of 5 stays
+3 out of 5 after the scale becomes 1–10, and a retired tracker still shows on the days that
+recorded it ("No longer tracked"). Opening a past day shows such a value as recorded; clearing it
+returns the field to today's definition. Every tracker is optional, *Not set* included; a day emptied completely is removed rather
+than kept blank. The diary has its own repository and tables; nothing counts it, and logging never
+asks for it.
 
 ## Backup and restore
 
 *Backup & restore* is in the Library's ⋮ menu. **Export** writes the whole record to a file chosen
 with Android's picker: one human-readable JSON document (`format: "melete-backup"`,
 `formatVersion: 1`) holding every table with its stable ids — library, variations, circuits,
-modules, everything scheduled with its snapshots, every set, sessions, metrics and the diary.
+modules, everything scheduled with its snapshots, every set, sessions, trackers and the diary.
 Tombstoned definitions are included, because history hangs from them. Dates are `2026-09-21`,
 enums are names, and plans, set payloads and circuit snapshots are embedded as the JSON objects
 they are stored as. The running timer lives outside the database and is never in it.
@@ -745,8 +759,11 @@ These are the ones no test can make.
 
 ### 8. Diary, export and restore
 
-- [ ] **Diary**: ✎ on a day, write a line, rate energy; the line shows under the heading. Clear
-      everything and save: it goes.
+- [ ] **Diary**: + → *Daily notes* on a day, write a line, set energy, *Save*; the line shows
+      under the heading. Clear everything and save: it goes.
+- [ ] **Trackers**: in the notes page, ⋮ → *Edit daily trackers*; add *Weight* (number, kg), a
+      checkmark and a comment; reorder; back in the notes the draft is intact and the new ones are
+      there. Change Energy's scale and retire one: the day's line still reads as recorded.
 - [ ] **Export** to Downloads; open the file and read it — dates, names, plans as objects.
 - [ ] **Restore that file**: the summary matches, *Replace* works, a safety copy appears below.
       Restore the safety copy: back as before.
@@ -1104,7 +1121,12 @@ run on schema 6** — the phone was away.
 ## Phase 5B, part one: diary, export and restore (2026-09-26)
 
 - **The diary**: `diary_entries`, `metric_definitions` and `diary_metric_values` (schema **v7**),
-  its own `DiaryRepository`, defaults seeded on first use; ✎ and a one-line summary per day.
+  its own `DiaryRepository`, defaults seeded on first use; a one-line summary per day.
+- **Daily trackers** (schema **v9**, replacing the metrics): `trackers` and `diary_values`, each
+  tracker a scale with its own range, a number with a unit, a checkmark or a comment. Each value
+  row snapshots its tracker's definition, and so does the backup (`DiaryValueRecord`), which
+  validates a value against its own snapshot. *Daily notes* is a full page (`ui/diary`) from the
+  day's + menu, with the tracker editor in its ⋮; the ✎ and the dialog are gone.
 - **Export and restore** in `data/backup`, apart from the training repository and reading the
   tables directly: `BackupFormat` (records and the mapping both ways), `BackupValidator` (pure,
   every refusal in words), `BackupService` (export in one transaction, safety copy, atomic

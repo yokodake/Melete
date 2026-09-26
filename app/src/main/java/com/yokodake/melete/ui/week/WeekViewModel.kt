@@ -46,9 +46,9 @@ class WeekViewModel(
                 repository.observeWeekCircuits(start),
                 repository.observeWeekModules(start),
                 diary.observeDays(start, start.plusDays(6)),
-                diary.observeMetrics(),
-            ) { occurrences, circuits, modules, days, metrics ->
-                WeekUiState.build(start, today, occurrences, circuits, modules, days, metrics)
+                diary.observeTrackers(),
+            ) { occurrences, circuits, modules, days, trackers ->
+                WeekUiState.build(start, today, occurrences, circuits, modules, days, trackers)
             }
         }
         .stateIn(
@@ -225,11 +225,6 @@ class WeekViewModel(
                 "Module removed, including logs for $recorded exercise" +
                     if (recorded == 1) "" else "s"
         }
-    }
-
-    /** Writes one day's diary; emptied completely, it goes. */
-    fun saveDiary(date: LocalDate, text: String?, values: Map<String, Int?>) {
-        viewModelScope.launch { diary.save(date, text, values) }
     }
 
     /** The week the planner is currently showing, for defaulting a move or a copy. */

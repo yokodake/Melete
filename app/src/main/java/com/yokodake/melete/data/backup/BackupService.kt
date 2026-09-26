@@ -2,7 +2,6 @@ package com.yokodake.melete.data.backup
 
 import androidx.room.withTransaction
 import com.yokodake.melete.data.MeleteDatabase
-import com.yokodake.melete.data.ScaleJson
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -60,8 +59,7 @@ class BackupService(private val database: MeleteDatabase) {
                 .map { it.toRecord() },
             sets = dao.sets().sortedWith(compareBy({ it.trainingDateEpochDay }, { it.recordedAtEpochMs }))
                 .map { it.toRecord() },
-            metrics = dao.metrics().sortedBy { it.orderIndex }
-                .map { it.toRecord(ScaleJson.decode(it.scaleLabelsJson)) },
+            trackers = dao.trackers().sortedBy { it.orderIndex }.map { it.toRecord() },
             diary = dao.diaryEntries().sortedBy { it.dateEpochDay }
                 .map { it.toRecord(diaryValues[it.dateEpochDay].orEmpty()) },
         )
@@ -111,7 +109,7 @@ class BackupService(private val database: MeleteDatabase) {
         database.withTransaction {
             dao.clearDiaryValues()
             dao.clearDiaryEntries()
-            dao.clearMetrics()
+            dao.clearTrackers()
             dao.clearSets()
             dao.clearSessions()
             dao.clearOccurrences()
@@ -136,7 +134,7 @@ class BackupService(private val database: MeleteDatabase) {
             dao.insertOccurrences(backup.occurrences.map { it.toEntity() })
             dao.insertSessions(backup.sessions.map { it.toEntity() })
             dao.insertSets(backup.sets.map { it.toEntity() })
-            dao.insertMetrics(backup.metrics.map { it.toEntity(ScaleJson.encode(it.scale)) })
+            dao.insertTrackers(backup.trackers.map { it.toEntity() })
             dao.insertDiaryEntries(backup.diary.map { it.toEntity() })
             dao.insertDiaryValues(backup.diary.flatMap { it.valueEntities() })
         }

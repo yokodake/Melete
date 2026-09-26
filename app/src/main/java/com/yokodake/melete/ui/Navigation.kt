@@ -35,6 +35,8 @@ import com.yokodake.melete.ui.module.ModuleEditorRoute
 import com.yokodake.melete.ui.routine.RoutineEditorRoute
 import com.yokodake.melete.ui.timer.TimerRoute
 import com.yokodake.melete.ui.week.WeekRoute
+import com.yokodake.melete.ui.diary.DiaryRoute
+import com.yokodake.melete.ui.diary.TrackersRoute
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
@@ -106,6 +108,14 @@ data class ModuleEditorDestination(val moduleId: String? = null)
 @Serializable
 data object BackupDestination
 
+/** One day's notes and trackers. */
+@Serializable
+data class DiaryDestination(val dateEpochDay: Long)
+
+/** What the diary tracks each day. */
+@Serializable
+data object TrackersDestination
+
 /**
  * What a scheduled circuit is, and the two things to do with it.
  *
@@ -166,6 +176,7 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                     )
                 },
                 onOpenCircuit = { navController.navigate(CircuitDetailDestination(it)) },
+                onOpenDiary = { navController.navigate(DiaryDestination(it.toEpochDay())) },
                 bottomBar = bottomBar,
             )
         }
@@ -273,6 +284,15 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         }
         composable<BackupDestination> {
             BackupRoute(onBack = { navController.popBackStack() })
+        }
+        composable<DiaryDestination> {
+            DiaryRoute(
+                onBack = { navController.popBackStack() },
+                onEditTrackers = { navController.navigate(TrackersDestination) },
+            )
+        }
+        composable<TrackersDestination> {
+            TrackersRoute(onBack = { navController.popBackStack() })
         }
         composable<CircuitDetailDestination> {
             CircuitDetailRoute(

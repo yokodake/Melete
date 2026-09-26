@@ -4,9 +4,10 @@ import com.yokodake.melete.data.backup.BACKUP_FORMAT_VERSION
 import com.yokodake.melete.data.backup.BackupJson
 import com.yokodake.melete.data.backup.BackupValidator
 import com.yokodake.melete.data.backup.DiaryRecord
+import com.yokodake.melete.data.backup.DiaryValueRecord
 import com.yokodake.melete.data.backup.MeleteBackup
-import com.yokodake.melete.data.backup.MetricRecord
 import com.yokodake.melete.data.backup.SessionRecord
+import com.yokodake.melete.data.backup.TrackerRecord
 import com.yokodake.melete.data.backup.entryEntities
 import com.yokodake.melete.data.backup.toEntity
 import com.yokodake.melete.data.backup.toRecord
@@ -15,7 +16,7 @@ import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.DiaryEntryEntity
-import com.yokodake.melete.data.entity.DiaryMetricValueEntity
+import com.yokodake.melete.data.entity.DiaryValueEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.ExerciseVariationEntity
@@ -24,6 +25,8 @@ import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.RoutineEntity
 import com.yokodake.melete.data.entity.RoutineEntryEntity
+import com.yokodake.melete.data.entity.TrackerEntity
+import com.yokodake.melete.data.entity.TrackerType
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 import com.yokodake.melete.data.model.ActualSetJson
 import com.yokodake.melete.data.model.ActualSetPayload
@@ -36,6 +39,7 @@ import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionJson
 import com.yokodake.melete.data.model.PrescriptionPayload
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -130,17 +134,27 @@ class BackupFormatTest {
         assertEquals(session, session.toRecord().toEntity())
 
         val diary = DiaryEntryEntity(monday, "Tired", 4_000)
-        val values = listOf(DiaryMetricValueEntity(monday, "energy", 2))
+        // One of each kind: a scale, a number, a checkmark and a comment.
+        // Each carries the tracker as it was that day.
+        val values = listOf(
+            DiaryValueEntity(monday, "energy", "Energy", TrackerType.SCALE, 0, 5, number = 2.0),
+            DiaryValueEntity(monday, "skin", "Skin", TrackerType.TEXT, text = "Split on the left index"),
+            DiaryValueEntity(monday, "stretched", "Stretched", TrackerType.CHECK, number = 1.0),
+            DiaryValueEntity(monday, "weight", "Weight", TrackerType.NUMBER, unitSnapshot = "kg", number = 72.5),
+        )
         val diaryRecord = diary.toRecord(values)
         assertEquals(diary, diaryRecord.toEntity())
         assertEquals(values, diaryRecord.valueEntities())
+
+        val tracker = TrackerEntity("weight", "Weight", TrackerType.NUMBER, null, null, "kg", 1, 5_000, 6_000)
+        assertEquals(tracker, tracker.toRecord().toEntity())
     }
 
     @Test
     fun `the file is readable and survives being written and read back`() {
         val backup = MeleteBackup(
             exportedAt = "2026-09-26T10:00:00Z",
-            schemaVersion = 7,
+            schemaVersion = 8,
             exercises = listOf(exercise.toRecord()),
             occurrences = listOf(occurrence.toRecord()),
         )
@@ -156,13 +170,30 @@ class BackupFormatTest {
 
     private val valid = MeleteBackup(
         exportedAt = "2026-09-26T10:00:00Z",
-        schemaVersion = 7,
+        schemaVersion = 8,
         exercises = listOf(exercise.toRecord()),
         occurrences = listOf(occurrence.toRecord()),
         sessions = listOf(SessionRecord("ses-1", "2026-09-22", 0, 3_000)),
         sets = listOf(set.toRecord()),
-        metrics = listOf(MetricRecord("energy", "Energy", listOf("1", "2", "3", "4", "5"), 0)),
-        diary = listOf(DiaryRecord("2026-09-21", "Tired", 4_000, mapOf("energy" to 2))),
+        trackers = listOf(
+            TrackerRecord("energy", "Energy", TrackerType.SCALE, 1, 10, orderIndex = 0, createdAtEpochMs = 0),
+            TrackerRecord("weight", "Weight", TrackerType.NUMBER, unit = "kg", orderIndex = 1, createdAtEpochMs = 0),
+            TrackerRecord("stretched", "Stretched", TrackerType.CHECK, orderIndex = 2, createdAtEpochMs = 0),
+            TrackerRecord("skin", "Skin", TrackerType.TEXT, orderIndex = 3, createdAtEpochMs = 0),
+        ),
+        diary = listOf(
+            DiaryRecord(
+                "2026-09-21", "Tired", 4_000,
+                listOf(
+                    // Recorded on a 0–5 scale, though Energy is 1–10 now: the day's own
+                    // definition is what the value is checked against.
+                    DiaryValueRecord("energy", "Energy", TrackerType.SCALE, 0, 5, value = JsonPrimitive(0)),
+                    DiaryValueRecord("weight", "Weight", TrackerType.NUMBER, unit = "kg", value = JsonPrimitive(72.5)),
+                    DiaryValueRecord("stretched", "Stretched", TrackerType.CHECK, value = JsonPrimitive(1)),
+                    DiaryValueRecord("skin", "Skin", TrackerType.TEXT, value = JsonPrimitive("Sore")),
+                ),
+            )
+        ),
     )
 
     @Test
@@ -183,7 +214,7 @@ class BackupFormatTest {
     fun `everything the foreign keys would reject is caught first`() {
         assertTrue(BackupValidator.problems(valid.copy(sessions = emptyList())).any { "session" in it })
         assertTrue(BackupValidator.problems(valid.copy(occurrences = emptyList())).any { "planned exercise" in it })
-        assertTrue(BackupValidator.problems(valid.copy(metrics = emptyList())).any { "metric" in it })
+        assertTrue(BackupValidator.problems(valid.copy(trackers = emptyList())).any { "tracks something" in it })
         assertTrue(
             BackupValidator.problems(valid.copy(exercises = valid.exercises + valid.exercises))
                 .any { "share the id" in it }
@@ -195,8 +226,23 @@ class BackupFormatTest {
         val badDate = valid.copy(occurrences = listOf(occurrence.toRecord().copy(weekStart = "last monday")))
         assertTrue(BackupValidator.problems(badDate).any { "unreadable date" in it })
 
-        val offScale = valid.copy(diary = listOf(DiaryRecord("2026-09-21", null, 4_000, mapOf("energy" to 9))))
-        assertTrue(BackupValidator.problems(offScale).any { "off its metric's scale" in it })
+        fun day(value: JsonPrimitive, id: String = "energy", type: TrackerType = TrackerType.SCALE) =
+            valid.copy(
+                diary = listOf(
+                    DiaryRecord(
+                        "2026-09-21", null, 4_000,
+                        listOf(DiaryValueRecord(id, id, type, 0, 5, value = value)),
+                    )
+                )
+            )
+        val misfits = listOf(
+            day(JsonPrimitive(9)),      // off the day's scale, even though today's goes to 10
+            day(JsonPrimitive(2.5)),    // between steps
+            day(JsonPrimitive("heavy"), "weight", TrackerType.NUMBER),
+            day(JsonPrimitive(0), "stretched", TrackerType.CHECK),   // a checkmark is only ever done
+            day(JsonPrimitive(3), "skin", TrackerType.TEXT),
+        )
+        misfits.forEach { assertTrue(BackupValidator.problems(it).any { p -> "does not fit" in p }) }
 
         val badPlan = valid.copy(
             occurrences = listOf(
