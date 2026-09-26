@@ -96,10 +96,10 @@ object DiaryDefaults {
 
 /** Why a tracker could not be saved, in words; null when it can. */
 fun trackerProblem(label: String, type: TrackerType, scaleMin: Int?, scaleMax: Int?): String? = when {
-    label.isBlank() -> "Give it a name."
-    type == TrackerType.SCALE && (scaleMin == null || scaleMax == null) -> "A scale needs a lowest and a highest value."
+    label.isBlank() -> "Enter a name."
+    type == TrackerType.SCALE && (scaleMin == null || scaleMax == null) -> "Enter both limits."
     type == TrackerType.SCALE && scaleMin!! >= scaleMax!! -> "The highest value must be above the lowest."
-    type == TrackerType.SCALE && scaleMax!! - scaleMin!! > 100 -> "Keep a scale to at most 100 steps."
+    type == TrackerType.SCALE && scaleMax!! - scaleMin!! > 100 -> "Maximum range: 100."
     else -> null
 }
 

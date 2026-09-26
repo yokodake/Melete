@@ -32,7 +32,6 @@ import com.yokodake.melete.data.LibraryExercise
 import com.yokodake.melete.data.TrainingModule
 import com.yokodake.melete.ui.components.VariationChoiceDialog
 import com.yokodake.melete.ui.module.ModuleRow
-import com.yokodake.melete.ui.module.unavailableNote
 import com.yokodake.melete.ui.routine.RoutineRow
 
 /**
@@ -121,14 +120,7 @@ fun LibraryPickerScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onNew,
-                text = {
-                    Text(
-                        when (state.tab) {
-                            LibraryTab.WORKOUTS -> "New workout"
-                            LibraryTab.MODULES -> "New module"
-                        }
-                    )
-                },
+                text = { Text("New") },
                 icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
             )
         },
@@ -218,7 +210,7 @@ fun LibraryPickerScreen(
             title = { Text("Add ${module.name}?") },
             text = {
                 Text(
-                    (unavailableNote(module) ?: "") + "\n" +
+                    "These items won’t be added:\n" +
                         module.unavailableEntries.joinToString("\n") { "· ${it.name}" }
                 )
             },
