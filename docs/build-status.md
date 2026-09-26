@@ -25,7 +25,7 @@ the two ever disagree, the code and the first half win.
 | Timer B — repeaters | ✅ |
 | Timer C — supersets/circuits and compact review | ✅ |
 | 4B — modules for planning | built; not yet run on a phone |
-| 5B — daily notes, metrics, export and restore | diary, export and restore built; importer to come; not yet run on a phone |
+| 5B — daily notes, metrics, export and restore | diary, export and restore built and tested on the phone; importer to come |
 | 6 — motivating overview dashboard | not started |
 
 Schema version **7**, and one schema only until phase 6 — see *No migration chain* below.
@@ -1111,8 +1111,9 @@ run on schema 6** — the phone was away.
   restore). The *Backup & restore* screen drives it with the system file picker.
 
 **Checks run:** 172 unit tests pass — 6 new for the file format and validation, including every
-kind of row surviving the round trip unchanged. All three APKs build. **Not run on a phone:**
-`BackupRestoreTest` (5 tests: a mixed record — one-off activity, circuit, module, skipped work,
+kind of row surviving the round trip unchanged. All three APKs build. On the Pixel 9, **77 of 77**
+instrumented tests pass (backup `backups/pre-v7-20260926-105028/`), among them the new
+`WeekEditTest` (6) and `BackupRestoreTest` (5 tests: a mixed record — one-off activity, circuit, module, skipped work,
 manual, inferred and missing durations, unilateral loads, a tombstone, variations, the diary —
 exported, restored over other data, and exported again to the identical file; the restored week
 read back; unreadable and invalid files changing nothing; the safety copy restoring the record).
