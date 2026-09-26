@@ -92,6 +92,7 @@ data class LibraryActions(
     val onConfirmRemoveModule: () -> Unit = {},
     val onCancelRemoveModule: () -> Unit = {},
     val onMessageShown: () -> Unit = {},
+    val onOpenBackup: () -> Unit = {},
 )
 
 /**
@@ -106,6 +107,7 @@ fun LibraryRoute(
     onEditCircuit: (String) -> Unit,
     onNewModule: () -> Unit,
     onEditModule: (String) -> Unit,
+    onOpenBackup: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
@@ -135,6 +137,7 @@ fun LibraryRoute(
             onConfirmRemoveModule = viewModel::confirmModuleRemoval,
             onCancelRemoveModule = viewModel::cancelModuleRemoval,
             onMessageShown = viewModel::consumeMessage,
+            onOpenBackup = onOpenBackup,
         ),
         bottomBar = bottomBar,
     )
@@ -176,6 +179,7 @@ fun LibraryScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceContainer,
                         ),
                         title = { Text("Library", style = MaterialTheme.typography.titleMedium) },
+                        actions = { LibraryMenu(onOpenBackup = actions.onOpenBackup) },
                     )
                     LibraryTabs(selected = state.tab, onSelect = actions.onShowTab)
                 }
@@ -371,6 +375,24 @@ fun LibraryScreen(
                 TextButton(onClick = actions.onCancelRemoveModule) { Text("Cancel") }
             },
         )
+    }
+}
+
+/** The library's overflow: the things about the whole record rather than any one entry. */
+@Composable
+private fun LibraryMenu(onOpenBackup: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { open = true },
+            modifier = Modifier.semantics { contentDescription = "More" },
+        ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Backup & restore") },
+                onClick = { open = false; onOpenBackup() },
+            )
+        }
     }
 }
 

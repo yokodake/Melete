@@ -27,6 +27,7 @@ import com.yokodake.melete.ui.detail.ExerciseDetailRoute
 import com.yokodake.melete.ui.library.ExerciseEditorRoute
 import com.yokodake.melete.ui.library.LibraryPickerRoute
 import com.yokodake.melete.ui.library.LibraryRoute
+import com.yokodake.melete.ui.backup.BackupRoute
 import com.yokodake.melete.ui.circuit.CircuitDetailRoute
 import com.yokodake.melete.ui.circuit.CircuitReviewRoute
 import com.yokodake.melete.ui.logger.LoggerRoute
@@ -100,6 +101,10 @@ data class RoutineEditorDestination(
 
 @Serializable
 data class ModuleEditorDestination(val moduleId: String? = null)
+
+/** Export and restore of the whole record. */
+@Serializable
+data object BackupDestination
 
 /**
  * What a scheduled circuit is, and the two things to do with it.
@@ -175,6 +180,7 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onEditCircuit = { navController.navigate(RoutineEditorDestination(it)) },
                 onNewModule = { navController.navigate(ModuleEditorDestination()) },
                 onEditModule = { navController.navigate(ModuleEditorDestination(it)) },
+                onOpenBackup = { navController.navigate(BackupDestination) },
                 bottomBar = bottomBar,
             )
         }
@@ -264,6 +270,9 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onDone = { navController.popBackStack() },
                 onBack = { navController.popBackStack() },
             )
+        }
+        composable<BackupDestination> {
+            BackupRoute(onBack = { navController.popBackStack() })
         }
         composable<CircuitDetailDestination> {
             CircuitDetailRoute(

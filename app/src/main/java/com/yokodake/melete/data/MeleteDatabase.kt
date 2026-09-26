@@ -6,6 +6,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.yokodake.melete.data.dao.BackupDao
+import com.yokodake.melete.data.dao.DiaryDao
 import com.yokodake.melete.data.dao.LibraryDao
 import com.yokodake.melete.data.dao.LoggingDao
 import com.yokodake.melete.data.dao.ModuleDao
@@ -14,9 +16,12 @@ import com.yokodake.melete.data.dao.TrainingDao
 import com.yokodake.melete.data.dao.VariationDao
 import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
+import com.yokodake.melete.data.entity.DiaryEntryEntity
+import com.yokodake.melete.data.entity.DiaryMetricValueEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.ExerciseVariationEntity
+import com.yokodake.melete.data.entity.MetricDefinitionEntity
 import com.yokodake.melete.data.entity.ModuleEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.ModuleInstanceEntity
@@ -57,8 +62,11 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         ModuleEntity::class,
         ModuleEntryEntity::class,
         ModuleInstanceEntity::class,
+        MetricDefinitionEntity::class,
+        DiaryEntryEntity::class,
+        DiaryMetricValueEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)
@@ -75,6 +83,10 @@ abstract class MeleteDatabase : RoomDatabase() {
     abstract fun variationDao(): VariationDao
 
     abstract fun moduleDao(): ModuleDao
+
+    abstract fun diaryDao(): DiaryDao
+
+    abstract fun backupDao(): BackupDao
 
     companion object {
         const val DATABASE_NAME = "melete.db"

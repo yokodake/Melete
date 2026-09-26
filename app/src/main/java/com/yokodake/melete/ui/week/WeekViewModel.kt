@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.DiaryRepository
 import com.yokodake.melete.data.NudgeResult
 import com.yokodake.melete.data.PlanItemRef
 import com.yokodake.melete.data.TrainingRepository
@@ -25,6 +26,7 @@ import java.time.LocalDate
 @OptIn(ExperimentalCoroutinesApi::class)
 class WeekViewModel(
     private val repository: TrainingRepository,
+    private val diary: DiaryRepository,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
 
@@ -43,8 +45,10 @@ class WeekViewModel(
                 repository.observeWeek(start),
                 repository.observeWeekCircuits(start),
                 repository.observeWeekModules(start),
-            ) { occurrences, circuits, modules ->
-                WeekUiState.build(start, today, occurrences, circuits, modules)
+                diary.observeDays(start, start.plusDays(6)),
+                diary.observeMetrics(),
+            ) { occurrences, circuits, modules, days, metrics ->
+                WeekUiState.build(start, today, occurrences, circuits, modules, days, metrics)
             }
         }
         .stateIn(
@@ -223,6 +227,11 @@ class WeekViewModel(
         }
     }
 
+    /** Writes one day's diary; emptied completely, it goes. */
+    fun saveDiary(date: LocalDate, text: String?, values: Map<String, Int?>) {
+        viewModelScope.launch { diary.save(date, text, values) }
+    }
+
     /** The week the planner is currently showing, for defaulting a move or a copy. */
     val shownWeekStart: LocalDate get() = weekStart.value
 
@@ -235,7 +244,10 @@ class WeekViewModel(
             initializer {
                 val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
                     as MeleteApplication
-                WeekViewModel(application.container.trainingRepository)
+                WeekViewModel(
+                    application.container.trainingRepository,
+                    application.container.diaryRepository,
+                )
             }
         }
     }
