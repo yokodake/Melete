@@ -211,8 +211,8 @@ private fun TrackerField(
             )
         }
         when (field.note) {
-            FieldNote.AS_RECORDED -> "As recorded that day. Clear it to use the tracker as it is now."
-            FieldNote.NO_LONGER_TRACKED -> "No longer tracked. Kept as recorded that day."
+            FieldNote.AS_RECORDED -> "Previous settings. Clear to use current settings."
+            FieldNote.NO_LONGER_TRACKED -> "No longer tracked"
             null -> null
         }?.let {
             Text(

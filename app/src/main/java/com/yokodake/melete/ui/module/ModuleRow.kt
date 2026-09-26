@@ -110,5 +110,5 @@ internal fun ModuleRow(
 internal fun unavailableNote(module: TrainingModule): String? {
     val count = module.unavailableEntries.size
     if (count == 0) return null
-    return "$count unavailable — left out when added. Edit to replace or remove."
+    return "$count unavailable"
 }

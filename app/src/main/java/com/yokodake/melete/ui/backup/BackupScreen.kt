@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,7 +33,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -128,28 +133,26 @@ fun BackupScreen(
             }
             item {
                 Button(onClick = onExport, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                    Text("Export to a file")
+                    Text("Export")
                 }
                 Text(
-                    text = "Everything: the library, circuits, modules, every week, every logged " +
-                        "set and the diary, in one readable file.",
+                    text = "Library, plans, logs and daily notes in one file.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             item {
                 OutlinedButton(onClick = onPickRestore, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                    Text("Restore from a file…")
+                    Text("Restore…")
                 }
                 Text(
-                    text = "Replaces everything on this phone with the file, after checking it " +
-                        "and asking. What is here now is saved first, and listed below.",
+                    text = "Replaces your Melete data. A recovery copy is saved first.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (state.safetyCopies.isNotEmpty()) {
-                item { Section("Saved before a restore") }
+                item { Section("Recovery copies") }
                 items(items = state.safetyCopies, key = { it.file.name }) { copy ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(copy.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
@@ -165,17 +168,17 @@ fun BackupScreen(
     state.pending?.let { pending ->
         AlertDialog(
             onDismissRequest = onCancelRestore,
-            title = { Text("Replace everything?") },
+            title = { Text("Replace Melete data?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("From ${pending.source}, written ${pending.summary.exportedAt.take(16).replace('T', ' ')}:")
+                    Text("${pending.source} · ${pending.summary.exportedAt.take(16).replace('T', ' ')}")
                     SummaryCard(pending.summary)
                     state.current?.let {
-                        Text("This replaces what is on the phone now:")
+                        Text("Current data")
                         SummaryCard(it)
                     }
                     Text(
-                        text = "What is here now is saved first, so this can be undone from this screen.",
+                        text = "Your current data will be saved under Recovery copies.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -190,15 +193,26 @@ fun BackupScreen(
     }
 
     if (state.problems.isNotEmpty()) {
+        var showDetails by remember(state.problems) { mutableStateOf(false) }
+        val summaries = state.problems.map(::problemSummary).distinct()
+        val hasDetails = state.problems.any { problemSummary(it) != it }
         AlertDialog(
             onDismissRequest = onDismissProblems,
             title = { Text("Can't restore this file") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     Text("Nothing on the phone was changed.", style = MaterialTheme.typography.bodyMedium)
-                    state.problems.take(6).forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
-                    if (state.problems.size > 6) {
-                        Text("…and ${state.problems.size - 6} more.", style = MaterialTheme.typography.bodySmall)
+                    summaries.forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
+                    if (hasDetails) {
+                        TextButton(onClick = { showDetails = !showDetails }) {
+                            Text(if (showDetails) "Hide details" else "Details")
+                        }
+                        if (showDetails) {
+                            state.problems.forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
+                        }
                     }
                 }
             },
@@ -228,10 +242,26 @@ private fun SummaryCard(summary: BackupSummary) {
 }
 
 private fun summaryLine(summary: BackupSummary): String = listOf(
-    "${summary.exercises} exercises",
-    "${summary.circuits} circuits",
-    "${summary.modules} modules",
-    "${summary.planned} planned",
-    "${summary.loggedSets} logged sets",
-    "${summary.diaryDays} diary days",
+    countLabel(summary.exercises, "exercise"),
+    countLabel(summary.circuits, "circuit"),
+    countLabel(summary.modules, "module"),
+    countLabel(summary.planned, "training entry", "training entries"),
+    countLabel(summary.loggedSets, "logged set"),
+    countLabel(summary.diaryDays, "daily entry", "daily entries"),
 ).joinToString(" · ")
+
+private fun countLabel(count: Int, singular: String, plural: String = "${singular}s"): String =
+    "$count ${if (count == 1) singular else plural}"
+
+private fun problemSummary(problem: String): String = when {
+    problem.startsWith("This backup was written by a newer version") ->
+        "This backup needs a newer version of Melete."
+    problem.startsWith("This is not a Melete backup (format") -> "This is not a Melete backup."
+    problem.startsWith("Two ") || problem.contains("has two values for the same tracker") -> "Duplicate entries"
+    problem.endsWith("not in the file.") -> "Missing training data"
+    problem.startsWith("The scheduled circuit ") && problem.endsWith(" has an unreadable snapshot.") ->
+        "Couldn’t read " + problem.removePrefix("The scheduled circuit ")
+            .removeSuffix(" has an unreadable snapshot.")
+    problem.startsWith("A logged set (") && problem.endsWith("cannot be read.") -> "Couldn’t read a logged set"
+    else -> problem
+}

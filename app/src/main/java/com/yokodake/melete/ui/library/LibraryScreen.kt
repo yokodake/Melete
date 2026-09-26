@@ -191,14 +191,7 @@ fun LibraryScreen(
                     LibraryTab.WORKOUTS -> actions.onNewWorkout
                     LibraryTab.MODULES -> actions.onNewModule
                 },
-                text = {
-                    Text(
-                        when (state.tab) {
-                            LibraryTab.WORKOUTS -> "New workout"
-                            LibraryTab.MODULES -> "New module"
-                        }
-                    )
-                },
+                text = { Text("New") },
                 icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
             )
         },
@@ -309,7 +302,7 @@ fun LibraryScreen(
         is Scheduling.Module -> WeekTargetDialog(
             // What will be left out is said before the week is chosen, not discovered after.
             title = "Add ${target.module.name} to" +
-                (unavailableNote(target.module)?.let { "\n$it" } ?: ""),
+                (unavailableNote(target.module)?.let { "\n$it — won’t be added" } ?: ""),
             today = state.today,
             onConfirm = { week ->
                 scheduling = null
@@ -331,18 +324,10 @@ fun LibraryScreen(
             title = { Text(removal.routine.name) },
             text = {
                 Text(
-                    text = when {
-                        removal.recordedCopies > 0 ->
-                            "This has been logged ${removal.recordedCopies} " +
-                                "${if (removal.recordedCopies == 1) "time" else "times"}. " +
-                                "Removing it takes it out of this list only — every scheduled " +
-                                "copy and everything logged stays exactly as it is."
-
-                        removal.scheduledCopies > 0 ->
-                            "${removal.scheduledCopies} ${if (removal.scheduledCopies == 1) "copy is" else "copies are"} scheduled. Removing it takes " +
-                                "it out of this list only; those copies stay in their weeks."
-
-                        else -> "Nothing has been cut from this, so it goes completely."
+                    text = if (removal.scheduledCopies > 0 || removal.recordedCopies > 0) {
+                        "Remove this saved circuit? Existing plans and logs will stay."
+                    } else {
+                        "Remove this saved circuit?"
                     },
                 )
             },

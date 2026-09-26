@@ -2,6 +2,7 @@ package com.yokodake.melete.ui.backup
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -92,13 +93,20 @@ class BackupViewModel(
         val text = withContext(Dispatchers.IO) {
             resolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
         } ?: throw BackupUnreadable("That file could not be opened.")
-        offer(service.decode(text), source = "the chosen file")
+        val name = withContext(Dispatchers.IO) {
+            runCatching {
+                resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                }
+            }.getOrNull()
+        }
+        offer(service.decode(text), source = name?.takeIf { it.isNotBlank() } ?: "Selected backup")
     }
 
     /** Offers a copy saved before an earlier restore — the way back from a restore. */
     fun loadSafetyCopy(copy: SafetyCopy) = work {
         val text = withContext(Dispatchers.IO) { copy.file.readText() }
-        offer(service.decode(text), source = "the copy saved ${copy.label}")
+        offer(service.decode(text), source = copy.file.name)
     }
 
     private fun offer(backup: MeleteBackup, source: String) {
@@ -121,10 +129,10 @@ class BackupViewModel(
         val pending = _state.value.pending ?: return
         _state.update { it.copy(pending = null) }
         work {
-            val saved = service.writeSafetyCopy(safetyDirectory)
+            service.writeSafetyCopy(safetyDirectory)
             service.restore(pending.backup)
             _state.update {
-                it.copy(message = "Restored. What was here before is kept below as ${saved.nameWithoutExtension}.")
+                it.copy(message = "Backup restored")
             }
             refresh()
         }

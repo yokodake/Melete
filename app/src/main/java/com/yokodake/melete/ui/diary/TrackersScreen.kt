@@ -109,18 +109,10 @@ fun TrackersScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item {
-                Text(
-                    text = "Asked in this order in each day's notes. None of them is ever required. " +
-                        "Changing or removing one leaves days already recorded as they were.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             if (trackers.isEmpty()) {
                 item {
                     Text(
-                        text = "Nothing tracked. Days keep their notes all the same.",
+                        text = "No trackers",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(vertical = 16.dp),
                     )
@@ -249,7 +241,7 @@ private fun TrackerDialog(
                 }
                 if (draft.id != null) {
                     Text(
-                        text = "Changes apply from now on. Days already recorded keep what they say.",
+                        text = "Existing values stay unchanged.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

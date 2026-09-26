@@ -308,7 +308,7 @@ private fun EntryCard(
                     if (entry.unavailable) {
                         // Scheduling leaves this out; say so here, where it can be repaired.
                         Text(
-                            text = "Unavailable — replace or remove. Left out when added to a plan.",
+                            text = "Unavailable — won’t be added",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
