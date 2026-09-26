@@ -1,0 +1,25 @@
+<!-- A cog: adjust the plan. Flat blocks, like the navigation icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- The wheel, with its hole. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:fillType="evenOdd"
+        android:pathData="M12,4.8A7.2,7.2 0 1,0 12,19.2A7.2,7.2 0 1,0 12,4.8zM12,9A3,3 0 1,1 12,15A3,3 0 1,1 12,9z" />
+    <!-- Four teeth square to the frame. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M10.5,2h3v3.5h-3zM10.5,18.5h3v3.5h-3zM2,10.5h3.5v3h-3.5zM18.5,10.5h3.5v3h-3.5z" />
+    <!-- And four on the diagonals. -->
+    <group
+        android:pivotX="12"
+        android:pivotY="12"
+        android:rotation="45">
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M10.5,2h3v3.5h-3zM10.5,18.5h3v3.5h-3zM2,10.5h3.5v3h-3.5zM18.5,10.5h3.5v3h-3.5z" />
+    </group>
+</vector>

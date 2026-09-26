@@ -17,16 +17,16 @@ import com.yokodake.melete.data.dao.VariationDao
 import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.DiaryEntryEntity
-import com.yokodake.melete.data.entity.DiaryMetricValueEntity
+import com.yokodake.melete.data.entity.DiaryValueEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.ExerciseVariationEntity
-import com.yokodake.melete.data.entity.MetricDefinitionEntity
 import com.yokodake.melete.data.entity.ModuleEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.ModuleInstanceEntity
 import com.yokodake.melete.data.entity.RoutineEntity
 import com.yokodake.melete.data.entity.RoutineEntryEntity
+import com.yokodake.melete.data.entity.TrackerEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 
 /**
@@ -62,11 +62,11 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         ModuleEntity::class,
         ModuleEntryEntity::class,
         ModuleInstanceEntity::class,
-        MetricDefinitionEntity::class,
+        TrackerEntity::class,
         DiaryEntryEntity::class,
-        DiaryMetricValueEntity::class,
+        DiaryValueEntity::class,
     ],
-    version = 7,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)

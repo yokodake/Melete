@@ -3,7 +3,10 @@ package com.yokodake.melete.data.backup
 import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.CircuitStructureSnapshot
 import com.yokodake.melete.data.model.PrescriptionPayload
+import com.yokodake.melete.data.entity.TrackerType
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.time.LocalDate
 
@@ -21,6 +24,25 @@ import java.time.LocalDate
  * templates, and the record itself keeps them that way.
  */
 object BackupValidator {
+
+    /**
+     * Whether a diary value is the kind of thing its own definition says, and within its range.
+     * Checked against the definition the value carries, not the tracker's current one.
+     */
+    private fun fits(tracker: DiaryValueRecord, value: JsonElement): Boolean {
+        val primitive = value as? JsonPrimitive ?: return false
+        return when (tracker.type) {
+            TrackerType.TEXT -> primitive.isString
+            TrackerType.NUMBER -> !primitive.isString && primitive.doubleOrNull != null
+            TrackerType.CHECK -> !primitive.isString && primitive.doubleOrNull == 1.0
+            TrackerType.SCALE -> {
+                val number = primitive.doubleOrNull
+                !primitive.isString && number != null && number == number.toInt().toDouble() &&
+                    tracker.scaleMin != null && tracker.scaleMax != null &&
+                    number.toInt() in tracker.scaleMin..tracker.scaleMax
+            }
+        }
+    }
 
     fun problems(backup: MeleteBackup): List<String> = buildList {
         if (backup.format != BACKUP_FORMAT) {
@@ -52,7 +74,7 @@ object BackupValidator {
         unique("planned exercises", backup.occurrences.map { it.id })
         unique("sessions", backup.sessions.map { it.id })
         unique("logged sets", backup.sets.map { it.id })
-        unique("metrics", backup.metrics.map { it.id })
+        unique("trackers", backup.trackers.map { it.id })
         unique("diary days", backup.diary.map { it.date })
 
         // What the foreign keys will insist on.
@@ -68,14 +90,20 @@ object BackupValidator {
         backup.sets.firstOrNull { it.sessionId !in sessions }?.let {
             add("A logged set (${it.id}) belongs to a session that is not in the file.")
         }
-        val metrics = backup.metrics.map { it.id }.toSet()
-        backup.diary.firstOrNull { day -> day.values.keys.any { it !in metrics } }?.let {
-            add("The diary for ${it.date} rates a metric that is not in the file.")
+        val trackers = backup.trackers.associateBy { it.id }
+        backup.diary.firstOrNull { day -> day.values.any { it.tracker !in trackers } }?.let {
+            add("The diary for ${it.date} tracks something that is not in the file.")
         }
-        val scaleSizes = backup.metrics.associate { it.id to it.scale.size }
-        backup.diary.firstOrNull { day ->
-            day.values.any { (metric, value) -> value !in 1..(scaleSizes[metric] ?: 0) }
-        }?.let { add("The diary for ${it.date} has a rating off its metric's scale.") }
+        backup.diary.firstOrNull { day -> day.values.map { it.tracker }.toSet().size < day.values.size }?.let {
+            add("The diary for ${it.date} has two values for the same tracker.")
+        }
+        backup.diary.forEach { day ->
+            day.values.forEach { value ->
+                if (!fits(value, value.value)) {
+                    add("The diary for ${day.date} has a value for ${value.label} that does not fit it.")
+                }
+            }
+        }
         backup.sessions.groupBy { it.trainingDate to it.ordinal }.values.firstOrNull { it.size > 1 }
             ?.let { add("Two sessions are both number ${it.first().ordinal} on ${it.first().trainingDate}.") }
 

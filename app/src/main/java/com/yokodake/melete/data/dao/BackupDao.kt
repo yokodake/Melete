@@ -6,16 +6,16 @@ import androidx.room.Query
 import com.yokodake.melete.data.entity.ActualSetEntity
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.DiaryEntryEntity
-import com.yokodake.melete.data.entity.DiaryMetricValueEntity
+import com.yokodake.melete.data.entity.DiaryValueEntity
 import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.ExerciseVariationEntity
-import com.yokodake.melete.data.entity.MetricDefinitionEntity
 import com.yokodake.melete.data.entity.ModuleEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.ModuleInstanceEntity
 import com.yokodake.melete.data.entity.RoutineEntity
 import com.yokodake.melete.data.entity.RoutineEntryEntity
+import com.yokodake.melete.data.entity.TrackerEntity
 import com.yokodake.melete.data.entity.TrainingSessionEntity
 
 /**
@@ -38,14 +38,14 @@ interface BackupDao {
     @Query("SELECT * FROM exercise_occurrences") suspend fun occurrences(): List<ExerciseOccurrenceEntity>
     @Query("SELECT * FROM training_sessions") suspend fun sessions(): List<TrainingSessionEntity>
     @Query("SELECT * FROM actual_sets") suspend fun sets(): List<ActualSetEntity>
-    @Query("SELECT * FROM metric_definitions") suspend fun metrics(): List<MetricDefinitionEntity>
+    @Query("SELECT * FROM trackers") suspend fun trackers(): List<TrackerEntity>
     @Query("SELECT * FROM diary_entries") suspend fun diaryEntries(): List<DiaryEntryEntity>
-    @Query("SELECT * FROM diary_metric_values") suspend fun diaryValues(): List<DiaryMetricValueEntity>
+    @Query("SELECT * FROM diary_values") suspend fun diaryValues(): List<DiaryValueEntity>
 
     // Children before parents, so no foreign key ever sees a missing row.
-    @Query("DELETE FROM diary_metric_values") suspend fun clearDiaryValues()
+    @Query("DELETE FROM diary_values") suspend fun clearDiaryValues()
     @Query("DELETE FROM diary_entries") suspend fun clearDiaryEntries()
-    @Query("DELETE FROM metric_definitions") suspend fun clearMetrics()
+    @Query("DELETE FROM trackers") suspend fun clearTrackers()
     @Query("DELETE FROM actual_sets") suspend fun clearSets()
     @Query("DELETE FROM training_sessions") suspend fun clearSessions()
     @Query("DELETE FROM exercise_occurrences") suspend fun clearOccurrences()
@@ -69,7 +69,7 @@ interface BackupDao {
     @Insert suspend fun insertOccurrences(rows: List<ExerciseOccurrenceEntity>)
     @Insert suspend fun insertSessions(rows: List<TrainingSessionEntity>)
     @Insert suspend fun insertSets(rows: List<ActualSetEntity>)
-    @Insert suspend fun insertMetrics(rows: List<MetricDefinitionEntity>)
+    @Insert suspend fun insertTrackers(rows: List<TrackerEntity>)
     @Insert suspend fun insertDiaryEntries(rows: List<DiaryEntryEntity>)
-    @Insert suspend fun insertDiaryValues(rows: List<DiaryMetricValueEntity>)
+    @Insert suspend fun insertDiaryValues(rows: List<DiaryValueEntity>)
 }

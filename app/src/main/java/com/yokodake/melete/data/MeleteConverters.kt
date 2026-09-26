@@ -3,6 +3,7 @@ package com.yokodake.melete.data
 import androidx.room.TypeConverter
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.entity.TrackerType
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.data.model.ExerciseMode
@@ -51,6 +52,12 @@ class MeleteConverters {
     @TypeConverter
     fun stringToEffortLevel(value: String?): EffortLevel? =
         value?.let { name -> EffortLevel.entries.firstOrNull { it.name == name } }
+
+    @TypeConverter
+    fun trackerTypeToString(value: TrackerType): String = value.name
+
+    @TypeConverter
+    fun stringToTrackerType(value: String): TrackerType = TrackerType.valueOf(value)
 
     @TypeConverter
     fun bodySideToString(value: BodySide?): String? = value?.name

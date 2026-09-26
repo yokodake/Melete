@@ -8,6 +8,7 @@ import com.yokodake.melete.data.backup.BackupUnreadable
 import com.yokodake.melete.data.backup.MeleteBackup
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.entity.TrackerType
 import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.data.model.ExerciseCategory
@@ -164,9 +165,26 @@ class BackupRestoreTest {
         repository.saveLogs(monday, listOf(OccurrenceLogWrite(oldOcc, true, listOf(set(10.0, null)))))
         repository.removeExercise(retired)
         // The diary.
-        diary.observeMetrics().first()
-        diary.save(monday, "Slept badly", mapOf("energy" to 2, "finger_discomfort" to 1))
-        diary.save(tuesday, null, mapOf("energy" to 4))
+        diary.observeTrackers().first()
+        diary.createTracker("Weight", TrackerType.NUMBER, null, null, "kg")
+        diary.createTracker("Stretched", TrackerType.CHECK, null, null, null)
+        diary.createTracker("Skin", TrackerType.TEXT, null, null, null)
+        val trackers = diary.observeTrackers().first().associateBy { it.label }
+        fun value(label: String, reading: TrackerReading) = TrackedValue(trackers.getValue(label), reading)
+        diary.save(
+            monday, "Slept badly",
+            listOf(
+                value("Energy", TrackerReading(number = 2.0)),
+                value("Finger discomfort", TrackerReading(number = 1.0)),
+                value("Weight", TrackerReading(number = 72.5)),
+                value("Stretched", TrackerReading(number = 1.0)),
+                value("Skin", TrackerReading(text = "Split on the left index")),
+            ),
+        )
+        diary.save(tuesday, null, listOf(value("Energy", TrackerReading(number = 4.0))))
+        // A retired tracker whose day still names it, and one changed after it was recorded.
+        diary.retireTracker(trackers.getValue("Skin").id)
+        diary.updateTracker("energy", "Energy", TrackerType.SCALE, 1, 10, null)
     }
 
     /** The file minus when it was written, which is the one thing allowed to differ. */
@@ -193,7 +211,7 @@ class BackupRestoreTest {
         assertEquals(original.occurrences, restored.occurrences)
         assertEquals(original.sessions, restored.sessions)
         assertEquals(original.sets, restored.sets)
-        assertEquals(original.metrics, restored.metrics)
+        assertEquals(original.trackers, restored.trackers)
         assertEquals(original.diary, restored.diary)
         assertEquals(original.comparable(), restored.comparable())
     }
@@ -234,7 +252,15 @@ class BackupRestoreTest {
         // The diary.
         val days = DiaryRepository(target).observeDays(monday, tuesday).first()
         assertEquals("Slept badly", days.getValue(monday).text)
-        assertEquals(mapOf("energy" to 4), days.getValue(tuesday).values)
+        val tuesdayEnergy = days.getValue(tuesday).values.getValue("energy")
+        assertEquals(TrackerReading(number = 4.0), tuesdayEnergy.reading)
+        // Still read against the scale it was recorded on.
+        assertEquals(0 to 5, tuesdayEnergy.tracker.scaleMin to tuesdayEnergy.tracker.scaleMax)
+        assertEquals(5, days.getValue(monday).values.size)
+        assertEquals(
+            listOf("Energy", "Finger discomfort", "Weight", "Stretched"),
+            DiaryRepository(target).observeTrackers().first().map { it.label },
+        )
     }
 
     @Test
@@ -277,7 +303,7 @@ class BackupRestoreTest {
 
         val copy = service.writeSafetyCopy(directory, at)
         // Replace the record with an empty one, then undo from the copy.
-        service.restore(MeleteBackup(exportedAt = at.toString(), schemaVersion = 7))
+        service.restore(MeleteBackup(exportedAt = at.toString(), schemaVersion = 8))
         assertTrue(TrainingRepository(target).observeWeek(monday).first().isEmpty())
         service.restore(service.decode(copy.readText()))
 
