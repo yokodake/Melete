@@ -1,7 +1,7 @@
 # Build status
 
-Last updated: 2026-09-22, after phase 5A, the timer extensions A, B and C, and the first
-round of feedback on them.
+Last updated: 2026-09-26, after phase 4B, phase 5B part one (the diary with user-defined
+trackers, export and restore) and the week edit mode.
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -24,11 +24,11 @@ the two ever disagree, the code and the first half win.
 | Timer A — unilateral execution | ✅ |
 | Timer B — repeaters | ✅ |
 | Timer C — supersets/circuits and compact review | ✅ |
-| 4B — modules for planning | built; not yet run on a phone |
+| 4B — modules for planning | ✅ built; instrumented tests pass on the phone |
 | 5B — daily notes, trackers, export and restore | diary, export and restore built and tested on the phone; importer to come |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **7**, and one schema only until phase 6 — see *No migration chain* below.
+Schema version **9**, and one schema only until phase 6 — see *No migration chain* below.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -1126,7 +1126,10 @@ run on schema 6** — the phone was away.
   tracker a scale with its own range, a number with a unit, a checkmark or a comment. Each value
   row snapshots its tracker's definition, and so does the backup (`DiaryValueRecord`), which
   validates a value against its own snapshot. *Daily notes* is a full page (`ui/diary`) from the
-  day's + menu, with the tracker editor in its ⋮; the ✎ and the dialog are gone.
+  day's + menu, *Save* anchored at the bottom and the tracker editor in its ⋮; the ✎ and the
+  dialog are gone.
+- **The plan card's cog** in the exercise detail is a drawn vector (`ic_edit_plan.xml`, in the
+  navigation icons' style) instead of the ⚙ character, whose look depended on the font.
 - **Export and restore** in `data/backup`, apart from the training repository and reading the
   tables directly: `BackupFormat` (records and the mapping both ways), `BackupValidator` (pure,
   every refusal in words), `BackupService` (export in one transaction, safety copy, atomic
@@ -1139,6 +1142,10 @@ instrumented tests pass (backup `backups/pre-v7-20260926-105028/`), among them t
 manual, inferred and missing durations, unilateral loads, a tombstone, variations, the diary —
 exported, restored over other data, and exported again to the identical file; the restored week
 read back; unreadable and invalid files changing nothing; the safety copy restoring the record).
+After the trackers moved to schema 9, **81 of 81** pass (backup `backups/pre-v9-20260926-112247/`),
+the new four in `DiaryTrackersTest`: a renamed, re-kinded tracker leaves its recorded days as they
+were; a rescaled one keeps values outside its new range; a retired one stays on its days, ordered
+last; a value its tracker cannot hold is never stored. 172 unit tests pass.
 
 ## Next step
 
@@ -1148,8 +1155,9 @@ file.
 
 Owed before or alongside it:
 
-- **Everything in *What still needs a phone*.** None of 5A, the timer extensions, variations or
-  modules has been walked through by hand. `LibrarySeed` refills a wiped debug database with the
+- **Everything in *What still needs a phone*.** Much of it has been used by hand on the phone
+  (5A, the timer extensions, variations, modules) but the boxes have not been ticked; tick the
+  ones confirmed. `LibrarySeed` refills a wiped debug database with the
   library, variations, circuits and modules.
 - The 4A acceptance scenarios end to end. The instrumented suite exercises the database, not the
   screens.
