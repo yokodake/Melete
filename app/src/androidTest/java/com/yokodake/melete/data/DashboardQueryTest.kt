@@ -35,6 +35,37 @@ class DashboardQueryTest {
     fun tearDown() = database.close()
 
     @Test
+    fun anUpcomingPlanIsFutureDatedOrUndatedWorkNotYetDone() = runBlocking {
+        val today = monday.plusDays(2)
+        val exerciseId = repository.createExercise(
+            ExerciseDraft(
+                name = "Hang", mode = ExerciseMode.DURATION, unilateral = false,
+                measurementUnit = null, measurementMeaning = null, notes = null, description = null,
+                category = null, defaultPrescription = PrescriptionPayload(sets = 1, targetDurationSeconds = 10),
+            )
+        )
+        assertEquals(false, repository.observeHasUpcomingPlan(today).first())
+
+        // Past or finished work is not a plan.
+        repository.scheduleExercise(exerciseId, monday, monday)
+        val skipped = repository.scheduleExercise(exerciseId, monday, today.plusDays(1))
+        repository.setOccurrenceState(skipped, OccurrenceState.SKIPPED)
+        val undatedDone = repository.scheduleExercise(exerciseId, monday, null)
+        repository.saveLogs(today, listOf(OccurrenceLogWrite(undatedDone, completed = true)))
+        repository.scheduleExercise(exerciseId, monday.minusWeeks(1), null) // last week's Anytime
+        assertEquals(false, repository.observeHasUpcomingPlan(today).first())
+
+        // An unfinished Anytime item this week is a plan, even with today empty.
+        val anytime = repository.scheduleExercise(exerciseId, monday, null)
+        assertEquals(true, repository.observeHasUpcomingPlan(today).first())
+        repository.deleteOccurrenceIfEmpty(anytime)
+
+        // So is anything dated later.
+        repository.scheduleExercise(exerciseId, monday.plusWeeks(3), monday.plusWeeks(3))
+        assertEquals(true, repository.observeHasUpcomingPlan(today).first())
+    }
+
+    @Test
     fun onlyCompletedExercisesInRangeAreRead() = runBlocking {
         val exerciseId = repository.createExercise(
             ExerciseDraft(

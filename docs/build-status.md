@@ -75,7 +75,7 @@ category and a doughnut are deferred, as agreed.
 
 ## Benchmarks (7A)
 
-**Menu → Benchmarks**: a small collection of reference tests, separate from the Library. Each row
+**Home → Benchmarks**: a small collection of reference tests, separate from the Library. Each row
 reads "Latest **+30 kg** · 24 Sep" over "Best +35 kg", with a **+** to record a result; a tap
 opens its history, a long press edits or hides it. *New* creates one. A name shared by two
 benchmarks shows its protocol to tell them apart; otherwise the protocol is on the detail and the
@@ -91,7 +91,7 @@ carry the **bodyweight %** reported with it, stored as written and shown as "(12
 benchmark can be deleted only while it has no results.
 
 **Plan files** can carry a `benchmarks` section (definitions and results; see
-[plan-format.md](plan-format.md)), imported with *Add* under Import / export. Results ignore the
+[plan-format.md](plan-format.md)), imported with *Add* under Settings → Import / export. Results ignore the
 From today scope and are never added twice, so re-importing changes nothing; Replace plans never
 removes benchmarks.
 
@@ -113,10 +113,34 @@ touches them.
 
 ## Navigation
 
-The bottom bar is **Menu · Calendar · Timer · Dashboard**, four ordinary tabs that each keep
-their state. **Menu** lists Profile, Benchmarks, Library, Import / export and Settings; Benchmarks,
-Library and Import / export open focused screens with a back arrow, and Profile and Settings are
-placeholders that do nothing until 7B. **Dashboard** is an empty placeholder until 6A. (A left
+The bottom bar is **Home · Calendar · Timer · Dashboard**, four ordinary tabs that each keep
+their state. The app opens on **Home**; Back from another tab returns there.
+
+**Home** (`ui/home`): Profile and Settings are unlabelled icons in its top bar (described for
+accessibility). Profile is inert until 7B; **Settings** opens a screen that is the permanent home
+of **Import / export** (7B's preferences join it). Below:
+
+- A **Today** card — "Today · Mon 28 Sep ›", "2 / 5 completed" (or "Nothing planned"), one block
+  per exercise (a plain bar past twelve), "1 skipped" when there is any, and "≈ 35 min remaining"
+  only while something is left and every remaining exercise has an estimate (a circuit's
+  exercises take their share of its one clock). Only the fill is coloured: a fixed quiet blue
+  (`progressColor`) under way, the done green once all is done; the text stays neutral. It counts
+  today's exercise occurrences — circuit and module members, never the containers; skipped work
+  leaves the target; work logged today counts, undated work does not until it is dated; benchmarks
+  and the diary never. A tap opens Calendar on the current week, scrolled to today
+  (`GO_TO_TODAY`). The arithmetic is `TodaySummary`, unit-tested.
+- **Import plan**, right under the card, only when nothing is left planned — no unstarted
+  exercise dated today or later, and none undated in this week or a later one (an empty today is
+  not an empty plan; `observeHasUpcomingPlan`). It opens Import / export with the plan file picker
+  already up.
+- **Daily note ›**, a compact row opening today's diary page, new or existing. When today has an
+  entry, it shows under the label — the note, then the tracked values on the next line, up to five
+  lines — so it is plain that opening it updates rather than starts one. 32dp of space follows.
+- **Library** and **Benchmarks** as two equal, low tiles side by side (icon, label, a subtle
+  background). The Benchmarks tile carries at most one quiet reminder line, "Max hang — 20 mm HC ·
+  8 months ago": the visible benchmark whose latest result is oldest, once that is six months or
+  more. A tap opens the list; a long press offers *Hide reminder for a month* (a display
+  preference, not part of the record). **Dashboard** is an empty placeholder until 6A. (A left
 drawer was tried first and dropped on the user's preference.) On Calendar, a horizontal swipe
 turns the week — left for the next, right for the previous — past a 72 dp threshold. The
 Week/Month selector on the week title (a small chevron) is **deferred** to 6C.
@@ -381,7 +405,7 @@ asks for it.
 
 ## Backup and restore
 
-*Import / export* is in the drawer, with *Backup* (Export, Restore) and *Plans* (Import a plan)
+*Import / export* is in Settings (and Home offers *Import plan* when nothing is planned), with *Backup* (Export, Restore) and *Plans* (Import a plan)
 kept apart. Recovery copies are listed by date, "27 Sep · 19:33", with the year once it is not
 this one; the stamp in the file name is local time and is read back as such, and the files are
 never renamed. **Export** writes the whole record to a file chosen

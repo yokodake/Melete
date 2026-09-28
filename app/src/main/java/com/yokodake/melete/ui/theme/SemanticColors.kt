@@ -83,6 +83,15 @@ fun doneColors(): Pair<Color, Color> =
         DoneGreenLight to Color.White
     }
 
+/**
+ * The fill of a progress bar still under way: a quiet blue, fixed rather than taken from the
+ * wallpaper, so progress reads as colour on a page of greys. Finished work switches to [doneColors].
+ */
+@Composable
+@ReadOnlyComposable
+fun progressColor(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF7FA7D9) else Color(0xFF4A78B5)
+
 /** The last seconds of a rest, when the work is about to start. */
 @Composable
 @ReadOnlyComposable

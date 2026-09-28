@@ -17,24 +17,33 @@ import com.yokodake.melete.data.DiaryDay
 import com.yokodake.melete.data.Tracker
 
 /**
- * A day's diary in one line under its heading: the text, then each recorded value as it was
- * recorded, in today's tracker order. Shown only when there is an entry; tapping it opens the day.
+ * A day's diary under its heading: the text, then each recorded value as it was recorded, in
+ * today's tracker order, on the next line — as Home shows it. Shown only when there is an entry;
+ * tapping it opens the day.
  */
 @Composable
 fun DiaryLine(day: DiaryDay, trackers: List<Tracker>, onClick: () -> Unit) {
-    val recorded = day.orderedBy(trackers).mapNotNull { it.tracker.format(it.reading) }
     Text(
-        text = listOfNotNull(day.text?.takeIf { it.isNotBlank() }, recorded.joinToString(" · ").ifEmpty { null })
-            .joinToString(" — "),
+        text = diarySummary(day, trackers),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 2,
+        maxLines = 5,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
     )
+}
+
+/**
+ * A day's diary in short: the text, then each recorded value in today's tracker order on the next
+ * line, in the week and on Home alike.
+ */
+fun diarySummary(day: DiaryDay, trackers: List<Tracker>, separator: String = "\n"): String {
+    val recorded = day.orderedBy(trackers).mapNotNull { it.tracker.format(it.reading) }
+    return listOfNotNull(day.text?.takeIf { it.isNotBlank() }, recorded.joinToString(" · ").ifEmpty { null })
+        .joinToString(separator)
 }
 
 /**

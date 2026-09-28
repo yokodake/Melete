@@ -490,6 +490,13 @@ class TrainingRepository(private val database: MeleteDatabase) {
             }
         }
 
+    /**
+     * Whether anything is still planned: an unstarted exercise dated [today] or later, or an
+     * unstarted one without a date in this week or a later one. An empty today is not an empty plan.
+     */
+    fun observeHasUpcomingPlan(today: LocalDate): Flow<Boolean> =
+        dao.observeUpcomingPlanned(today.toEpochDay(), WeekMath.weekStartOf(today).toEpochDay()).map { it > 0 }
+
     /** The first date anything was completed on, or null when nothing ever was. */
     fun observeFirstCompletedDate(): Flow<LocalDate?> =
         dao.observeFirstCompletedDate().map { it?.let(LocalDate::ofEpochDay) }

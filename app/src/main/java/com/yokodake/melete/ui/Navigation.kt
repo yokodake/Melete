@@ -12,7 +12,9 @@ import com.yokodake.melete.ui.benchmark.BenchmarkDetailRoute
 import com.yokodake.melete.ui.benchmark.BenchmarkEditorRoute
 import com.yokodake.melete.ui.benchmark.BenchmarksRoute
 import com.yokodake.melete.ui.dashboard.DashboardRoute
-import com.yokodake.melete.ui.menu.MenuRoute
+import com.yokodake.melete.ui.home.HomeRoute
+import com.yokodake.melete.ui.settings.SettingsRoute
+import androidx.compose.runtime.collectAsState
 import com.yokodake.melete.ui.module.ModuleDetailRoute
 import com.yokodake.melete.ui.routine.RoutineDetailRoute
 import androidx.compose.ui.platform.LocalContext
@@ -128,7 +130,14 @@ data class ModuleEditorDestination(val moduleId: String? = null)
 
 /** Export and restore of the whole record. */
 @Serializable
-data object BackupDestination
+data class BackupDestination(
+    /** Opens the plan file picker straight away: Home's Import plan shortcut. */
+    val pickPlan: Boolean = false,
+)
+
+/** Settings: Import / export, and the preferences to come. */
+@Serializable
+data object SettingsDestination
 
 /** One day's notes and trackers. */
 @Serializable
@@ -151,9 +160,15 @@ data class CircuitDetailDestination(val circuitInstanceId: String)
 @Serializable
 data class CircuitReviewDestination(val circuitInstanceId: String)
 
-/** The Menu tab: the places that are not part of a training day. */
+/** The Home tab: today at a glance, and the places that are not part of a training day. */
 @Serializable
-data object MenuDestination
+data object HomeDestination
+
+/**
+ * The saved-state key on the week's entry that asks it to show today — the current week, scrolled
+ * to the day. Its value changes with every request, so asking twice asks twice.
+ */
+const val GO_TO_TODAY = "goToToday"
 
 /** Every benchmark and where it stands. */
 @Serializable
@@ -167,12 +182,12 @@ data class BenchmarkDetailDestination(val benchmarkId: String)
 @Serializable
 data class BenchmarkEditorDestination(val benchmarkId: String? = null)
 
-/** The Dashboard tab. A placeholder until phase 6A fills it. */
+/** The Dashboard tab. */
 @Serializable
 data object DashboardDestination
 
 /**
- * The tabs of the app, in the agreed order Menu · Calendar · Timer · Dashboard. Focused flows
+ * The tabs of the app, in the order Home · Calendar · Timer · Dashboard. Focused flows
  * opened from a tab — the picker, the exercise editor, the logger — deliberately hide the bar: they
  * are one task with a back button, not a place to switch away from mid-set.
  */
@@ -182,7 +197,7 @@ private enum class Tab(
     val route: Any,
     val matches: (NavDestination) -> Boolean,
 ) {
-    MENU("Menu", R.drawable.ic_nav_menu, MenuDestination, { it.hasRoute<MenuDestination>() }),
+    HOME("Home", R.drawable.ic_nav_home, HomeDestination, { it.hasRoute<HomeDestination>() }),
     CALENDAR("Calendar", R.drawable.ic_nav_week, WeekDestination, { it.hasRoute<WeekDestination>() }),
     TIMER("Timer", R.drawable.ic_nav_timer, TimerDestination, { it.hasRoute<TimerDestination>() }),
     DASHBOARD(
@@ -208,12 +223,19 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
 
 @Composable
 private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composable () -> Unit) {
-    NavHost(navController = navController, startDestination = WeekDestination) {
-        composable<MenuDestination> {
-            MenuRoute(
+    NavHost(navController = navController, startDestination = HomeDestination) {
+        composable<HomeDestination> {
+            HomeRoute(
+                onOpenToday = {
+                    navController.switchTab(WeekDestination)
+                    navController.getBackStackEntry<WeekDestination>().savedStateHandle[GO_TO_TODAY] =
+                        System.nanoTime()
+                },
+                onOpenDailyNote = { navController.navigate(DiaryDestination(it.toEpochDay())) },
                 onOpenBenchmarks = { navController.navigate(BenchmarksDestination) },
                 onOpenLibrary = { navController.navigate(LibraryDestination) },
-                onOpenImportExport = { navController.navigate(BackupDestination) },
+                onImportPlan = { navController.navigate(BackupDestination(pickPlan = true)) },
+                onOpenSettings = { navController.navigate(SettingsDestination) },
                 bottomBar = bottomBar,
             )
         }
@@ -240,8 +262,10 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
         composable<DashboardDestination> {
             DashboardRoute(bottomBar = bottomBar)
         }
-        composable<WeekDestination> {
+        composable<WeekDestination> { entry ->
+            val todayRequest by entry.savedStateHandle.getStateFlow(GO_TO_TODAY, 0L).collectAsState()
             WeekRoute(
+                todayRequest = todayRequest,
                 onOpenOccurrence = {
                     navController.navigate(ExerciseDetailDestination(occurrenceId = it))
                 },
@@ -377,8 +401,17 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
                 onBack = { navController.popBackStack() },
             )
         }
-        composable<BackupDestination> {
-            BackupRoute(onBack = { navController.popBackStack() })
+        composable<SettingsDestination> {
+            SettingsRoute(
+                onOpenImportExport = { navController.navigate(BackupDestination()) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<BackupDestination> { entry ->
+            BackupRoute(
+                pickPlan = entry.toRoute<BackupDestination>().pickPlan,
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<DiaryDestination> {
             DiaryRoute(

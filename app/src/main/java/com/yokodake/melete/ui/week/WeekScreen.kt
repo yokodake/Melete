@@ -91,8 +91,13 @@ fun WeekRoute(
     onOpenBenchmark: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
+    /** Changes whenever something asks for today: the current week, scrolled to the day. */
+    todayRequest: Long = 0L,
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
 ) {
+    LaunchedEffect(todayRequest) {
+        if (todayRequest != 0L) viewModel.showCurrentWeek()
+    }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val moduleExpansion by viewModel.moduleExpansion.collectAsStateWithLifecycle()
@@ -127,6 +132,7 @@ fun WeekRoute(
         onModuleRecordedExercises = viewModel::moduleRecordedExercises,
         bottomBar = bottomBar,
         modifier = modifier,
+        todayRequest = todayRequest,
     )
 }
 
@@ -165,6 +171,7 @@ fun WeekScreen(
     onModuleRecordedExercises: suspend (String) -> Int = { 0 },
     bottomBar: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
+    todayRequest: Long = 0L,
 ) {
     val rows = remember(state) { state.toRows() }
     val listState = rememberLazyListState()
@@ -244,6 +251,18 @@ fun WeekScreen(
     // Only when the week itself changes: coming back from a workout, the drawer or another tab
     // keeps the place in the list rather than jumping to today again.
     var positionedFor by rememberSaveable { mutableStateOf<Long?>(null) }
+    // A request for today scrolls to it once the current week is showing, even when that week
+    // was already on screen but scrolled away.
+    var handledRequest by rememberSaveable { mutableStateOf(0L) }
+    LaunchedEffect(todayRequest, state.weekStart, rows.size) {
+        if (todayRequest == 0L || todayRequest == handledRequest || !state.isCurrentWeek) return@LaunchedEffect
+        val todayIndex = rows.indexOfFirst { it is WeekRow.DayHeading && it.isToday }
+        if (todayIndex >= 0) {
+            listState.scrollToItem(todayIndex)
+            handledRequest = todayRequest
+            positionedFor = state.weekStart.toEpochDay()
+        }
+    }
     LaunchedEffect(state.weekStart) {
         if (positionedFor == state.weekStart.toEpochDay()) return@LaunchedEffect
         positionedFor = state.weekStart.toEpochDay()
