@@ -35,19 +35,14 @@ class PrescriptionPayloadTest {
     }
 
     @Test
-    fun `added load and assistance are different quantities`() {
-        val added = PrescriptionPayload(
+    fun `added load is signed, and assistance is simply below zero`() {
+        val assisted = PrescriptionPayload(
             sets = 5,
             targetDurationSeconds = 10,
-            measurement = Measurement(12.5, "kg", MeasurementMeaning.ADDED_LOAD),
+            measurement = Measurement(-12.5, "kg", MeasurementMeaning.ADDED_LOAD),
         )
-        val assisted = added.copy(
-            measurement = Measurement(12.5, "kg", MeasurementMeaning.ASSISTANCE),
-        )
-        val decodedAdded = PrescriptionJson.decode(PrescriptionJson.encode(added))
-        val decodedAssisted = PrescriptionJson.decode(PrescriptionJson.encode(assisted))
-        assertEquals(MeasurementMeaning.ADDED_LOAD, decodedAdded.measurement?.meaning)
-        assertEquals(MeasurementMeaning.ASSISTANCE, decodedAssisted.measurement?.meaning)
+        val decoded = PrescriptionJson.decode(PrescriptionJson.encode(assisted))
+        assertEquals(Measurement(-12.5, "kg", MeasurementMeaning.ADDED_LOAD), decoded.measurement)
     }
 
     @Test

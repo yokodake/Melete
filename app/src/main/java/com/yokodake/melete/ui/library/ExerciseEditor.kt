@@ -183,6 +183,11 @@ fun ExerciseEditorScreen(
                         optionLabel = MeasurementMeaning::label,
                         onSelect = onMeaningChange,
                         label = "Load type",
+                        supportingText = if (state.meaning == MeasurementMeaning.ADDED_LOAD) {
+                            "Negative for assistance: −15 kg is a band taking 15 kg off."
+                        } else {
+                            null
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

@@ -66,7 +66,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         DiaryEntryEntity::class,
         DiaryValueEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)

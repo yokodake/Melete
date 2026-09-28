@@ -214,7 +214,7 @@ object PlanCheck {
                 unit = null
                 meaning = null
             } else if (unit != null && meaning == null && source.meaning == null) {
-                problems += "$name: \"unit\" needs a \"meaning\" (TOTAL_LOAD, ADDED_LOAD or ASSISTANCE)."
+                problems += "$name: \"unit\" needs a \"meaning\" (TOTAL_LOAD, or ADDED_LOAD — negative for assistance)."
             } else if (unit == null && meaning != null) {
                 warnings += "$name: \"meaning\" without a \"unit\" left out."
                 meaning = null

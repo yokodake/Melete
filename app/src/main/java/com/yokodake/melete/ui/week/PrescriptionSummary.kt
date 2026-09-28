@@ -82,12 +82,14 @@ object PrescriptionSummary {
         return if (unilateral) "$base per side" else base
     }
 
-    private fun measurement(measurement: Measurement): String {
-        val value = number(measurement.value)
-        return when (measurement.meaning) {
-            MeasurementMeaning.TOTAL_LOAD -> "$value ${measurement.unit}"
-            MeasurementMeaning.ADDED_LOAD -> "+$value ${measurement.unit}"
-            MeasurementMeaning.ASSISTANCE -> "−$value ${measurement.unit} assist"
+    private fun measurement(measurement: Measurement): String = load(measurement)
+
+    /** A load as it reads: "60 kg" in total, "+10 kg" added, "−15 kg" taken off by assistance. */
+    fun load(measurement: Measurement): String = when (measurement.meaning) {
+        MeasurementMeaning.TOTAL_LOAD -> "${number(measurement.value)} ${measurement.unit}"
+        MeasurementMeaning.ADDED_LOAD -> {
+            val sign = if (measurement.value < 0) "−" else "+"
+            "$sign${number(kotlin.math.abs(measurement.value))} ${measurement.unit}"
         }
     }
 

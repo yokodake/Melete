@@ -20,6 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -361,12 +364,17 @@ fun NumberField(
     decimal: Boolean = false,
     placeholder: String? = null,
     minHeight: Int = 48,
+    /** Allows a negative value: added load below zero is assistance. Implies [decimal]. */
+    signed: Boolean = false,
 ) {
     CompactTextField(
         value = value,
         onValueChange = { typed ->
-            val filtered = typed.filter { it.isDigit() || (decimal && (it == '.' || it == ',')) }
-                .replace(',', '.')
+            val filtered = if (signed) {
+                loadInput(typed, signed = true)
+            } else {
+                typed.filter { it.isDigit() || (decimal && (it == '.' || it == ',')) }.replace(',', '.')
+            }
             onValueChange(filtered)
         },
         label = label,
@@ -377,4 +385,33 @@ fun NumberField(
         ),
         modifier = modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * What a load field keeps of what was typed: digits and one decimal point, and — for added load,
+ * which goes below zero for assistance — a sign. A minus typed anywhere flips the sign, so "15-"
+ * reads as "-15" and a second minus takes it away again; decimal keyboards that hide the minus key
+ * are covered by [SignKey].
+ */
+fun loadInput(typed: String, signed: Boolean): String {
+    val digits = typed.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.')
+    val negative = signed && typed.count { it == '-' } % 2 == 1
+    return if (negative) "-$digits" else digits
+}
+
+/** The same load with the other sign; empty stays empty but remembers a sign to type after. */
+fun flipSign(value: String): String = if (value.startsWith("-")) value.removePrefix("-") else "-$value"
+
+/** A small ± beside a load field, for keyboards without a minus key. */
+@androidx.compose.runtime.Composable
+fun SignKey(what: String, onClick: () -> Unit) {
+    androidx.compose.material3.TextButton(
+        onClick = onClick,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+        modifier = Modifier
+            .width(36.dp)
+            .semantics { contentDescription = "Change the sign of $what" },
+    ) {
+        androidx.compose.material3.Text("±", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+    }
 }

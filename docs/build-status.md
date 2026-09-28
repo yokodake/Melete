@@ -28,7 +28,7 @@ the two ever disagree, the code and the first half win.
 | 5B — daily notes, trackers, export and restore | diary, export and restore tested on the phone; plan import built, its instrumented tests pass on the phone |
 | 6 — motivating overview dashboard | not started |
 
-Schema version **9**, and one schema only until phase 6 — see *No migration chain* below.
+Schema version **10**, and one schema only until phase 6 — see *No migration chain* below.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -351,8 +351,11 @@ com.yokodake.melete
   cards never move by themselves, which is what makes the planner worth reading backwards.
 - **Prescription payload as versioned JSON.** `prescriptions.payloadJson` holds a named-field
   document with `payloadVersion` alongside it. Absent values are `null`, never `0`. Decoding uses
-  `ignoreUnknownKeys`. A measurement carries `value`, `unit` and an explicit `meaning`, so added
-  load and assistance can never collapse into one quantity.
+  `ignoreUnknownKeys`. A measurement carries `value`, `unit` and an explicit `meaning`: **total
+  load** (everything lifted, never negative) or **added load** (relative to bodyweight, signed —
+  below zero is assistance). There is no separate assistance meaning: one signed scale lets a move
+  from assisted to weighted read as one line of progress, and the heaviest set is always the
+  largest number.
 - **A plan lives on its owner.** An exercise's default, a variation, a circuit station, a module
   entry and a scheduled copy each hold their own plan as a JSON column (`prescriptionJson`,
   `defaultPrescriptionJson`). Scheduling copies the text, so nothing is shared, nothing needs
@@ -1225,6 +1228,24 @@ checked). `PlanImportTest` is now 6 — the replace test became "replacing clear
 have not happened" (a logged and a skipped card kept with their sets, the library the file's, a
 kept exercise's id unchanged) and "from today leaves the past alone" is new. On the Pixel 9 the
 whole instrumented suite passes, **87 of 87**.
+
+## Loads are signed; assistance is gone (2026-09-28)
+
+- **`MeasurementMeaning.ASSISTANCE` removed.** Assistance is added load below zero: −15 kg is a
+  band taking 15 kg off. This also fixes a bug where an assisted exercise's "heaviest set" was its
+  *most* assisted, i.e. easiest, set; with one signed scale the largest number is the hardest.
+- **Entering a negative:** on added-load exercises, a minus typed anywhere in a load field flips its
+  sign (`loadInput`), and the max-load field in the logger and in circuit review has a **±** key
+  (`SignKey`), since decimal keyboards may hide the minus. Total loads stay unsigned. Loads read
+  "60 kg", "+10 kg", "−15 kg" (`PrescriptionSummary.load`, now shared with the logger). The
+  exercise editor says what a negative means under *Load type*.
+- **Schema v10, no migration**: stored data could name the removed meaning, so debug builds wipe
+  on first open, and the test library (whose three assisted exercises are now `ADDED_LOAD`) is
+  re-seeded. Plan files accept `TOTAL_LOAD` and `ADDED_LOAD`.
+
+**Checks run:** 188 unit tests pass (`LoadInputTest`, 4 new: the sign flips and flips back,
+total loads never go negative, the ± key, signed display; the payload test now round-trips a
+negative added load).
 
 ## Next step
 

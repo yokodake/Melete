@@ -73,6 +73,9 @@ import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.ExerciseMode
 import com.yokodake.melete.data.model.MeasurementMeaning
+import com.yokodake.melete.ui.components.SignKey
+import com.yokodake.melete.ui.components.flipSign
+import com.yokodake.melete.ui.components.loadInput
 import com.yokodake.melete.data.model.EffortLevel
 import com.yokodake.melete.ui.components.CompactTextField
 import com.yokodake.melete.ui.components.EffortSelector
@@ -231,6 +234,7 @@ fun LoggerScreen(
                             table = state.table,
                             unit = occurrence.measurementUnit,
                             unilateral = occurrence.unilateral,
+                            signed = occurrence.measurementMeaning == MeasurementMeaning.ADDED_LOAD,
                             onMaxLoad = viewModel::setMaxLoad,
                         )
                     }
@@ -252,6 +256,7 @@ fun LoggerScreen(
                                 row = row,
                                 unit = occurrence.measurementUnit,
                                 unilateral = occurrence.unilateral,
+                                signed = occurrence.measurementMeaning == MeasurementMeaning.ADDED_LOAD,
                                 onLoad = viewModel::setRowLoad,
                                 onToggle = { viewModel.toggleRow(row.number) },
                             )
@@ -542,6 +547,7 @@ private fun MaxLoadRow(
     table: SetTable,
     unit: String,
     unilateral: Boolean,
+    signed: Boolean,
     onMaxLoad: (String, Boolean) -> Unit,
 ) {
     // Label beside the fields. This only became possible once the fields stopped being
@@ -560,18 +566,21 @@ private fun MaxLoadRow(
         )
         if (unilateral) {
             SideLabel("L")
-            LoadField(table.maxLoad, modifier = Modifier.width(76.dp).semantics {
+            LoadField(table.maxLoad, signed = signed, modifier = Modifier.width(76.dp).semantics {
                 contentDescription = "Left max load ($unit)"
             }) { onMaxLoad(it, false) }
+            if (signed) SignKey("left max load") { onMaxLoad(flipSign(table.maxLoad), false) }
             Spacer(Modifier.width(8.dp))
             SideLabel("R")
-            LoadField(table.maxLoadRight, modifier = Modifier.width(76.dp).semantics {
+            LoadField(table.maxLoadRight, signed = signed, modifier = Modifier.width(76.dp).semantics {
                 contentDescription = "Right max load ($unit)"
             }) { onMaxLoad(it, true) }
+            if (signed) SignKey("right max load") { onMaxLoad(flipSign(table.maxLoadRight), true) }
         } else {
-            LoadField(table.maxLoad, modifier = Modifier.width(120.dp).semantics {
+            LoadField(table.maxLoad, signed = signed, modifier = Modifier.width(120.dp).semantics {
                 contentDescription = "Max load ($unit)"
             }) { onMaxLoad(it, false) }
+            if (signed) SignKey("max load") { onMaxLoad(flipSign(table.maxLoad), false) }
         }
     }
 }
@@ -622,6 +631,7 @@ private fun SetTableRow(
     row: SetRow,
     unit: String?,
     unilateral: Boolean,
+    signed: Boolean,
     onLoad: (Int, String, Boolean) -> Unit,
     onToggle: () -> Unit,
 ) {
@@ -650,14 +660,14 @@ private fun SetTableRow(
             if (unit != null) {
                 // A recorded row stays editable. The tick says the set happened; the load says
                 // what it weighed, and correcting the second is not a statement about the first.
-                LoadField(row.load, modifier = Modifier.weight(1f).semantics {
+                LoadField(row.load, signed = signed, modifier = Modifier.weight(1f).semantics {
                     contentDescription = "Set ${row.number}, ${if (unilateral) "left load" else "load"} ($unit)"
                 }) {
                     onLoad(row.number, it, false)
                 }
                 if (unilateral) {
                     Spacer(Modifier.width(8.dp))
-                    LoadField(row.loadRight, modifier = Modifier.weight(1f).semantics {
+                    LoadField(row.loadRight, signed = signed, modifier = Modifier.weight(1f).semantics {
                         contentDescription = "Set ${row.number}, right load ($unit)"
                     }) {
                         onLoad(row.number, it, true)
@@ -685,13 +695,13 @@ private fun SideLabel(text: String) {
 private fun LoadField(
     value: String,
     modifier: Modifier = Modifier,
+    /** Added load, which can go below zero for assistance. */
+    signed: Boolean = false,
     onValueChange: (String) -> Unit,
 ) {
     CompactTextField(
         value = value,
-        onValueChange = { typed ->
-            onValueChange(typed.filter { it.isDigit() || it == '.' || it == ',' }.replace(',', '.'))
-        },
+        onValueChange = { typed -> onValueChange(loadInput(typed, signed)) },
         textStyle = MaterialTheme.typography.bodyLarge,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier.widthIn(min = 64.dp),
@@ -743,14 +753,7 @@ private fun formatSet(payload: ActualSetPayload, side: BodySide?, unit: String?)
     val parts = mutableListOf<String>()
     payload.reps?.let { parts += "$it ${if (it == 1) "rep" else "reps"}" }
     payload.durationSeconds?.let { parts += PrescriptionSummary.duration(it) }
-    payload.measurement?.let { measurement ->
-        val value = trimNumber(measurement.value)
-        parts += when (measurement.meaning) {
-            MeasurementMeaning.TOTAL_LOAD -> "$value ${measurement.unit}"
-            MeasurementMeaning.ADDED_LOAD -> "+$value ${measurement.unit}"
-            MeasurementMeaning.ASSISTANCE -> "−$value ${measurement.unit} assist"
-        }
-    }
+    payload.measurement?.let { parts += PrescriptionSummary.load(it) }
     payload.effort?.let { parts += it.label.lowercase() }
     side?.let { parts += if (it == BodySide.LEFT) "L" else "R" }
     if (parts.isEmpty() && unit != null) parts += "no values"

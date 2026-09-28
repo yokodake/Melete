@@ -37,6 +37,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.yokodake.melete.data.model.MeasurementMeaning
+import com.yokodake.melete.ui.components.SignKey
+import com.yokodake.melete.ui.components.flipSign
 import com.yokodake.melete.ui.components.TrainingDateCard
 import com.yokodake.melete.ui.components.TrainingDatePickerDialog
 import androidx.compose.runtime.remember
@@ -293,16 +296,23 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                val signed = station.occurrence.measurementMeaning == MeasurementMeaning.ADDED_LOAD
                 station.occurrence.measurementUnit?.let { unit ->
                     NumberField(
                         label = unit,
                         value = station.table.maxLoad,
                         onValueChange = { viewModel.setMaxLoad(id, it) },
                         decimal = true,
+                        signed = signed,
                         modifier = Modifier.width(88.dp).semantics {
                             contentDescription = "${station.occurrence.name}, max load ($unit)"
                         },
                     )
+                    if (signed) {
+                        SignKey("${station.occurrence.name} max load") {
+                            viewModel.setMaxLoad(id, flipSign(station.table.maxLoad))
+                        }
+                    }
                 }
                 Text(
                     text = if (station.expanded) "⌃" else "⌄",
@@ -358,6 +368,7 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                                     viewModel.setRowLoad(id, row.number, value)
                                 },
                                 decimal = true,
+                                signed = station.occurrence.measurementMeaning == MeasurementMeaning.ADDED_LOAD,
                                 modifier = Modifier.width(80.dp).semantics {
                                     contentDescription = "${station.occurrence.name}, round ${row.number}, " +
                                         "${if (station.occurrence.unilateral) "left load" else "load"} ($it)"
@@ -371,6 +382,7 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                                         viewModel.setRowLoad(id, row.number, value, right = true)
                                     },
                                     decimal = true,
+                                    signed = station.occurrence.measurementMeaning == MeasurementMeaning.ADDED_LOAD,
                                     modifier = Modifier.width(80.dp).semantics {
                                         contentDescription = "${station.occurrence.name}, round ${row.number}, right load ($it)"
                                     },
