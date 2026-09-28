@@ -97,9 +97,11 @@ app structure, not a generic framework.
    midnight cannot regroup history. A placement carries **one** date and its sets are filed under
    that same date: moving trained work re-dates its actuals and rehomes the day's session, and
    logged work cannot become unscheduled.
-10. Release upgrades must preserve the real training record. Debug uses a separate application
-    ID (`com.yokodake.melete.debug`) and disposable data; its pre-phase-6 destructive fallback
-    cannot be used as a release upgrade strategy. See [the build guide](debug-release.md).
+10. Upgrades preserve the training record. Schema 10 is the baseline (closing phase 5B): every
+    schema change after it needs a data-preserving migration and a test, and neither build has a
+    destructive fallback. Backup and plan files of format version 1 stay readable. Debug is a
+    separate app (`com.yokodake.melete.debug`) whose data is disposable, but it takes the same
+    upgrade path. See [the build guide](debug-release.md).
 
 ## Session and duration defaults
 
@@ -151,7 +153,7 @@ workflow, general macrocycle engine.
 
 ## Phase sequence
 
-Revised 2026-09-22. Completed phases are marked; `docs/build-status.md` has the detail.
+Revised 2026-09-28. Completed phases are marked; `docs/build-status.md` has the detail.
 
 1. Runnable foundation: week layout, persistent local data. ✅
 2. Create an exercise and log it with minimal friction. ✅
@@ -161,15 +163,25 @@ Revised 2026-09-22. Completed phases are marked; `docs/build-status.md` has the 
 Timer A. Unilateral execution. ✅
 Timer B. Repeaters. ✅
 Timer C. Supersets/circuits and compact review. ✅
-4B. Modules for planning.
-5B. Daily notes and metrics, backup/export and restore.
-6. Motivating overview dashboard. **After phase 6 this is the stable baseline, and every later
-   release needs a data-preserving migration.**
+4B. Modules for planning. ✅
+5B. Daily notes and trackers, backup/export and restore, plan import; **the stable baseline**:
+    records and backup compatibility are preserved from here on. ✅
+6A. Overview: motivating totals, category breakdown, weekly and monthly bars.
+6B. History and basic graphs: drill into totals, browse exercise logs, plot load over time and
+    load against reps.
+6C. Month view: a calendar above a daily list; selecting a date jumps to it. Toggle planned work;
+    include diary entries.
+7. Profile and benchmarks: optional bodyweight history and named benchmark results.
+8. Progression analysis: refined comparisons — fixed reps or duration, variations, standalone
+   against circuit, selected time windows.
+9. Remote and web: remote backups first; a dashboard and web-authored plan imports as separate
+   increments.
+10. Appearance: a coherent visual polish pass across the app.
 
 Later, only when useful: strength progression charts; a work-time-only filter; module filters and
 explainable scheduling warnings; draft preservation; promoting a one-off activity to a library
 entry.
 
-Until phase 6, database and stored-format compatibility are not required and a clean model is
-preferred to compatibility code — but a data-preserving migration is still written wherever it is
-cheap, and any schema change that would need a development reset must say so plainly.
+From the 5B baseline on, database and stored-format compatibility are required: a schema change
+ships with its migration, and old backups and plan files keep working. (Before it, a clean model
+was preferred to compatibility code, and the debug build reset instead of migrating.)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs instrumented tests against Melete Debug, never the everyday release app.
-# Installs with -r to preserve debug data on install; tests and debug schema changes can still
-# modify or reset debug data. Release uses a separate application ID and private storage.
+# Installs with -r to preserve debug data on install; the tests themselves use in-memory
+# databases. Release uses a separate application ID and private storage.
 #
 # Usage: scripts/device-tests.sh [class-or-method filter]
 #   scripts/device-tests.sh

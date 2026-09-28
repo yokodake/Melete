@@ -1,7 +1,6 @@
 package com.yokodake.melete.data
 
 import android.content.Context
-import com.yokodake.melete.BuildConfig
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -32,22 +31,12 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
 /**
  * The training record.
  *
- * **One schema, no migration chain, until phase 6.** The version still has to move when the schema
- * does — Room refuses a changed schema under an unchanged number — but only the current schema is
- * exported and nothing migrates between them.
- * The app has never been installed by anyone
- * but its author and the database is disposable until the first real training block, so the five
- * migrations that carried it from v1 to v6 were ceremony: two hundred lines and six tests proving
- * that upgrades work for a record nobody would mind losing. They are gone, along with the schemas
- * they stepped through.
- *
- * What replaces them is a debug-only destructive fallback. A schema change now means the next
- * debug launch starts from an empty database, which takes seconds to refill. **The release build
- * has no fallback** and still fails loudly, because that is the build trained against, and a
- * silent wipe of a real diary is the one outcome worth crashing to avoid.
- *
- * Phase 6 is where this reverses: at that point the record becomes the stable baseline, the
- * fallback comes out, and every change needs a data-preserving migration again.
+ * **Schema 10 is the baseline, and upgrades preserve data.** Every schema change from here comes
+ * with a migration in [MeleteMigrations] and a test of it; see there for the steps. Neither build
+ * has a destructive fallback: until phase 5B the debug build wiped itself on a schema change, which
+ * was fine while every record was disposable, but it also meant a forgotten migration only showed
+ * up in release — the build holding the real record. Now Melete Debug fails on open exactly as
+ * release would, so a missing migration is found where losing data does not matter.
  */
 @Database(
     entities = [
@@ -66,7 +55,7 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         DiaryEntryEntity::class,
         DiaryValueEntity::class,
     ],
-    version = 10,
+    version = MeleteMigrations.CURRENT,
     exportSchema = true,
 )
 @TypeConverters(MeleteConverters::class)
@@ -91,13 +80,9 @@ abstract class MeleteDatabase : RoomDatabase() {
     companion object {
         const val DATABASE_NAME = "melete.db"
 
-        fun build(context: Context): MeleteDatabase =
-            Room.databaseBuilder(context, MeleteDatabase::class.java, DATABASE_NAME)
-                .apply {
-                    // Debug only, and deliberately not a convenience: it is what lets the schema
-                    // change freely before phase 6. The release build keeps no fallback at all.
-                    if (BuildConfig.DEBUG) fallbackToDestructiveMigration(dropAllTables = true)
-                }
+        fun build(context: Context, name: String = DATABASE_NAME): MeleteDatabase =
+            Room.databaseBuilder(context, MeleteDatabase::class.java, name)
+                .addMigrations(*MeleteMigrations.ALL)
                 .build()
     }
 }

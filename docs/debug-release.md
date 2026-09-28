@@ -60,7 +60,7 @@ The Kotlin namespace and activity/test class names remain `com.yokodake.melete`;
 com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-There is no release-target option. `install -r` avoids deleting debug data during installation, but tests, seed/import helpers and debug schema changes can still change or reset debug records. Treat the debug database as disposable. Gradle-managed instrumented tests can also remove/reset their debug installation; this no longer affects release data.
+There is no release-target option. `install -r` avoids deleting debug data during installation, but seed/import helpers can still change debug records, and a schema change migrates debug exactly as it will release. Treat the debug database as disposable. Gradle-managed instrumented tests can also remove/reset their debug installation; this no longer affects release data.
 
 `LibrarySeed` and `DeviceActions` additionally refuse to modify a target whose package is not `com.yokodake.melete.debug`. Their example ADB commands use the new test package. Old installed `com.yokodake.melete.test` instrumentation belongs to the pre-split setup: do not invoke it. Updating the source does not disable an old APK still installed on the phone. It can be removed separately when deliberately cleaning up the old test installation; never remove the everyday `com.yokodake.melete` application to do so.
 
@@ -96,7 +96,7 @@ Seeding and `DeviceActions` refuse to run unless the target is `com.yokodake.mel
 
 ## Database upgrades
 
-The debug build still permits destructive Room migration during the current development phase, but only within the debug application. This separation does not make release schema upgrades automatically safe. Release migrations and backup compatibility must preserve the real training record. Never solve a release migration/install failure by uninstalling the everyday app or enabling a release destructive fallback.
+Since the 5B baseline (schema 10), neither build has a destructive fallback: both open a changed schema only through a migration in `MeleteMigrations`, so a missing one fails in Melete Debug first, where its data does not matter. Every schema change needs its migration and `MigrationTest`; see `MeleteMigrations` for the steps. Never solve a release migration/install failure by uninstalling the everyday app, clearing its storage, or adding a destructive fallback.
 
 ## Verification
 
