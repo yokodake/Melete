@@ -26,6 +26,8 @@ the two ever disagree, the code and the first half win.
 | Timer C — supersets/circuits and compact review | ✅ |
 | 4B — modules for planning | ✅ built; instrumented tests pass on the phone |
 | 5B — diary, export/restore, plan import; stable baseline | ✅ instrumented tests pass on the phone; the hand checklist is still to tick |
+| UI pass (part of 1.0, no schema change) | ✅ built; unit and instrumented tests pass; screens still to be checked by hand |
+| Timer polish (near-term follow-up) | not started — recorded in `ui-ux-handoff.md` |
 | 6A — overview | not started |
 | 6B — history and basic graphs | not started |
 | 6C — month view | not started |
@@ -40,10 +42,28 @@ below. Backup format **1** and plan format **1** stay readable in every later ve
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
+## Navigation
+
+The bottom bar is **Menu · Calendar · Timer · Dashboard**, four ordinary tabs that each keep
+their state. **Menu** lists Profile, Benchmarks, Library, Import / export and Settings; Library
+and Import / export open focused screens with a back arrow, and the other three are placeholders
+that do nothing until their phases. **Dashboard** is an empty placeholder until 6A. (A left
+drawer was tried first and dropped on the user's preference.) On Calendar, a horizontal swipe
+turns the week — left for the next, right for the previous — past a 72 dp threshold. The
+Week/Month selector on the week title (a small chevron) is **deferred** to 6C.
+
 ## The week
 
 One vertical list: the week's unscheduled items on top, then Monday to Sunday. Today is
-highlighted and the list opens near it. Previous/next week and a *Today* action.
+highlighted and the list opens near it — when the week changes, not every time the screen is
+returned to, so coming back from a workout keeps the place. Previous/next week and a *Today*
+action.
+
+A scheduled **module folds** under its header (▸ / ▾). Folded, it shows its name and "4
+exercises" or "2 of 4 exercises logged" (circuit stations counted, containers not), or the Done
+chip. Today's modules start open, every other slot's start folded; a module opened or closed by
+hand stays that way while the week screen lives. Display only: nothing about membership, order or
+records changes.
 
 Each day's `+` offers two things:
 
@@ -57,9 +77,31 @@ Each day's `+` offers two things:
   for the life of the picker, across switching tabs and detours to create something.
 - **Other activity**, typed in by name with optional minutes — no library entry is created.
 
-**The Library tab** has the same two tabs, *Workouts* and *Modules*, with one search over the
-tab on screen. A tap opens an exercise and edits a circuit or module; a long press offers *Add to
-plan*, edit, duplicate and remove. *New workout* opens the exercise editor with **Exercise |
+**The Library** (from the drawer) has the same two tabs, *Workouts* and *Modules*, with one
+search over the tab on screen — the same search as the picker's. A tap opens what the item is:
+an exercise's page, a circuit's contents (stations in order, each with its per-set plan, the
+rounds, switch and rest, and the whole circuit's estimate) or a module's description and
+contents. Each has an explicit **Edit** in its top bar and **Add to plan**; a long press still
+offers *Add to plan*, edit, duplicate and remove. In the picker, a row's **Open** leads to the same
+pages.
+
+**Search**: commas separate conditions, all of which must match. A condition matches an item's
+own text (name; a circuit's stations), its own category by any part of its name or the start of
+its abbreviation, case-insensitive (`finger`, `FN`, `S&C`), or its kind as a whole word
+(`circuit`, `exercise`). `!circuit` leaves circuits out. `pull, S&C`; `circuit, FNGR`;
+`!circuit, fn`. Spaces are part of the text. Modules match by text only. Any other negation is
+**deferred**.
+
+**From the library, an exercise can be timed or logged directly.** With variations, a tap on a
+plan card chooses which plan (outlined); **⋮ → Adjust this attempt** changes the plan for this
+attempt only — saved on the copy it makes, never on the template or as a variation. *Start timer*
+and *Log exercise* then put one copy of that plan into this week's unscheduled area and use it:
+the timer runs linked to it (a timer records nothing), and its *Log* opens the logger on that same
+copy, so nothing is duplicated; pressing either again on the same page reuses it, and choosing
+another plan swaps out the untouched copy. *Log* from the library defaults to today with the
+usual *Change*; leaving the logger without saving removes the copy it made for that
+(`discardUnloggedOccurrence`, which refuses anything logged, skipped, completed or grouped). A
+copy made for a timer that is never logged stays in Unscheduled as a plan. *New workout* opens the exercise editor with **Exercise |
 Circuit** at the top, and the rest of the form follows that choice — switching replaces the editor
 rather than stacking one on the other. Editing an existing exercise or circuit never offers the
 switch.
@@ -132,10 +174,22 @@ Opening a workout shows what it is first: description, the plan, the facts that 
 performed, and — once logged — how long it took. The bottom bar offers the only two things worth
 doing next.
 
+A planned exercise's page shows **Last logged** under its plan: "Last logged · 24 Sep" over
+"3 × 8 · 20 kg · Hard", or "8 × 20 · 8 × 20 · 6 × 22 kg" when sets differ, "L 20 / R 22.5 kg" for
+uneven sides, "5 sets · 10 kg" for timed work (no reps invented), duration and effort for an
+activity (`ui/detail/LastLogged.kt`). It is the most recent completed or logged occurrence of the
+same exercise on or before this one's date (today's when unscheduled), by training date, never
+this occurrence itself; the same variation is preferred, and a fallback to another plan shows
+that plan's chip (or "default plan"). No earlier result, no block. The plan card no longer
+repeats the category the header shows.
+
 **The logger is a draft table.** Planned rows begin ticked; ticking, unticking and typing cost
 nothing. *Mark done* writes the whole workout in one transaction, sets the occurrence completed and
 closes; pressing it again on a logged workout *replaces* what was written, so correcting a log is
-the same gesture as making one and the button says *Save changes*.
+the same gesture as making one and the button says *Save changes*. The button sits in a bar
+anchored at the foot of the screen — above the keyboard, with the reason it cannot save yet — in
+the logger and the circuit review alike. Previous results are one compact line each, the latest
+shown and the rest behind *N more*.
 
 - Load is per set, with an L/R pair for unilateral work and a max-load fallback that fills rows
   saying nothing of their own but never overrides one that does.
@@ -148,10 +202,13 @@ the same gesture as making one and the button says *Save changes*.
 - A duration-only activity has no set table at all. It records that it happened, optionally how
   long and how it felt, and counts once — with no fabricated set records.
 
-**A circuit opens as information**, exactly as an exercise does: what it is, how many rounds of
-what, what falls between, the stations in order with their plans and their share of the clock, and
-then the only two things worth doing next — *Start the circuit* and *Log the workout*. Going
-straight into the review meant a circuit could only be answered and never read.
+**A circuit opens as information**, exactly as an exercise does: one line of rounds, switch,
+rest and the whole circuit's estimate, then the stations in order with their per-set plans, and
+the only two things worth doing next — *Start timer* and *Log circuit*. Stations show no time of
+their own: their allocated share includes the rests and read as a contradiction beside "30 s"
+(the allocation itself is unchanged and still what the review infers). Going straight into the
+review meant a circuit could only be answered and never read. Neither page explains counting any
+more; that lives in *Counting* below.
 
 **A circuit is logged in one review**: a list of expandable rows, one per exercise. Collapsed, a
 row is a tick, a name and a max load; expanded, it has the same set table, per-side loads, partial
@@ -252,7 +309,10 @@ asks for it.
 
 ## Backup and restore
 
-*Backup & restore* is in the Library's ⋮ menu. **Export** writes the whole record to a file chosen
+*Import / export* is in the drawer, with *Backup* (Export, Restore) and *Plans* (Import a plan)
+kept apart. Recovery copies are listed by date, "27 Sep · 19:33", with the year once it is not
+this one; the stamp in the file name is local time and is read back as such, and the files are
+never renamed. **Export** writes the whole record to a file chosen
 with Android's picker: one human-readable JSON document (`format: "melete-backup"`,
 `formatVersion: 1`) holding every table with its stable ids — library, variations, circuits,
 modules, everything scheduled with its snapshots, every set, sessions, trackers and the diary.
@@ -693,7 +753,9 @@ the migration suite having gone.
   by rather than firing them late.
 - A countdown's labels are snapshotted names, deliberately not live links: a timer reaching zero
   must never be able to touch what was logged.
-- The library detail screen has no *Start the timer* button; only a planned copy in a week does.
+- Starting a timer from the library leaves a planned copy in this week's Unscheduled if it is
+  never logged (by choice: the copy is what the timer's *Log* records).
+- The week's module folding lasts while the week screen lives; it is not saved across restarts.
 - `today` is computed when the UI state is built, so an app left open across midnight keeps the old
   highlight until the state is rebuilt.
 - The month abbreviation in week labels comes from the device locale. Unit tests pin `Locale.US`.
@@ -1291,6 +1353,28 @@ negative added load).
 **Checks run:** 193 unit tests pass; on the Pixel 9 the instrumented suite passes, **92 of 92**.
 Melete Debug, now without a fallback, opens its seeded schema-10 database.
 
+## UI pass (2026-09-28)
+
+From `docs/ui-ux-handoff.md`, as part of 1.0 — no version bump, no schema change, backups and plan
+files untouched. Menu · Calendar · Timer · Dashboard tabs (Menu: Profile, Benchmarks, Library,
+Import / export, Settings; the drawer first built was replaced); week swipe; folding
+modules; comma search in the library and the picker; library pages for circuits and modules;
+timing and logging an exercise straight from the library; *Last logged*; anchored save bars and
+compact previous results; circuit pages without allocated station times or counting prose;
+readable recovery-copy dates. Decisions taken with the user: a library attempt is a real
+unscheduled copy (removed again if the logger is left unsaved); modules start folded except
+today's; the Library is a focused screen with Back rather than a tab.
+
+Checks: 209 unit tests pass after the second round (new: comma search, `FN` prefixes, `!circuit`, `LastLoggedPicker` choice and formatting — same
+variation, dates over edit order, L/R, zero and negative added load, timed work, activities —
+and recovery-copy labels). All 93 instrumented tests passed on the Pixel 9 after the first round,
+including a new one pinning that an attempt copy is only ever discarded while untouched; the
+second round (tabs, swipe, search tweaks) was not run on the device suite. The user checked the
+first round's drawer, folding, attempt copies and save bar by hand.
+
+**Still deferred**: the running-timer polish (next, before 6A), Profile / Benchmarks / Settings
+content, Dashboard content (6A), Month and its title chevron (6C), search negation beyond
+`!circuit`, the full-screen import preview.
 ## Next step
 
 **Phase 6A — the overview.** Before the real plan goes into release: walk the hand checklist

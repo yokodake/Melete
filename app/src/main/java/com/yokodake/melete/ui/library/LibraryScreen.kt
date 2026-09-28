@@ -92,23 +92,26 @@ data class LibraryActions(
     val onConfirmRemoveModule: () -> Unit = {},
     val onCancelRemoveModule: () -> Unit = {},
     val onMessageShown: () -> Unit = {},
-    val onOpenBackup: () -> Unit = {},
+    val onOpenCircuit: (String) -> Unit = {},
+    val onOpenModule: (String) -> Unit = {},
+    val onBack: () -> Unit = {},
 )
 
 /**
- * The library as a tab: workouts — exercises and circuits together — and the modules that group
- * them. A tap on an exercise opens it, not a form: what it is comes first, and editing it is a
- * button on that screen. A circuit or a module has no such page, so a tap edits it.
+ * The library, opened from the drawer: workouts — exercises and circuits together — and the
+ * modules that group them. A tap on anything opens what it is, not a form: editing is an explicit
+ * action on that page, or in the row's menu.
  */
 @Composable
 fun LibraryRoute(
     onOpenExercise: (String) -> Unit,
+    onOpenCircuit: (String) -> Unit,
+    onOpenModule: (String) -> Unit,
     onNewWorkout: () -> Unit,
     onEditCircuit: (String) -> Unit,
     onNewModule: () -> Unit,
     onEditModule: (String) -> Unit,
-    onOpenBackup: () -> Unit = {},
-    bottomBar: @Composable () -> Unit = {},
+    onBack: () -> Unit,
     viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -137,9 +140,10 @@ fun LibraryRoute(
             onConfirmRemoveModule = viewModel::confirmModuleRemoval,
             onCancelRemoveModule = viewModel::cancelModuleRemoval,
             onMessageShown = viewModel::consumeMessage,
-            onOpenBackup = onOpenBackup,
+            onOpenCircuit = onOpenCircuit,
+            onOpenModule = onOpenModule,
+            onBack = onBack,
         ),
-        bottomBar = bottomBar,
     )
 }
 
@@ -155,7 +159,6 @@ private sealed interface Scheduling {
 fun LibraryScreen(
     state: LibraryUiState,
     actions: LibraryActions,
-    bottomBar: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var scheduling by remember { mutableStateOf<Scheduling?>(null) }
@@ -169,7 +172,6 @@ fun LibraryScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        bottomBar = bottomBar,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -179,7 +181,14 @@ fun LibraryScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceContainer,
                         ),
                         title = { Text("Library", style = MaterialTheme.typography.titleMedium) },
-                        actions = { LibraryMenu(onOpenBackup = actions.onOpenBackup) },
+                        navigationIcon = {
+                            IconButton(
+                                onClick = actions.onBack,
+                                modifier = Modifier.semantics { contentDescription = "Back" },
+                            ) {
+                                Text("‹", style = MaterialTheme.typography.headlineMedium)
+                            }
+                        },
                     )
                     LibraryTabs(selected = state.tab, onSelect = actions.onShowTab)
                 }
@@ -206,20 +215,7 @@ fun LibraryScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item {
-                CompactTextField(
-                    value = state.query,
-                    onValueChange = actions.onQueryChange,
-                    label = "Search",
-                    minHeight = 48,
-                    trailingIcon = {
-                        if (state.query.isNotEmpty()) {
-                            TextButton(onClick = { actions.onQueryChange("") }) { Text("Clear") }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            item { LibrarySearchField(state.query, actions.onQueryChange) }
             val empty = when (state.tab) {
                 LibraryTab.WORKOUTS -> state.workouts.isEmpty()
                 LibraryTab.MODULES -> state.modules.isEmpty()
@@ -252,7 +248,7 @@ fun LibraryScreen(
 
                         is Workout.Circuit -> RoutineRow(
                             routine = workout.routine,
-                            onClick = { actions.onEditCircuit(workout.routine.id) },
+                            onClick = { actions.onOpenCircuit(workout.routine.id) },
                             onEdit = { actions.onEditCircuit(workout.routine.id) },
                             onDuplicate = { actions.onDuplicateCircuit(workout.routine.id) },
                             onRemove = { actions.onAskRemoveCircuit(workout.routine.id) },
@@ -266,7 +262,7 @@ fun LibraryScreen(
                 LibraryTab.MODULES -> items(items = state.modules, key = { it.id }) { module ->
                     ModuleRow(
                         module = module,
-                        onClick = { actions.onEditModule(module.id) },
+                        onClick = { actions.onOpenModule(module.id) },
                         onEdit = { actions.onEditModule(module.id) },
                         onDuplicate = { actions.onDuplicateModule(module.id) },
                         onRemove = { actions.onAskRemoveModule(module.id) },
@@ -360,24 +356,6 @@ fun LibraryScreen(
                 TextButton(onClick = actions.onCancelRemoveModule) { Text("Cancel") }
             },
         )
-    }
-}
-
-/** The library's overflow: the things about the whole record rather than any one entry. */
-@Composable
-private fun LibraryMenu(onOpenBackup: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(
-            onClick = { open = true },
-            modifier = Modifier.semantics { contentDescription = "More" },
-        ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("Backup & restore") },
-                onClick = { open = false; onOpenBackup() },
-            )
-        }
     }
 }
 

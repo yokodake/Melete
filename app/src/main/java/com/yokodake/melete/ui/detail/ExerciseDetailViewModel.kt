@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -94,7 +95,29 @@ data class ExerciseDetailUiState(
     val today: LocalDate = LocalDate.now(),
     /** One-shot text for the snackbar. */
     val message: String? = null,
+    /** On a planned copy: the most recent earlier result, or null when there is none. */
+    val lastLogged: LastLogged? = null,
+    /** In the library: which plan the timer and the logger use; null is the default. */
+    val selectedVariationId: String? = null,
+    /** In the library: a plan changed for this one attempt only, never saved to the template. */
+    val attemptPlan: PrescriptionPayload? = null,
+    /** Non-null while that one-off plan is being written. */
+    val attemptEditor: PrescriptionFormState? = null,
 ) {
+    /** In the library, the plan an attempt would be cut from, before any one-off change. */
+    val selectedPlan: PrescriptionPayload?
+        get() = if (selectedVariationId == null) {
+            libraryExercise?.defaultPrescription
+        } else {
+            variations.firstOrNull { it.id == selectedVariationId }?.prescription
+        }
+
+    /** What the timer and the logger would run from the library: the one-off, or the selection. */
+    val attemptPrescription: PrescriptionPayload? get() = attemptPlan ?: selectedPlan
+
+    /** Timer and logging work from here: a planned copy, or a library entry that can still be planned. */
+    val canTrain: Boolean get() = occurrenceId != null || libraryExercise != null
+
     /**
      * What the logging button offers.
      *
@@ -137,7 +160,7 @@ data class ExerciseDetailUiState(
 class ExerciseDetailViewModel(
     private val repository: TrainingRepository,
     private val timer: TimerController,
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val destination = savedStateHandle.toRoute<ExerciseDetailDestination>()
@@ -147,9 +170,47 @@ class ExerciseDetailViewModel(
         val prescriptionEditor: PrescriptionFormState? = null,
         val variationEditor: VariationEditorState? = null,
         val message: String? = null,
+        val selectedVariationId: String? = null,
+        val attemptPlan: PrescriptionPayload? = null,
+        val attemptEditor: PrescriptionFormState? = null,
     )
 
     private val transient = MutableStateFlow(Transient())
+
+    /**
+     * The copy this screen last created for an attempt from the library, kept so a second press —
+     * logging after the timer, or starting it again — reuses it instead of adding another.
+     */
+    private var attemptOccurrenceId: String?
+        get() = savedStateHandle.get<String>(ATTEMPT_KEY)
+        set(value) {
+            savedStateHandle[ATTEMPT_KEY] = value
+        }
+
+    /** The plan [attemptOccurrenceId] was cut with, to tell whether it still matches. */
+    private var attemptSignature: String?
+        get() = savedStateHandle.get<String>(ATTEMPT_SIGNATURE_KEY)
+        set(value) {
+            savedStateHandle[ATTEMPT_SIGNATURE_KEY] = value
+        }
+
+    private val lastLogged: Flow<LastLogged?> = when (val occurrenceId = destination.occurrenceId) {
+        null -> flowOf(null)
+        else -> repository.observeOccurrence(occurrenceId).flatMapLatest { detail ->
+            val current = detail?.occurrence ?: return@flatMapLatest flowOf(null)
+            combine(
+                repository.observeOccurrencesOf(current.exerciseId),
+                repository.observePreviousResults(current.exerciseId, occurrenceId, Int.MAX_VALUE),
+            ) { history, previous ->
+                LastLoggedPicker.pick(
+                    current = current,
+                    history = history,
+                    sets = previous.flatMap { it.sets },
+                    today = LocalDate.now(),
+                )
+            }
+        }
+    }
 
     private val source: Flow<Pair<OccurrenceDetail?, LibraryExercise?>> =
         when (val occurrenceId = destination.occurrenceId) {
@@ -168,8 +229,8 @@ class ExerciseDetailViewModel(
         }
 
     val uiState: StateFlow<ExerciseDetailUiState> =
-        combine(source, transient) { (detail, library), extras ->
-            build(detail, library, extras)
+        combine(source, transient, lastLogged) { (detail, library), extras, last ->
+            build(detail, library, extras).copy(lastLogged = last)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -244,6 +305,11 @@ class ExerciseDetailViewModel(
             libraryExercise = library?.takeIf { it.deletedAtEpochMs == null },
             variationEditor = extras.variationEditor,
             message = extras.message,
+            // A variation retired since it was selected falls back to the default.
+            selectedVariationId = extras.selectedVariationId
+                ?.takeIf { id -> library?.activeVariations?.any { it.id == id } == true },
+            attemptPlan = extras.attemptPlan,
+            attemptEditor = extras.attemptEditor,
         )
     }
 
@@ -303,9 +369,95 @@ class ExerciseDetailViewModel(
     }
 
     private fun startTimer(onStarted: () -> Unit) {
-        val program = uiState.value.timerProgram ?: return
-        timer.start(program)
-        onStarted()
+        val state = uiState.value
+        if (state.occurrenceId != null) {
+            val program = state.timerProgram ?: return
+            timer.start(program)
+            onStarted()
+            return
+        }
+        // From the library: the countdown belongs to a real copy in this week, so logging it
+        // afterwards records that copy rather than creating a second one. The timer itself still
+        // records nothing.
+        viewModelScope.launch {
+            val (id, _) = attemptOccurrence(state) ?: return@launch
+            timer.start(
+                timerProgram(state.name, state.mode, state.unilateral, state.attemptPrescription, id)
+            )
+            onStarted()
+        }
+    }
+
+    // ------------------------------------------------------ library attempts
+
+    /**
+     * Logs the library exercise without placing it by hand first: a copy of the chosen plan goes
+     * into this week's unscheduled area and the logger opens on it, where the date defaults to
+     * today and can be changed as for any unscheduled work. A copy made only for this is taken
+     * away again if the logger is left without saving.
+     */
+    fun logFromLibrary(onLog: (occurrenceId: String, discardIfUnlogged: Boolean) -> Unit) {
+        val state = uiState.value
+        viewModelScope.launch {
+            val (id, created) = attemptOccurrence(state) ?: return@launch
+            onLog(id, created)
+        }
+    }
+
+    /** The copy for an attempt: the one already made for the same plan, or a new one. */
+    private suspend fun attemptOccurrence(state: ExerciseDetailUiState): Pair<String, Boolean>? {
+        val exercise = state.libraryExercise ?: return null
+        val signature = "${state.selectedVariationId}|${state.attemptPlan}"
+        attemptOccurrenceId?.let { id ->
+            val existing = repository.observeOccurrence(id).first()
+            if (existing != null &&
+                existing.occurrence.state == OccurrenceState.PLANNED &&
+                existing.sets.isEmpty()
+            ) {
+                if (attemptSignature == signature) return id to false
+                // Another plan was chosen since: the untouched copy of the old one is not wanted.
+                repository.discardUnloggedOccurrence(id)
+            }
+        }
+        val id = repository.scheduleExercise(
+            exerciseId = exercise.id,
+            weekStart = WeekMath.weekStartOf(LocalDate.now()),
+            trainingDate = null,
+            variationId = state.selectedVariationId,
+        )
+        // A one-off change lives on this copy alone; the template and its variations are untouched.
+        state.attemptPlan?.let { repository.updateOccurrencePrescription(id, it) }
+        attemptOccurrenceId = id
+        attemptSignature = signature
+        return id to true
+    }
+
+    /** Chooses which plan an attempt uses. A one-off change belonged to the previous choice. */
+    fun selectPlan(variationId: String?) {
+        transient.update { it.copy(selectedVariationId = variationId, attemptPlan = null) }
+    }
+
+    fun openAttemptEditor() {
+        val plan = uiState.value.attemptPrescription
+        transient.update { it.copy(attemptEditor = PrescriptionFormState.from(plan)) }
+    }
+
+    fun updateAttemptEditor(form: PrescriptionFormState) {
+        transient.update { it.copy(attemptEditor = form) }
+    }
+
+    fun dismissAttemptEditor() {
+        transient.update { it.copy(attemptEditor = null) }
+    }
+
+    fun saveAttemptPlan() {
+        val form = transient.value.attemptEditor ?: return
+        val mode = uiState.value.mode
+        transient.update { it.copy(attemptPlan = form.toPayload(mode), attemptEditor = null) }
+    }
+
+    fun clearAttemptPlan() {
+        transient.update { it.copy(attemptPlan = null) }
     }
 
     // ------------------------------------------------------ prescription
@@ -418,6 +570,9 @@ class ExerciseDetailViewModel(
     }
 
     companion object {
+        private const val ATTEMPT_KEY = "attemptOccurrenceId"
+        private const val ATTEMPT_SIGNATURE_KEY = "attemptSignature"
+
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]

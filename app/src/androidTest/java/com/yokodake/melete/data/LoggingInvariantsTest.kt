@@ -345,4 +345,37 @@ class LoggingInvariantsTest {
         repository.setOccurrenceComment(occurrenceId, "   ")
         assertNull(occurrenceOf(occurrenceId).occurrence.comment)
     }
+
+    /**
+     * A copy made from the library for one attempt goes again only while it is untouched. Logged,
+     * skipped or completed work stays, however the logger was left.
+     */
+    @Test
+    fun anAttemptCopyIsDiscardedOnlyWhileNothingHasHappenedToIt() = runBlocking {
+        val exerciseId = repository.createExercise(rowDraft())
+
+        val untouched = repository.scheduleExercise(exerciseId, monday, trainingDate = null)
+        assertTrue(repository.discardUnloggedOccurrence(untouched))
+        assertNull(repository.observeOccurrence(untouched).first())
+
+        val logged = repository.scheduleExercise(exerciseId, monday, trainingDate = null)
+        repository.saveLogs(
+            trainingDate = tuesday,
+            writes = listOf(
+                OccurrenceLogWrite(
+                    occurrenceId = logged,
+                    completed = true,
+                    sets = listOf(SetWrite(ActualSetPayload(reps = 8), BodySide.LEFT)),
+                )
+            ),
+        )
+        assertFalse(repository.discardUnloggedOccurrence(logged))
+        assertEquals(OccurrenceState.COMPLETED, occurrenceOf(logged).occurrence.state)
+        assertEquals(1, occurrenceOf(logged).sets.size)
+
+        val skipped = repository.scheduleExercise(exerciseId, monday, trainingDate = null)
+        repository.setOccurrenceState(skipped, OccurrenceState.SKIPPED)
+        assertFalse(repository.discardUnloggedOccurrence(skipped))
+        assertNotNull(repository.observeOccurrence(skipped).first())
+    }
 }

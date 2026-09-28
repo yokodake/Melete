@@ -48,7 +48,7 @@ data class CircuitDetailUiState(
      * Planned work has no log yet, so the button offers to make one. Once anything has been
      * written the same button reopens what it says, which is a different promise.
      */
-    val logButtonLabel: String get() = if (recorded > 0) "Update log" else "Log the workout"
+    val logButtonLabel: String get() = if (recorded > 0) "Update log" else "Log circuit"
 }
 
 /**

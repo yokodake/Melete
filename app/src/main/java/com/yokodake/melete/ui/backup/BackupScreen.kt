@@ -121,7 +121,7 @@ fun BackupScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
-                title = { Text("Backup & restore", style = MaterialTheme.typography.titleMedium) },
+                title = { Text("Import / export", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
@@ -146,7 +146,7 @@ fun BackupScreen(
             if (state.busy) item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
 
             item {
-                Section("On this phone")
+                Section("Backup")
                 state.current?.let { SummaryText(it) }
             }
             item {
@@ -170,13 +170,12 @@ fun BackupScreen(
                 )
             }
             item {
-                Section("Plan")
+                Section("Plans")
                 OutlinedButton(onClick = onPickPlan, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                     Text("Import a plan…")
                 }
                 Text(
-                    text = "A hand-written file of exercises, circuits, modules and weeks. You see what " +
-                        "it will add or change before anything is written. Logged work is never deleted.",
+                    text = "Shows what it adds or changes first. Logged training and daily notes stay.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

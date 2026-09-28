@@ -28,6 +28,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** A backup read and validated, waiting for the yes that replaces the record with it. */
 data class PendingRestore(
@@ -49,6 +53,22 @@ data class PendingPlan(
 
 /** A copy of the record saved automatically before a restore replaced it. */
 data class SafetyCopy(val file: File, val label: String)
+
+/**
+ * A recovery copy's name as a date: "27 Sep · 19:33", with the year once it is not [today]'s.
+ *
+ * The stamp in the file name was written in the phone's own time zone (see
+ * `BackupService.writeSafetyCopy`), so it is read back as that local time rather than converted.
+ * The file itself is never renamed; a name that does not parse is shown as it is.
+ */
+fun recoveryCopyLabel(fileName: String, today: LocalDate = LocalDate.now()): String {
+    val stamp = fileName.removeSuffix(".json").removePrefix("melete-before-restore-")
+    val time = runCatching {
+        LocalDateTime.parse(stamp, DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+    }.getOrNull() ?: return stamp
+    val pattern = if (time.year == today.year) "d MMM · HH:mm" else "d MMM yyyy · HH:mm"
+    return DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(time)
+}
 
 data class BackupUiState(
     val busy: Boolean = false,
@@ -95,7 +115,7 @@ class BackupViewModel(
         safetyDirectory.listFiles { file -> file.name.endsWith(".json") }
             .orEmpty()
             .sortedByDescending { it.lastModified() }
-            .map { SafetyCopy(it, it.nameWithoutExtension.removePrefix("melete-before-restore-")) }
+            .map { SafetyCopy(it, recoveryCopyLabel(it.name)) }
     }
 
     /** Writes the whole record to the file the user picked. */

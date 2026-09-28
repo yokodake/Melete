@@ -1,6 +1,10 @@
 package com.yokodake.melete.ui.week
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.BorderStroke
@@ -89,8 +93,11 @@ fun WeekRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val moduleExpansion by viewModel.moduleExpansion.collectAsStateWithLifecycle()
     WeekScreen(
         state = state,
+        moduleExpansion = moduleExpansion,
+        onModuleExpanded = viewModel::setModuleExpanded,
         message = message,
         onMessageShown = viewModel::consumeMessage,
         onRemoveOccurrence = viewModel::removeOccurrence,
@@ -125,6 +132,9 @@ fun WeekRoute(
 fun WeekScreen(
     state: WeekUiState,
     message: String? = null,
+    /** Modules opened or closed by hand; the rest follow [moduleStartsExpanded]. */
+    moduleExpansion: Map<String, Boolean> = emptyMap(),
+    onModuleExpanded: (String, Boolean) -> Unit = { _, _ -> },
     onMessageShown: () -> Unit = {},
     onRemoveOccurrence: (String) -> Unit = {},
     onDeleteWithLog: (String, Int) -> Unit = { _, _ -> },
@@ -203,6 +213,9 @@ fun WeekScreen(
 
             is WeekItem.Module -> ModuleCard(
                 item = item,
+                expanded = moduleExpansion[item.module.id]
+                    ?: moduleStartsExpanded(item.module.trainingDate, state.today),
+                onToggle = { expanded -> onModuleExpanded(item.module.id, expanded) },
                 onUngroup = { onUngroupModule(item.module.id) },
                 onRemove = {
                     scope.launch {
@@ -224,7 +237,12 @@ fun WeekScreen(
 
     // Open near today without hiding the unscheduled section: the heading for today goes to the
     // top of the list, one short scroll away from the items that have no date yet.
+    // Only when the week itself changes: coming back from a workout, the drawer or another tab
+    // keeps the place in the list rather than jumping to today again.
+    var positionedFor by rememberSaveable { mutableStateOf<Long?>(null) }
     LaunchedEffect(state.weekStart) {
+        if (positionedFor == state.weekStart.toEpochDay()) return@LaunchedEffect
+        positionedFor = state.weekStart.toEpochDay()
         val todayIndex = rows.indexOfFirst { it is WeekRow.DayHeading && it.isToday }
         listState.scrollToItem(if (todayIndex >= 0) todayIndex else 0)
     }
@@ -282,9 +300,29 @@ fun WeekScreen(
             )
         },
     ) { innerPadding ->
+        // A horizontal swipe turns the week, as the ‹ › buttons do: left for the next week, right
+        // for the previous. Only past a clear distance, so a sloppy vertical scroll never does.
+        val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(onPreviousWeek, onNextWeek) {
+                    var dragged = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragged = 0f },
+                        onDragEnd = {
+                            when {
+                                dragged <= -swipeThreshold -> onNextWeek()
+                                dragged >= swipeThreshold -> onPreviousWeek()
+                            }
+                        },
+                        onHorizontalDrag = { change, amount ->
+                            change.consume()
+                            dragged += amount
+                        },
+                    )
+                },
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
@@ -817,6 +855,8 @@ private fun CircuitCard(
 @Composable
 private fun ModuleCard(
     item: WeekItem.Module,
+    expanded: Boolean,
+    onToggle: (Boolean) -> Unit,
     onUngroup: () -> Unit,
     onRemove: () -> Unit,
     member: @Composable (WeekItem) -> Unit,
@@ -829,18 +869,42 @@ private fun ModuleCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+            modifier = Modifier.padding(
+                start = 8.dp,
+                end = 8.dp,
+                bottom = if (expanded) 8.dp else 0.dp,
+            ),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // The header folds the group: a view of the week, never a change to what is in it.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable(
+                    onClickLabel = if (expanded) "Collapse ${item.module.name}" else "Expand ${item.module.name}",
+                ) { onToggle(!expanded) },
+            ) {
                 Text(
-                    text = item.module.name,
+                    text = if (expanded) "▾" else "▸",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 4.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, end = 6.dp),
                 )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.module.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (!expanded) {
+                        moduleSummary(item)?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
                 if (item.completed) {
                     val colors = doneColors()
                     Chip("Done", colors.first, colors.second)
@@ -863,11 +927,34 @@ private fun ModuleCard(
                     }
                 }
             }
-            if (item.members.isEmpty()) {
-                Hint("No items in this module.")
+            if (expanded) {
+                if (item.members.isEmpty()) {
+                    Hint("No items in this module.")
+                }
+                item.members.forEach { member(it) }
             }
-            item.members.forEach { member(it) }
         }
+    }
+}
+
+/**
+ * Today's modules start open, so a session never has to reopen its own work; every other day's
+ * start folded, which is what keeps a planned week short enough to read.
+ */
+internal fun moduleStartsExpanded(date: LocalDate?, today: LocalDate): Boolean = date == today
+
+/**
+ * A folded module in one line: how many exercises it holds and how many are logged. Exercises,
+ * circuit stations included — the module and its circuits are containers and count nothing.
+ */
+internal fun moduleSummary(item: WeekItem.Module): String? {
+    val total = item.exercises.size
+    if (total == 0) return null
+    val noun = if (total == 1) "exercise" else "exercises"
+    return when (val logged = item.recordedExercises) {
+        0 -> "$total $noun"
+        total -> null // the Done chip already says it
+        else -> "$logged of $total $noun logged"
     }
 }
 

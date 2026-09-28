@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Surface
+import com.yokodake.melete.ui.components.circuitShapeLine
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -135,6 +138,32 @@ fun CircuitReviewScreen(
                 },
             )
         },
+        // Anchored, as in the exercise logger: reachable with every station expanded, and above
+        // the keyboard together with the reason it cannot save yet.
+        bottomBar = {
+            if (state.circuit != null) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 3.dp) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        state.blocker?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                        }
+                        Button(onClick = viewModel::save, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (state.committed) "Save changes" else "Mark done")
+                        }
+                    }
+                }
+            }
+        },
     ) { padding ->
         val circuit = state.circuit ?: run {
             if (!state.loading) {
@@ -168,27 +197,17 @@ fun CircuitReviewScreen(
                 }
             }
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                // The shape in one line; the stations below say what they are themselves.
+                Text(
+                    text = circuitShapeLine(
+                        rounds = circuit.rounds,
+                        transitionSeconds = circuit.transitionSeconds,
+                        roundRestSeconds = circuit.roundRestSeconds,
+                        estimatedSeconds = state.stations.sumOf { it.suggestedDurationSeconds },
                     ),
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Planned", style = MaterialTheme.typography.labelMedium)
-                        Text(
-                            text = "${circuit.rounds} ${if (circuit.rounds == 1) "round" else "rounds"} of " +
-                                "${circuit.stations.size} ${if (circuit.stations.size == 1) "exercise" else "exercises"}, " +
-                                "one set of each per round",
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Text(
-                            text = timingLine(state),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                }
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             item { HorizontalDivider() }
 
@@ -197,46 +216,9 @@ fun CircuitReviewScreen(
                     StationRow(station = station, viewModel = viewModel)
                 }
             }
-
-            item {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    Button(onClick = viewModel::save, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (state.committed) "Save changes" else "Mark done")
-                    }
-                    state.blocker?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    Text(
-                        text = "Each exercise counts once, however many rounds it took. " +
-                            "The circuit itself counts nothing.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
         }
     }
 
-}
-
-/** The circuit's own timing, worked out once from the sequence rather than per exercise. */
-private fun timingLine(state: CircuitReviewUiState): String {
-    val total = state.stations.sumOf { it.suggestedDurationSeconds }
-    val parts = mutableListOf<String>()
-    if (total > 0) parts += "≈ ${PrescriptionSummary.duration(total)}"
-    state.circuit?.transitionSeconds?.takeIf { it > 0 }?.let {
-        parts += "${PrescriptionSummary.duration(it)} between exercises"
-    }
-    state.circuit?.roundRestSeconds?.takeIf { it > 0 }?.let {
-        parts += "${PrescriptionSummary.duration(it)} between rounds"
-    }
-    return parts.joinToString(" · ")
 }
 
 /**
