@@ -76,6 +76,8 @@ object BackupValidator {
         unique("logged sets", backup.sets.map { it.id })
         unique("trackers", backup.trackers.map { it.id })
         unique("diary days", backup.diary.map { it.date })
+        unique("benchmarks", backup.benchmarks.map { it.id })
+        unique("benchmark results", backup.benchmarks.flatMap { b -> b.results.map { it.id } })
 
         // What the foreign keys will insist on.
         val exercises = backup.exercises.map { it.id }.toSet()
@@ -128,6 +130,9 @@ object BackupValidator {
         backup.sessions.forEach { date("A session", it.trainingDate) }
         backup.sets.forEach { date("A logged set", it.trainingDate) }
         backup.diary.forEach { date("A diary day", it.date) }
+        backup.benchmarks.forEach { b -> b.results.forEach { date("A result for ${b.name}", it.date) } }
+        backup.benchmarks.firstOrNull { b -> b.results.any { it.value == null && it.valueRight == null } }
+            ?.let { add("A result for ${it.name} holds no value.") }
 
         fun plan(label: String, element: JsonElement?) {
             if (element != null &&

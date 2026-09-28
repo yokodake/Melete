@@ -43,8 +43,15 @@ class BackupCompatibilityTest {
         service.restore(fixture)
         val again = service.export()
 
-        // When it was written and from which schema are informational; everything else is the record.
-        assertEquals(fixture.copy(exportedAt = "", schemaVersion = 0), again.copy(exportedAt = "", schemaVersion = 0))
+        // When it was written and from which schema are informational, and a re-export is written
+        // at today's format version (a version 1 file has no benchmarks, so it gains none);
+        // everything else is the record.
+        assertEquals(1, fixture.formatVersion)
+        assertTrue(again.benchmarks.isEmpty())
+        assertEquals(
+            fixture.copy(exportedAt = "", schemaVersion = 0, formatVersion = 0),
+            again.copy(exportedAt = "", schemaVersion = 0, formatVersion = 0),
+        )
 
         // And it reads as a record, not just as rows: the assisted sets come back negative.
         val repository = TrainingRepository(database)

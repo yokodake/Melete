@@ -53,6 +53,17 @@ class MigrationTest {
         try {
             val library = TrainingRepository(database).observeLibrary().first()
             assertEquals(listOf("Pull-up"), library.map { it.name })
+            // 10 → 11 added the benchmark tables, empty and usable.
+            val benchmarks = BenchmarkRepository(database)
+            assertEquals(emptyList<BenchmarkStanding>(), benchmarks.observeStandings().first())
+            val id = benchmarks.create(
+                BenchmarkDraft(
+                    "Max hang", com.yokodake.melete.data.entity.BenchmarkMeasure.LOAD, "kg",
+                    com.yokodake.melete.data.model.MeasurementMeaning.ADDED_LOAD, false, true, null,
+                )
+            )
+            benchmarks.record(id, java.time.LocalDate.of(2026, 9, 28), 0.0, null, null)
+            assertEquals("+0 kg", benchmarks.observeStanding(id).first()!!.latest!!.text)
         } finally {
             database.close()
         }

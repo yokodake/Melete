@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.BenchmarkDayResult
 import com.yokodake.melete.data.DiaryDay
 import com.yokodake.melete.data.Tracker
 import com.yokodake.melete.data.PlanItemKind
@@ -87,6 +88,7 @@ fun WeekRoute(
     onAddExercise: (weekStart: LocalDate, trainingDate: LocalDate?) -> Unit,
     onOpenCircuit: (String) -> Unit = {},
     onOpenDiary: (LocalDate) -> Unit = {},
+    onOpenBenchmark: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
@@ -113,6 +115,7 @@ fun WeekRoute(
         onAddActivity = viewModel::addActivity,
         onOpenCircuit = onOpenCircuit,
         onOpenDiary = onOpenDiary,
+        onOpenBenchmark = onOpenBenchmark,
         onRemoveCircuit = viewModel::removeCircuit,
         onDeleteCircuitWithLog = viewModel::deleteCircuitAndLogs,
         onCircuitRecordedStations = viewModel::circuitRecordedStations,
@@ -143,6 +146,7 @@ fun WeekScreen(
     /** Moves a card one place, crossing into the next day at an edge. Offered in edit mode. */
     onNudge: (PlanItemRef, Int) -> Unit = { _, _ -> },
     onOpenDiary: (LocalDate) -> Unit = {},
+    onOpenBenchmark: (String) -> Unit = {},
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onCurrentWeek: () -> Unit,
@@ -346,6 +350,7 @@ fun WeekScreen(
                         onAddExercise = { onAddExercise(row.date) },
                         onAddActivity = { addingActivityOn = row.date },
                         onOpenDiary = { onOpenDiary(row.date) },
+                        onOpenBenchmark = onOpenBenchmark,
                     )
 
                     is WeekRow.Item -> if (editing) {
@@ -596,6 +601,7 @@ private fun DayHeading(
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
     onOpenDiary: () -> Unit,
+    onOpenBenchmark: (String) -> Unit,
 ) {
     Column {
         Row(
@@ -634,6 +640,9 @@ private fun DayHeading(
             },
         )
         row.diary?.takeIf { !it.isEmpty }?.let { DiaryLine(it, trackers, onOpenDiary) }
+        row.benchmarks.forEach { result ->
+            BenchmarkLine(result) { onOpenBenchmark(result.benchmarkId) }
+        }
     }
 }
 
@@ -1107,6 +1116,7 @@ sealed interface WeekRow {
         val date: LocalDate,
         val isToday: Boolean,
         val diary: DiaryDay? = null,
+        val benchmarks: List<BenchmarkDayResult> = emptyList(),
     ) : WeekRow {
         override val key: String get() = "day-$date"
     }
@@ -1133,7 +1143,7 @@ private fun WeekUiState.toRows(): List<WeekRow> = buildList {
         unscheduled.forEach { add(WeekRow.Item(it)) }
     }
     days.forEach { day ->
-        add(WeekRow.DayHeading(day.date, day.isToday, day.diary))
+        add(WeekRow.DayHeading(day.date, day.isToday, day.diary, day.benchmarks))
         if (day.items.isEmpty()) {
             add(WeekRow.Hint("hint-${day.date}", "Nothing planned."))
         } else {

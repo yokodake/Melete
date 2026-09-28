@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.yokodake.melete.data.dao.BackupDao
+import com.yokodake.melete.data.dao.BenchmarkDao
 import com.yokodake.melete.data.dao.DiaryDao
 import com.yokodake.melete.data.dao.LibraryDao
 import com.yokodake.melete.data.dao.LoggingDao
@@ -14,6 +15,8 @@ import com.yokodake.melete.data.dao.RoutineDao
 import com.yokodake.melete.data.dao.TrainingDao
 import com.yokodake.melete.data.dao.VariationDao
 import com.yokodake.melete.data.entity.ActualSetEntity
+import com.yokodake.melete.data.entity.BenchmarkEntity
+import com.yokodake.melete.data.entity.BenchmarkResultEntity
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.DiaryEntryEntity
 import com.yokodake.melete.data.entity.DiaryValueEntity
@@ -54,6 +57,8 @@ import com.yokodake.melete.data.entity.TrainingSessionEntity
         TrackerEntity::class,
         DiaryEntryEntity::class,
         DiaryValueEntity::class,
+        BenchmarkEntity::class,
+        BenchmarkResultEntity::class,
     ],
     version = MeleteMigrations.CURRENT,
     exportSchema = true,
@@ -76,6 +81,8 @@ abstract class MeleteDatabase : RoomDatabase() {
     abstract fun diaryDao(): DiaryDao
 
     abstract fun backupDao(): BackupDao
+
+    abstract fun benchmarkDao(): BenchmarkDao
 
     companion object {
         const val DATABASE_NAME = "melete.db"

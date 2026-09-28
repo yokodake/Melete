@@ -1,6 +1,7 @@
 package com.yokodake.melete.ui.week
 
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.BenchmarkDayResult
 import com.yokodake.melete.data.DiaryDay
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.Tracker
@@ -73,6 +74,8 @@ data class DaySection(
     val items: List<WeekItem>,
     /** The day's diary, when it has one. Never counted, never part of the training. */
     val diary: DiaryDay? = null,
+    /** Benchmark results recorded that day. A record apart from training: never counted. */
+    val benchmarks: List<BenchmarkDayResult> = emptyList(),
 )
 
 data class WeekUiState(
@@ -103,7 +106,9 @@ data class WeekUiState(
             modules: List<WeekModule> = emptyList(),
             diary: Map<LocalDate, DiaryDay> = emptyMap(),
             trackers: List<Tracker> = emptyList(),
+            benchmarkResults: List<BenchmarkDayResult> = emptyList(),
         ): WeekUiState {
+            val resultsByDate = benchmarkResults.groupBy { it.date }
             val stationsByCircuit = occurrences
                 .filter { it.circuitInstanceId != null }
                 .groupBy { it.circuitInstanceId }
@@ -162,6 +167,7 @@ data class WeekUiState(
                         isToday = date == today,
                         items = itemsFor(date),
                         diary = diary[date],
+                        benchmarks = resultsByDate[date].orEmpty(),
                     )
                 },
             )

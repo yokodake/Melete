@@ -1,6 +1,9 @@
 package com.yokodake.melete.data.backup
 
 import com.yokodake.melete.data.entity.ActualSetEntity
+import com.yokodake.melete.data.entity.BenchmarkEntity
+import com.yokodake.melete.data.entity.BenchmarkMeasure
+import com.yokodake.melete.data.entity.BenchmarkResultEntity
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.DiaryEntryEntity
@@ -34,8 +37,11 @@ const val BACKUP_FORMAT = "melete-backup"
 /**
  * The version of the file layout. A file with a higher number was written by a newer app and is
  * refused rather than half-read; a lower one is read by the rules of its version.
+ *
+ * 2 (phase 7A) adds [MeleteBackup.benchmarks]. A version 1 file simply has none; the number went
+ * up so that an older app refuses a file holding benchmarks instead of restoring it without them.
  */
-const val BACKUP_FORMAT_VERSION = 1
+const val BACKUP_FORMAT_VERSION = 2
 
 /**
  * The whole training record, as one human-readable file.
@@ -65,6 +71,39 @@ data class MeleteBackup(
     val sets: List<SetRecord> = emptyList(),
     val trackers: List<TrackerRecord> = emptyList(),
     val diary: List<DiaryRecord> = emptyList(),
+    /** Since format 2. */
+    val benchmarks: List<BenchmarkRecord> = emptyList(),
+)
+
+/** A benchmark with every result recorded against it, hidden ones included. */
+@Serializable
+data class BenchmarkRecord(
+    val id: String,
+    val name: String,
+    val measure: BenchmarkMeasure,
+    val unit: String,
+    val loadMeaning: MeasurementMeaning? = null,
+    val unilateral: Boolean,
+    val higherIsBetter: Boolean,
+    val protocol: String? = null,
+    val orderIndex: Int,
+    val createdAtEpochMs: Long,
+    val hiddenAtEpochMs: Long? = null,
+    val results: List<BenchmarkResultRecord> = emptyList(),
+)
+
+/** One result, with the unit, load meaning and sides it was recorded under. */
+@Serializable
+data class BenchmarkResultRecord(
+    val id: String,
+    val date: String,
+    val value: Double? = null,
+    val valueRight: Double? = null,
+    val unit: String,
+    val loadMeaning: MeasurementMeaning? = null,
+    val unilateral: Boolean,
+    val note: String? = null,
+    val recordedAtEpochMs: Long,
 )
 
 @Serializable
@@ -368,6 +407,17 @@ internal fun DiaryEntryEntity.toRecord(values: List<DiaryValueEntity>) = DiaryRe
     },
 )
 
+internal fun BenchmarkEntity.toRecord(results: List<BenchmarkResultEntity>) = BenchmarkRecord(
+    id, name, measure, unit, loadMeaning, unilateral, higherIsBetter, protocol, orderIndex,
+    createdAtEpochMs, hiddenAtEpochMs,
+    results = results.sortedWith(compareBy({ it.dateEpochDay }, { it.recordedAtEpochMs })).map {
+        BenchmarkResultRecord(
+            it.id, it.dateEpochDay.date(), it.value, it.valueRight, it.unitSnapshot,
+            it.loadMeaningSnapshot, it.unilateralSnapshot, it.note, it.recordedAtEpochMs,
+        )
+    },
+)
+
 // ------------------------------------------------------------------ records → rows
 
 /** Back to the compact text the app stores, not the file's indented layout. */
@@ -476,5 +526,18 @@ internal fun DiaryRecord.valueEntities() = values.map { record ->
         unitSnapshot = record.unit,
         number = if (isText) null else primitive?.doubleOrNull,
         text = if (isText) primitive.content else null,
+    )
+}
+
+internal fun BenchmarkRecord.toEntity() = BenchmarkEntity(
+    id, name, measure, unit, loadMeaning, unilateral, higherIsBetter, protocol, orderIndex,
+    createdAtEpochMs, hiddenAtEpochMs,
+)
+
+internal fun BenchmarkRecord.resultEntities() = results.map {
+    BenchmarkResultEntity(
+        id = it.id, benchmarkId = id, dateEpochDay = it.date.epochDay(), value = it.value,
+        valueRight = it.valueRight, unitSnapshot = it.unit, loadMeaningSnapshot = it.loadMeaning,
+        unilateralSnapshot = it.unilateral, note = it.note, recordedAtEpochMs = it.recordedAtEpochMs,
     )
 }

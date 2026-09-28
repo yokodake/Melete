@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yokodake.melete.data.BenchmarkDayResult
 import com.yokodake.melete.data.DiaryDay
 import com.yokodake.melete.data.Tracker
 
@@ -25,6 +26,25 @@ fun DiaryLine(day: DiaryDay, trackers: List<Tracker>, onClick: () -> Unit) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+    )
+}
+
+/**
+ * A benchmark result on the day it was recorded, read-only like the diary: the name and the value.
+ * A record apart from training: no card, nothing to log, nothing counted. A tap opens the benchmark.
+ */
+@Composable
+fun BenchmarkLine(result: BenchmarkDayResult, onClick: () -> Unit) {
+    Text(
+        text = "\u2691 ${result.name} \u00b7 ${result.text}",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()

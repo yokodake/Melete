@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.BenchmarkRepository
 import com.yokodake.melete.data.DiaryRepository
 import com.yokodake.melete.data.NudgeResult
 import com.yokodake.melete.data.PlanItemRef
@@ -27,6 +28,7 @@ import java.time.LocalDate
 class WeekViewModel(
     private val repository: TrainingRepository,
     private val diary: DiaryRepository,
+    private val benchmarks: BenchmarkRepository,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
 
@@ -41,14 +43,21 @@ class WeekViewModel(
 
     val uiState: StateFlow<WeekUiState> = weekStart
         .flatMapLatest { start ->
+            val notes = combine(
+                diary.observeDays(start, start.plusDays(6)),
+                diary.observeTrackers(),
+                benchmarks.observeDayResults(start, start.plusDays(6)),
+            ) { days, trackers, results -> Triple(days, trackers, results) }
             combine(
                 repository.observeWeek(start),
                 repository.observeWeekCircuits(start),
                 repository.observeWeekModules(start),
-                diary.observeDays(start, start.plusDays(6)),
-                diary.observeTrackers(),
-            ) { occurrences, circuits, modules, days, trackers ->
-                WeekUiState.build(start, today, occurrences, circuits, modules, days, trackers)
+                notes,
+            ) { occurrences, circuits, modules, (days, trackers, results) ->
+                WeekUiState.build(
+                    start, today, occurrences, circuits, modules, days, trackers,
+                    benchmarkResults = results,
+                )
             }
         }
         .stateIn(
@@ -255,6 +264,7 @@ class WeekViewModel(
                 WeekViewModel(
                     application.container.trainingRepository,
                     application.container.diaryRepository,
+                    application.container.benchmarkRepository,
                 )
             }
         }

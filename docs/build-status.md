@@ -1,7 +1,7 @@
 # Build status
 
-Last updated: 2026-09-28, closing phase 5B: the stable baseline (schema 10, backup and plan format
-version 1), separate debug and release apps. See [the side-by-side build guide](debug-release.md).
+Last updated: 2026-09-28, phase 7A: benchmarks (schema 11, backup format 2, plan format 1), after
+the UI pass. Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -26,28 +26,58 @@ the two ever disagree, the code and the first half win.
 | Timer C — supersets/circuits and compact review | ✅ |
 | 4B — modules for planning | ✅ built; instrumented tests pass on the phone |
 | 5B — diary, export/restore, plan import; stable baseline | ✅ instrumented tests pass on the phone; the hand checklist is still to tick |
-| UI pass (part of 1.0, no schema change) | ✅ built; unit and instrumented tests pass; screens still to be checked by hand |
+| UI pass (part of 1.0, no schema change) | ✅ checked by hand |
+| 7A — benchmarks (brought forward for baseline week) | ✅ built; unit tests and the schema/backup/benchmark device tests pass; screens still to be checked by hand |
 | Timer polish (near-term follow-up) | not started — recorded in `ui-ux-handoff.md` |
 | 6A — overview | not started |
 | 6B — history and basic graphs | not started |
 | 6C — month view | not started |
-| 7 — profile and benchmarks | not started |
+| 7B — profile and settings (bodyweight tracking) | not started |
 | 8 — progression analysis | not started |
 | 9 — remote and web | not started |
 | 10 — appearance | not started |
 
-Schema version **10** is the **baseline**: from here every schema change comes with a migration
-and a test, and neither build has a destructive fallback — see *Upgrades preserve the record*
-below. Backup format **1** and plan format **1** stay readable in every later version.
+Schema version **11** (10 was the **baseline**; `MIGRATION_10_11` added the benchmark tables):
+every schema change comes with a migration and a test, and neither build has a destructive
+fallback — see *Upgrades preserve the record* below. Backup format **2** (1 plus benchmarks);
+backup format **1** and plan format **1** stay readable in every later version.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
+
+## Benchmarks (7A)
+
+**Menu → Benchmarks**: a small collection of reference tests, separate from the Library. Each row
+reads "Latest **+30 kg** · 24 Sep" over "Best +35 kg", with a **+** to record a result; a tap
+opens its history, a long press edits or hides it. *New* creates one. A name shared by two
+benchmarks shows its protocol to tell them apart; otherwise the protocol is on the detail and the
+entry dialog only. **⋮ → Show hidden** lists hidden ones, which keep every result and can be shown
+again.
+
+A definition is a name, a measurement (load, duration, distance, other) with a unit, for a load
+whether it is total or **added to bodyweight** (signed: assistance below zero), one value or
+**left and right**, whether **higher or lower** is better, and an optional protocol ("20 mm · 7 s ·
+added load"). A benchmark can be deleted only while it has no results.
+
+**Recording** is one dialog: the date (today, *Change*), the value or L and R, an optional note,
+Save — the best valid attempt, not the set logger. Zero and negative added loads are results. The
+detail page shows the protocol, **Latest** and **Best** (kept apart: the latest test may be below
+an older best; each side's best keeps its own date), and the dated results, each opened to
+correct or delete it. The graph over time is **deferred** to the exercise graphs.
+
+**A record apart from training (decision A):** a result is written to `benchmark_results` only —
+no occurrence, session or set, nothing counted or totalled. The calendar shows it on its date as a
+read-only line under the day (⚑ name · value), like the diary; a tap opens the benchmark. Each
+result keeps the unit, load meaning and sidedness it was recorded under, so editing a definition
+never rewrites an old result, and only results in the current unit and meaning compete for Best
+(`BenchmarkStanding`). Results are in backups (format 2) and survive restore; a plan import never
+touches them.
 
 ## Navigation
 
 The bottom bar is **Menu · Calendar · Timer · Dashboard**, four ordinary tabs that each keep
-their state. **Menu** lists Profile, Benchmarks, Library, Import / export and Settings; Library
-and Import / export open focused screens with a back arrow, and the other three are placeholders
-that do nothing until their phases. **Dashboard** is an empty placeholder until 6A. (A left
+their state. **Menu** lists Profile, Benchmarks, Library, Import / export and Settings; Benchmarks,
+Library and Import / export open focused screens with a back arrow, and Profile and Settings are
+placeholders that do nothing until 7B. **Dashboard** is an empty placeholder until 6A. (A left
 drawer was tried first and dropped on the user's preference.) On Calendar, a horizontal swipe
 turns the week — left for the next, right for the previous — past a 72 dp threshold. The
 Week/Month selector on the week title (a small chevron) is **deferred** to 6C.
@@ -314,7 +344,8 @@ kept apart. Recovery copies are listed by date, "27 Sep · 19:33", with the year
 this one; the stamp in the file name is local time and is read back as such, and the files are
 never renamed. **Export** writes the whole record to a file chosen
 with Android's picker: one human-readable JSON document (`format: "melete-backup"`,
-`formatVersion: 1`) holding every table with its stable ids — library, variations, circuits,
+`formatVersion: 2`; version 1 files still read, with no benchmarks) holding every table with its
+stable ids — library, variations, circuits,
 modules, everything scheduled with its snapshots, every set, sessions, trackers and the diary.
 Tombstoned definitions are included, because history hangs from them. Dates are `2026-09-21`,
 enums are names, and plans, set payloads and circuit snapshots are embedded as the JSON objects
@@ -1375,6 +1406,31 @@ first round's drawer, folding, attempt copies and save bar by hand.
 **Still deferred**: the running-timer polish (next, before 6A), Profile / Benchmarks / Settings
 content, Dashboard content (6A), Month and its title chevron (6C), search negation beyond
 `!circuit`, the full-screen import preview.
+## Phase 7A — benchmarks (2026-09-28)
+
+Brought forward ahead of 6A because this is the user's baseline week for measuring them; 7 is
+split into **7A benchmarks** (this) and **7B profile and settings**. The spec agreed with the user
+is in `ui-ux-handoff.md`, including decision A: results are records, not training.
+
+Schema **11**, the first change since the baseline: two new tables, `benchmarks` and
+`benchmark_results` (foreign key RESTRICT, so a benchmark with results cannot be deleted from under
+them), created by `MIGRATION_10_11` with nothing existing touched; `11.json` exported and pinned in
+`SchemaBaselineTest`. Backup format **2** adds `benchmarks` (with nested results); a version 1
+file reads as having none, and the version went up so an older app refuses a file holding
+benchmarks rather than restoring it without them.
+
+Checks: 218 unit tests pass (new `BenchmarkStandingTest`: latest by test date not entry order,
+best keeps its date and the first date on a tie, lower-is-better, separate L/R bests and dates,
+zero and assistance, other units excluded from best, formatting, the backup JSON round trip, a
+version 1 file, and validator refusals). On the phone, with Melete Debug updated, 14 device tests
+pass: `MigrationTest` (every schema migrates; a baseline database opens through the app's builder with
+its rows, then records a zero benchmark), the new `BenchmarkTest` (recording creates no
+occurrence, session or set; results keep their recorded terms; hiding keeps results; only an
+unused benchmark deletes; correction; export and restore round trip), `BackupCompatibilityTest`
+(the frozen version 1 fixture still restores and exports back the same) and `BackupRestoreTest`.
+The full device suite was not run. **Release has not been updated**: installing it runs
+`MIGRATION_10_11` on the real record, which the tests above cover; take an in-app export first.
+
 ## Next step
 
 **Phase 6A — the overview.** Before the real plan goes into release: walk the hand checklist

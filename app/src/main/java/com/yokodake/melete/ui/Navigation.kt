@@ -8,6 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import com.yokodake.melete.ui.benchmark.BenchmarkDetailRoute
+import com.yokodake.melete.ui.benchmark.BenchmarkEditorRoute
+import com.yokodake.melete.ui.benchmark.BenchmarksRoute
 import com.yokodake.melete.ui.dashboard.DashboardRoute
 import com.yokodake.melete.ui.menu.MenuRoute
 import com.yokodake.melete.ui.module.ModuleDetailRoute
@@ -152,6 +155,18 @@ data class CircuitReviewDestination(val circuitInstanceId: String)
 @Serializable
 data object MenuDestination
 
+/** Every benchmark and where it stands. */
+@Serializable
+data object BenchmarksDestination
+
+/** One benchmark: latest, best and every result. */
+@Serializable
+data class BenchmarkDetailDestination(val benchmarkId: String)
+
+/** A benchmark's definition, new or existing. */
+@Serializable
+data class BenchmarkEditorDestination(val benchmarkId: String? = null)
+
 /** The Dashboard tab. A placeholder until phase 6A fills it. */
 @Serializable
 data object DashboardDestination
@@ -196,9 +211,30 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
     NavHost(navController = navController, startDestination = WeekDestination) {
         composable<MenuDestination> {
             MenuRoute(
+                onOpenBenchmarks = { navController.navigate(BenchmarksDestination) },
                 onOpenLibrary = { navController.navigate(LibraryDestination) },
                 onOpenImportExport = { navController.navigate(BackupDestination) },
                 bottomBar = bottomBar,
+            )
+        }
+        composable<BenchmarksDestination> {
+            BenchmarksRoute(
+                onOpen = { navController.navigate(BenchmarkDetailDestination(it)) },
+                onNew = { navController.navigate(BenchmarkEditorDestination()) },
+                onEdit = { navController.navigate(BenchmarkEditorDestination(it)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<BenchmarkDetailDestination> {
+            BenchmarkDetailRoute(
+                onEdit = { navController.navigate(BenchmarkEditorDestination(it)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<BenchmarkEditorDestination> {
+            BenchmarkEditorRoute(
+                onDone = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
             )
         }
         composable<DashboardDestination> {
@@ -219,6 +255,7 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
                 },
                 onOpenCircuit = { navController.navigate(CircuitDetailDestination(it)) },
                 onOpenDiary = { navController.navigate(DiaryDestination(it.toEpochDay())) },
+                onOpenBenchmark = { navController.navigate(BenchmarkDetailDestination(it)) },
                 bottomBar = bottomBar,
             )
         }

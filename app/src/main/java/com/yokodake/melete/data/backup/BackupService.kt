@@ -19,6 +19,7 @@ data class BackupSummary(
     val planned: Int,
     val loggedSets: Int,
     val diaryDays: Int,
+    val benchmarkResults: Int = 0,
 )
 
 /**
@@ -37,6 +38,7 @@ class BackupService(private val database: MeleteDatabase) {
         val routineEntries = dao.routineEntries().groupBy { it.routineId }
         val moduleEntries = dao.moduleEntries().groupBy { it.moduleId }
         val diaryValues = dao.diaryValues().groupBy { it.dateEpochDay }
+        val benchmarkResults = dao.benchmarkResults().groupBy { it.benchmarkId }
         MeleteBackup(
             exportedAt = now.toString(),
             schemaVersion = database.openHelper.readableDatabase.version,
@@ -62,6 +64,8 @@ class BackupService(private val database: MeleteDatabase) {
             trackers = dao.trackers().sortedBy { it.orderIndex }.map { it.toRecord() },
             diary = dao.diaryEntries().sortedBy { it.dateEpochDay }
                 .map { it.toRecord(diaryValues[it.dateEpochDay].orEmpty()) },
+            benchmarks = dao.benchmarks().sortedWith(compareBy({ it.orderIndex }, { it.createdAtEpochMs }))
+                .map { it.toRecord(benchmarkResults[it.id].orEmpty()) },
         )
     }
 
@@ -80,6 +84,7 @@ class BackupService(private val database: MeleteDatabase) {
         planned = backup.occurrences.size,
         loggedSets = backup.sets.size,
         diaryDays = backup.diary.size,
+        benchmarkResults = backup.benchmarks.sumOf { it.results.size },
     )
 
     /**
@@ -124,6 +129,8 @@ class BackupService(private val database: MeleteDatabase) {
             dao.insertTrackers(backup.trackers.map { it.toEntity() })
             dao.insertDiaryEntries(backup.diary.map { it.toEntity() })
             dao.insertDiaryValues(backup.diary.flatMap { it.valueEntities() })
+            dao.insertBenchmarks(backup.benchmarks.map { it.toEntity() })
+            dao.insertBenchmarkResults(backup.benchmarks.flatMap { it.resultEntities() })
         }
     }
 
@@ -134,6 +141,8 @@ class BackupService(private val database: MeleteDatabase) {
      */
     suspend fun clearAll() {
         database.withTransaction {
+            dao.clearBenchmarkResults()
+            dao.clearBenchmarks()
             dao.clearDiaryValues()
             dao.clearDiaryEntries()
             dao.clearTrackers()
