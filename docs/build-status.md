@@ -28,8 +28,8 @@ the two ever disagree, the code and the first half win.
 | 5B — diary, export/restore, plan import; stable baseline | ✅ instrumented tests pass on the phone; the hand checklist is still to tick |
 | UI pass (part of 1.0, no schema change) | ✅ checked by hand |
 | 7A — benchmarks (brought forward for baseline week) | ✅ built; unit tests and the schema/backup/benchmark device tests pass; screens still to be checked by hand |
-| Timer polish (near-term follow-up) | not started — recorded in `ui-ux-handoff.md` |
-| 6A — overview | not started |
+| 6A — dashboard | ✅ built; unit tests and its query test pass; screens still to be checked by hand |
+| Timer polish (follow-up, after phase 6) | not started — recorded in `ui-ux-handoff.md` |
 | 6B — history and basic graphs | not started |
 | 6C — month view | not started |
 | 7B — profile and settings (bodyweight tracking) | not started |
@@ -43,6 +43,35 @@ fallback — see *Upgrades preserve the record* below. Backup format **2** (1 pl
 backup format **1** and plan format **1** stay readable in every later version.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
+
+## Dashboard (6A)
+
+The **Dashboard** tab. The measure (Hours or Exercises) is a small ▾ menu at the top right. The title's range (▾) picks **4 weeks · 12 weeks** (default) **· 6 months ·
+12 months · all time**, each ending today with the current partial week or month included; all
+time starts at the first completed exercise. Nothing is averaged. Beside the dates, **‹ • ›** pages
+back and forth by whole ranges (no gaps, no overlap; ‹ stops when nothing earlier is recorded)
+and • — filled on the current range, hollow away from it — returns to the range ending today.
+Choosing another length returns to the current range; all time does not page.
+
+- **Summary**: "24 h · 42 exercises" and the dates covered. Hours are recorded durations only,
+  manual and inferred alike, with no separate estimate; a completed exercise with no duration
+  counts and adds no time.
+- **Hours or Exercises** decides what the bars, the shares and the exercise rows measure and sort
+  by.
+- **Stacked bars** by category, weekly through six months and monthly beyond (all time by its real
+  span), empty periods shown. Segments follow the fixed category order and colours, 2px apart,
+  each at least 4dp of colour — borrowed from that bar's largest segment, so every bar keeps its
+  true height (`DashboardStats.segmentHeights`); a
+  tap names a bar's period and totals above the plot (the latest by default).
+- **Categories**: dot, name, hours · count · share of the chosen metric; "No category" is a row.
+- **Exercises**: each exercise's hours and count, "≈" when some of its time was worked out.
+
+What counts is `CompletedExercise` from `TrainingRepository.observeCompleted`: completed exercise
+occurrences by training date, circuit stations included (their saved shares of the circuit's time),
+never containers, modules, planned or skipped work, benchmarks or the diary. The arithmetic is
+`DashboardStats` (unit-tested). The category palette was not run through the dataviz validator —
+no Node on this machine — and stays the user's; the category rows name every colour. Filtering by
+category and a doughnut are deferred, as agreed.
 
 ## Benchmarks (7A)
 
@@ -593,6 +622,8 @@ foreground service types and background audio.
 | Make audio violations loud instead of silent | `adb shell cmd audio set-hardening throw` |
 | Copy the database off a debug build | `adb exec-out run-as com.yokodake.melete.debug cat databases/melete.db > melete.db` (**and the `-wal` and `-shm` beside it** — see below) |
 | Seed Melete Debug with the test library, two weeks and a few logs | `adb shell am instrument -w -e seed library -e class com.yokodake.melete.LibrarySeed com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner` (add `-e planning false` for exercises only) |
+| Add ~4 years of made-up training history to Melete Debug (refuses twice unless `-e force true`) | `adb shell am instrument -w -e seed history -e class com.yokodake.melete.HistorySeed com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner` |
+| Sound the timer's finish cue on the phone (touches no data) | `adb shell am instrument -w -e action cue -e class com.yokodake.melete.DeviceActions com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner` |
 | Try an import, or put back a recovery copy, in Melete Debug | `adb shell am instrument -w -e action import -e mode add\|replace -e scope today\|past [-e dry true] -e class com.yokodake.melete.DeviceActions com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner`; `-e action restore -e copy <file>` for a recovery copy |
 | Put the test plan in the phone's Downloads | `adb push app/src/androidTest/assets/test-library.json /sdcard/Download/test-library.json` |
 
@@ -1451,6 +1482,16 @@ on the phone `MigrationTest`, `BenchmarkTest` (now with an import-twice test), `
 `BackupCompatibilityTest` and `BackupRestoreTest` pass, 21 tests; Melete Debug opens its own
 migrated database without error. `DeviceActions` gained `-e action cue`, which plays the timer's
 finish cue on the phone and touches no data.
+
+## Phase 6A — dashboard (2026-09-28)
+
+Built to the handoff and the user's pinned details (metric-driven shares and ordering, recorded
+time only, "≈" only on an exercise's row, current partial periods included, no averages, no
+filtering or doughnut). Checks: 231 unit tests pass (new `DashboardStatsTest`: ranges and their
+partial periods, weekly or monthly bars, all-time span, counting with and without durations,
+circuit stations, shares and ordering by metric, no-category rows, the inferred mark, hour
+formatting); `DashboardQueryTest` on the phone (completed only, in range, first completed date).
+Melete Debug updated; not checked by eye.
 
 ## Next step
 

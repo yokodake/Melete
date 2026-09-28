@@ -169,9 +169,9 @@ Timer C. Supersets/circuits and compact review. ✅
     records and backup compatibility are preserved from here on. ✅
 UI pass (part of 1.0): Menu · Calendar · Timer · Dashboard tabs, week swipe, folding modules, library search and pages, direct
     timing/logging from the library, last logged result, anchored save bars. ✅
+6A. Overview: motivating totals, category breakdown, weekly and monthly bars. ✅
 Timer polish: the running screen's hierarchy — current exercise and phase, time or ALLEZ!,
-    progress, what is next, transport — without changing timer semantics. Next, before 6A.
-6A. Overview: motivating totals, category breakdown, weekly and monthly bars.
+    progress, what is next, transport — without changing timer semantics. After phase 6.
 6B. History and basic graphs: drill into totals, browse exercise logs, plot load over time and
     load against reps.
 6C. Month view: a calendar above a daily list; selecting a date jumps to it. Toggle planned work;
