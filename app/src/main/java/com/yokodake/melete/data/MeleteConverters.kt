@@ -1,6 +1,7 @@
 package com.yokodake.melete.data
 
 import androidx.room.TypeConverter
+import com.yokodake.melete.data.entity.BenchmarkMeasure
 import com.yokodake.melete.data.entity.BodySide
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.TrackerType
@@ -58,6 +59,14 @@ class MeleteConverters {
 
     @TypeConverter
     fun stringToTrackerType(value: String): TrackerType = TrackerType.valueOf(value)
+
+    @TypeConverter
+    fun benchmarkMeasureToString(value: BenchmarkMeasure): String = value.name
+
+    /** An unknown measure reads as "other": a number with a unit, which is never wrong. */
+    @TypeConverter
+    fun stringToBenchmarkMeasure(value: String): BenchmarkMeasure =
+        BenchmarkMeasure.entries.firstOrNull { it.name == value } ?: BenchmarkMeasure.OTHER
 
     @TypeConverter
     fun bodySideToString(value: BodySide?): String? = value?.name

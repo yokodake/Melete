@@ -25,7 +25,7 @@ import com.yokodake.melete.R
 
 /**
  * One place in the menu. [onOpen] is null for the entries whose phases have not built them yet —
- * Profile and Benchmarks (7), Settings — which are listed now so the menu has its final shape.
+ * Profile and Settings (7B) — which are listed now so the menu has its final shape.
  */
 private data class MenuEntry(
     val label: String,
@@ -39,6 +39,7 @@ private data class MenuEntry(
  */
 @Composable
 fun MenuRoute(
+    onOpenBenchmarks: () -> Unit,
     onOpenLibrary: () -> Unit,
     onOpenImportExport: () -> Unit,
     bottomBar: @Composable () -> Unit,
@@ -46,7 +47,7 @@ fun MenuRoute(
     MenuScreen(
         entries = listOf(
             MenuEntry("Profile", R.drawable.ic_menu_profile, null),
-            MenuEntry("Benchmarks", R.drawable.ic_menu_benchmarks, null),
+            MenuEntry("Benchmarks", R.drawable.ic_menu_benchmarks, onOpenBenchmarks),
             MenuEntry("Library", R.drawable.ic_nav_library, onOpenLibrary),
             MenuEntry("Import / export", R.drawable.ic_menu_import_export, onOpenImportExport),
             MenuEntry("Settings", R.drawable.ic_menu_settings, null),

@@ -287,6 +287,7 @@ private fun summaryLine(summary: BackupSummary): String = listOf(
     countLabel(summary.planned, "training entry", "training entries"),
     countLabel(summary.loggedSets, "logged set"),
     countLabel(summary.diaryDays, "daily entry", "daily entries"),
+    countLabel(summary.benchmarkResults, "benchmark result"),
 ).joinToString(" · ")
 
 private fun countLabel(count: Int, singular: String, plural: String = "${singular}s"): String =

@@ -1,6 +1,7 @@
 package com.yokodake.melete.data
 
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * Every schema step since the baseline, in order.
@@ -23,7 +24,40 @@ object MeleteMigrations {
     const val BASELINE = 10
 
     /** The schema the app is built for; [MeleteDatabase] declares it from here. */
-    const val CURRENT = 10
+    const val CURRENT = 11
 
-    val ALL: Array<Migration> = arrayOf()
+    /**
+     * 10 → 11, phase 7A: benchmarks and their results, two new tables. Nothing existing changes,
+     * so every row of the record is carried over untouched.
+     */
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `benchmarks` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                    "`measure` TEXT NOT NULL, `unit` TEXT NOT NULL, `loadMeaning` TEXT, " +
+                    "`unilateral` INTEGER NOT NULL, `higherIsBetter` INTEGER NOT NULL, `protocol` TEXT, " +
+                    "`orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, " +
+                    "`hiddenAtEpochMs` INTEGER, PRIMARY KEY(`id`))"
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `benchmark_results` (`id` TEXT NOT NULL, " +
+                    "`benchmarkId` TEXT NOT NULL, `dateEpochDay` INTEGER NOT NULL, `value` REAL, " +
+                    "`valueRight` REAL, `unitSnapshot` TEXT NOT NULL, `loadMeaningSnapshot` TEXT, " +
+                    "`unilateralSnapshot` INTEGER NOT NULL, `note` TEXT, " +
+                    "`recordedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`benchmarkId`) REFERENCES `benchmarks`(`id`) " +
+                    "ON UPDATE NO ACTION ON DELETE RESTRICT )"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_benchmark_results_benchmarkId` " +
+                    "ON `benchmark_results` (`benchmarkId`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_benchmark_results_dateEpochDay` " +
+                    "ON `benchmark_results` (`dateEpochDay`)"
+            )
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_10_11)
 }

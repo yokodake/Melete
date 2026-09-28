@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import com.yokodake.melete.data.entity.ActualSetEntity
+import com.yokodake.melete.data.entity.BenchmarkEntity
+import com.yokodake.melete.data.entity.BenchmarkResultEntity
 import com.yokodake.melete.data.entity.CircuitInstanceEntity
 import com.yokodake.melete.data.entity.DiaryEntryEntity
 import com.yokodake.melete.data.entity.DiaryValueEntity
@@ -41,8 +43,12 @@ interface BackupDao {
     @Query("SELECT * FROM trackers") suspend fun trackers(): List<TrackerEntity>
     @Query("SELECT * FROM diary_entries") suspend fun diaryEntries(): List<DiaryEntryEntity>
     @Query("SELECT * FROM diary_values") suspend fun diaryValues(): List<DiaryValueEntity>
+    @Query("SELECT * FROM benchmarks") suspend fun benchmarks(): List<BenchmarkEntity>
+    @Query("SELECT * FROM benchmark_results") suspend fun benchmarkResults(): List<BenchmarkResultEntity>
 
     // Children before parents, so no foreign key ever sees a missing row.
+    @Query("DELETE FROM benchmark_results") suspend fun clearBenchmarkResults()
+    @Query("DELETE FROM benchmarks") suspend fun clearBenchmarks()
     @Query("DELETE FROM diary_values") suspend fun clearDiaryValues()
     @Query("DELETE FROM diary_entries") suspend fun clearDiaryEntries()
     @Query("DELETE FROM trackers") suspend fun clearTrackers()
@@ -72,4 +78,6 @@ interface BackupDao {
     @Insert suspend fun insertTrackers(rows: List<TrackerEntity>)
     @Insert suspend fun insertDiaryEntries(rows: List<DiaryEntryEntity>)
     @Insert suspend fun insertDiaryValues(rows: List<DiaryValueEntity>)
+    @Insert suspend fun insertBenchmarks(rows: List<BenchmarkEntity>)
+    @Insert suspend fun insertBenchmarkResults(rows: List<BenchmarkResultEntity>)
 }

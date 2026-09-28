@@ -160,11 +160,45 @@ Use a month grid above a chronological list of planned/logged work and daily not
 
 Use compact category markers in date cells: one or two dots/chips depending on space, then a small **+** for overflow. An exact overflow count is not essential. No large illustrated cards or duplicated exercise names below. Provide an optional logged-only view that hides plans while retaining diary entries. Keep Daily notes under +; do not add a permanent notes button.
 
-### 7 — Profile and benchmarks
+### 7 — Profile and benchmarks (split: 7A benchmarks, built 2026-09-28; 7B profile and settings)
 
 Settings can enable **Track bodyweight**. This enables entry in Daily notes; Profile shows the latest value and provides access to its history/graph. Use one history, not separate profile and diary copies.
 
 Benchmarks are separate from Library exercises. Show the latest maximum/result, allow a new entry, and open a graph/previous entries on inspection. Reuse appropriate logging foundations with an explicit benchmark distinction rather than forcing benchmark definitions into Library. Hiding a benchmark preserves its records and permits showing it again later. Decide the precise benchmark types and aggregation rules in that phase rather than inventing them now.
+
+#### Benchmarks, as settled with the user (2026-09-28)
+
+A benchmark is **a small collection of reference results**, each showing where you are now and letting you record or inspect results quickly. Separate from Library.
+
+The page is a compact list. Layout examples only, not a proposed benchmark list:
+
+> **Weighted pull-up**
+> Latest **+30 kg** · 24 Sep
+> Best +35 kg　　　　　　　　 **+**
+
+> **One-arm lift**
+> Latest **L 25 · R 23 kg** · 24 Sep
+> Best L 27 · R 25 kg　　　　　**+**
+
+**Tap the row** to open its history; **tap +** to record a result. An overflow menu edits the definition or hides it. Hidden benchmarks keep their records and can be shown again.
+
+| Field | Purpose |
+|---|---|
+| Name | What you recognise it by |
+| Measurement | Load, duration, distance or another numeric value with a unit |
+| Sides | One value, or separate L/R |
+| Best direction | Higher or lower is better |
+| Protocol, optional | Fixed conditions that make results comparable, e.g. **“20 mm · 7 s · added load”** |
+
+The protocol belongs on the detail and entry screens; the overview shows it only where names alone would be ambiguous.
+
+**Recording is quick:** date defaulting to today, the value or L/R values, an optional note, Save. For a test with several attempts, record the best valid attempt; do not reproduce the set logger. Zero and negative loads are valid.
+
+**Detail:** the protocol, a compact **Latest / Best** summary, and dated entries underneath, editable through the usual log interaction. The graph over time (with L/R lines) is **deferred** to be built together with the exercise graphs.
+
+**Latest and Best stay distinct**: the most recent test may be below an older maximum. Best keeps its date, with separate dates for left and right.
+
+**Records, not training (decision A):** a result is stored in the benchmark's own records only. It creates no exercise occurrence, needs no planning, and adds nothing to completed-exercise counts or training hours. On the calendar it appears on its date as a read-only line, the way daily notes do. Showing a benchmark such as weighted pull-up alongside related exercise data (e.g. a force-curve graph) is a possible later question, not part of phase 7.
 
 ### 8–10 and other later work
 

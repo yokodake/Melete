@@ -97,9 +97,10 @@ app structure, not a generic framework.
    midnight cannot regroup history. A placement carries **one** date and its sets are filed under
    that same date: moving trained work re-dates its actuals and rehomes the day's session, and
    logged work cannot become unscheduled.
-10. Upgrades preserve the training record. Schema 10 is the baseline (closing phase 5B): every
+10. Upgrades preserve the training record. Schema 10 is the baseline (closing phase 5B; 11 added
+    benchmarks): every
     schema change after it needs a data-preserving migration and a test, and neither build has a
-    destructive fallback. Backup and plan files of format version 1 stay readable. Debug is a
+    destructive fallback. Backup and plan files of format version 1 stay readable (backups are now format 2). Debug is a
     separate app (`com.yokodake.melete.debug`) whose data is disposable, but it takes the same
     upgrade path. See [the build guide](debug-release.md).
 
@@ -175,7 +176,9 @@ Timer polish: the running screen's hierarchy — current exercise and phase, tim
     load against reps.
 6C. Month view: a calendar above a daily list; selecting a date jumps to it. Toggle planned work;
     include diary entries.
-7. Profile and benchmarks: optional bodyweight history and named benchmark results.
+7A. Benchmarks: named reference tests with latest and best results, recorded apart from training.
+    Brought forward for the baseline week. ✅
+7B. Profile and settings: optional bodyweight history, Track bodyweight.
 8. Progression analysis: refined comparisons — fixed reps or duration, variations, standalone
    against circuit, selected time windows.
 9. Remote and web: remote backups first; a dashboard and web-authored plan imports as separate
