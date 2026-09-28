@@ -279,7 +279,7 @@ private fun SetStructureFields(
 
     HorizontalDivider()
     NumberField(
-        label = "Total time (min)",
+        label = "Total time (m)",
         value = state.plannedDurationMinutes,
         onValueChange = { onStateChange(state.copy(plannedDurationMinutes = it)) },
         // The estimate, shown where the answer would go. Typing overrules it; clearing the

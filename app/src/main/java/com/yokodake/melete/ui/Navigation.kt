@@ -12,6 +12,8 @@ import com.yokodake.melete.ui.benchmark.BenchmarkDetailRoute
 import com.yokodake.melete.ui.benchmark.BenchmarkEditorRoute
 import com.yokodake.melete.ui.benchmark.BenchmarksRoute
 import com.yokodake.melete.ui.dashboard.DashboardRoute
+import com.yokodake.melete.ui.history.ExerciseHistoryRoute
+import com.yokodake.melete.ui.history.RecordsRoute
 import com.yokodake.melete.ui.home.HomeRoute
 import com.yokodake.melete.data.KeepAwake
 import com.yokodake.melete.ui.settings.SettingsRoute
@@ -188,6 +190,34 @@ data class BenchmarkEditorDestination(val benchmarkId: String? = null)
 data object DashboardDestination
 
 /**
+ * One exercise across weeks. Reached from the dashboard (with its range, which can be cleared)
+ * or from the exercise's own page (all time): one destination either way.
+ */
+@Serializable
+data class ExerciseHistoryDestination(
+    val exerciseId: String,
+    val fromEpochDay: Long = NO_TRAINING_DATE,
+    val toEpochDay: Long = NO_TRAINING_DATE,
+) {
+    val from: LocalDate? get() = fromEpochDay.takeIf { it != NO_TRAINING_DATE }?.let(LocalDate::ofEpochDay)
+    val to: LocalDate? get() = toEpochDay.takeIf { it != NO_TRAINING_DATE }?.let(LocalDate::ofEpochDay)
+}
+
+/** The completed exercises behind a dashboard number: a range or a bar, optionally one category. */
+@Serializable
+data class RecordsDestination(
+    val fromEpochDay: Long,
+    val toEpochDay: Long,
+    /** An [com.yokodake.melete.data.model.ExerciseCategory] name, or null for every category. */
+    val category: String? = null,
+    /** Only the exercises with no category. */
+    val uncategorised: Boolean = false,
+) {
+    val from: LocalDate get() = LocalDate.ofEpochDay(fromEpochDay)
+    val to: LocalDate get() = LocalDate.ofEpochDay(toEpochDay)
+}
+
+/**
  * The tabs of the app, in the order Home · Calendar · Timer · Dashboard. Focused flows
  * opened from a tab — the picker, the exercise editor, the logger — deliberately hide the bar: they
  * are one task with a back button, not a place to switch away from mid-set.
@@ -261,7 +291,29 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
             )
         }
         composable<DashboardDestination> {
-            DashboardRoute(bottomBar = bottomBar)
+            DashboardRoute(
+                bottomBar = bottomBar,
+                onOpenRecords = { from, to, category, uncategorised ->
+                    navController.navigate(
+                        RecordsDestination(from.toEpochDay(), to.toEpochDay(), category?.name, uncategorised)
+                    )
+                },
+                onOpenExercise = { exerciseId, from, to ->
+                    navController.navigate(ExerciseHistoryDestination(exerciseId, from.toEpochDay(), to.toEpochDay()))
+                },
+            )
+        }
+        composable<RecordsDestination> {
+            RecordsRoute(
+                onOpenRecord = { navController.navigate(ExerciseDetailDestination(occurrenceId = it)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ExerciseHistoryDestination> {
+            ExerciseHistoryRoute(
+                onOpenRecord = { navController.navigate(ExerciseDetailDestination(occurrenceId = it)) },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable<WeekDestination> { entry ->
             val todayRequest by entry.savedStateHandle.getStateFlow(GO_TO_TODAY, 0L).collectAsState()
@@ -367,6 +419,7 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
                 // long as it runs; the exercise stays behind it on the back stack.
                 onOpenTimer = { navController.switchTab(TimerDestination) },
                 onEditExercise = { navController.navigate(ExerciseEditorDestination(it)) },
+                onOpenHistory = { navController.navigate(ExerciseHistoryDestination(it)) },
                 onBack = { navController.popBackStack() },
             )
         }

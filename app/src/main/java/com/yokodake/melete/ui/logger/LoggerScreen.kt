@@ -516,7 +516,7 @@ private fun DurationRow(
             )
         }
         NumberField(
-            label = "min",
+            label = "m",
             value = state.table.durationMinutes,
             onValueChange = onValueChange,
             placeholder = state.inferredDurationMinutes,

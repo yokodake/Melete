@@ -95,7 +95,7 @@ fun ContentsLine(
 
 /**
  * A circuit's shape in one line: rounds, the rests in the editor's own words, and the whole
- * circuit's estimate. "3 rounds · switch 15 s · rest 2 min · ≈ 12:30".
+ * circuit's estimate. "3 rounds · switch 15 s · rest 2 m · ≈ 12:30".
  */
 fun circuitShapeLine(
     rounds: Int,

@@ -622,7 +622,7 @@ private fun IdleControls(
             FieldRow("Work") {
                 when (state.mode) {
                     TimerCreateMode.TIMED -> {
-                        NumberField("min", state.work.minutes, onWorkMinutes, Modifier.weight(1f))
+                        NumberField("m", state.work.minutes, onWorkMinutes, Modifier.weight(1f))
                         NumberField("s", state.work.seconds, onWorkSeconds, Modifier.weight(1f))
                     }
 
@@ -645,7 +645,7 @@ private fun IdleControls(
             }
 
             FieldRow("Rest") {
-                NumberField("min", state.rest.minutes, onRestMinutes, Modifier.weight(1f))
+                NumberField("m", state.rest.minutes, onRestMinutes, Modifier.weight(1f))
                 NumberField("s", state.rest.seconds, onRestSeconds, Modifier.weight(1f))
             }
 
@@ -751,7 +751,7 @@ private fun DurationRow(
             modifier = Modifier.width(48.dp),
         )
         NumberField(
-            label = "min",
+            label = "m",
             value = value.minutes,
             onValueChange = onMinutes,
             modifier = Modifier.width(96.dp),

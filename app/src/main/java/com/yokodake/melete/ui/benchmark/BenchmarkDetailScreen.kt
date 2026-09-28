@@ -72,6 +72,9 @@ import com.yokodake.melete.ui.components.DetailSection
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import com.yokodake.melete.ui.components.ChartLine
+import com.yokodake.melete.ui.components.ChartPoint
+import com.yokodake.melete.ui.components.LineChart
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -317,6 +320,16 @@ fun BenchmarkDetailScreen(
                 }
             }
             item { StandingCard(standing) }
+            benchmarkLines(standing).takeIf { lines -> lines.any { it.points.isNotEmpty() } }?.let { lines ->
+                item {
+                    val benchmark = standing.benchmark
+                    LineChart(
+                        lines = lines,
+                        format = { "${BenchmarkFormat.number(it, benchmark.loadMeaning)} ${benchmark.unit}".trim() },
+                        description = "${benchmark.name} over time",
+                    )
+                }
+            }
             if (standing.results.isNotEmpty()) {
                 item { DetailSection("Results") }
                 items(items = standing.results, key = { it.id }) { result ->
@@ -367,6 +380,27 @@ private fun definitionLine(benchmark: com.yokodake.melete.data.Benchmark): Strin
     "lower is better".takeIf { !benchmark.higherIsBetter },
     "hidden".takeIf { benchmark.hidden },
 ).joinToString(" · ")
+
+/**
+ * The results as lines over time, left and right apart for unilateral tests. Only results in the
+ * benchmark's current unit and load meaning, the same ones that compete for best, so a change of
+ * unit never draws two scales as one line. Text results have nothing to plot.
+ */
+internal fun benchmarkLines(standing: BenchmarkStanding): List<ChartLine> {
+    val benchmark = standing.benchmark
+    if (benchmark.isText) return emptyList()
+    val comparable = standing.results.filter { it.unit == benchmark.unit && it.loadMeaning == benchmark.loadMeaning }
+    fun points(of: (BenchmarkResult) -> Double?) =
+        comparable.mapNotNull { r -> of(r)?.let { ChartPoint(r.date, it) } }.sortedBy { it.date }
+    return if (benchmark.unilateral) {
+        listOf(
+            ChartLine("L", points { it.value }),
+            ChartLine("R", points { it.valueRight }, square = true),
+        ).filter { it.points.isNotEmpty() }
+    } else {
+        listOf(ChartLine(null, points { it.value }))
+    }
+}
 
 /** Latest and best, kept apart; each side's best keeps its own date. */
 @Composable

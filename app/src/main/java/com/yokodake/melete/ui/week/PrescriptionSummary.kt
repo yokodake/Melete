@@ -71,10 +71,8 @@ object PrescriptionSummary {
         if (prescription == null) return "No plan set"
         val parts = mutableListOf<String>()
         parts += volume(prescription, mode, unilateral)
-        repRest(prescription, mode)?.let { parts += it }
         prescription.measurement?.let { parts += measurement(it) }
-        if (mode.hasSetStructure)
-            prescription.restSeconds?.let { parts += "rest ${duration(it)}" }
+        if (mode.hasSetStructure) rests(prescription, mode)?.let { parts += it }
         prescription.effort?.let { parts += it.label.lowercase() }
         return parts.joinToString(" · ")
     }
@@ -110,11 +108,30 @@ object PrescriptionSummary {
         return if (unilateral) "$base per side" else base
     }
 
-    /** "1 min between reps", for a set of attempts; null for an ordinary set. */
+    /** The rest between the reps of a set of attempts; null for an ordinary set. */
+    private fun repRestSeconds(prescription: PrescriptionPayload, mode: ExerciseMode): Int? =
+        prescription.restSecondsBetweenReps?.takeIf { it > 0 && mode == ExerciseMode.REPETITIONS }
+
+    /** "3m between reps", for a station of attempts, whose set rest the circuit decides. */
     private fun repRest(prescription: PrescriptionPayload, mode: ExerciseMode): String? =
-        prescription.restSecondsBetweenReps
-            ?.takeIf { it > 0 && mode == ExerciseMode.REPETITIONS }
-            ?.let { "${duration(it)} between reps" }
+        repRestSeconds(prescription, mode)?.let { "${compact(it)} between reps" }
+
+    /**
+     * "rest 2m"; for attempts, set rest and rep rest together: "rest 5m/3m", "rest –/3m" when
+     * no set rest is planned. Null when there is no rest to state.
+     */
+    private fun rests(prescription: PrescriptionPayload, mode: ExerciseMode): String? {
+        val set = prescription.restSeconds
+        val rep = repRestSeconds(prescription, mode)
+        return when {
+            rep != null -> "rest ${set?.let(::compact) ?: "–"}/${compact(rep)}"
+            set != null -> "rest ${duration(set)}"
+            else -> null
+        }
+    }
+
+    /** A duration without its space, for a pair of them: "5m", "30s", "1:30". */
+    private fun compact(seconds: Int): String = duration(seconds).replace(" ", "")
 
     private fun measurement(measurement: Measurement): String = load(measurement)
 
@@ -129,7 +146,7 @@ object PrescriptionSummary {
 
     fun duration(seconds: Int): String = when {
         seconds < 60 -> "$seconds s"
-        seconds % 60 == 0 && seconds < 3600 -> "${seconds / 60} min"
+        seconds % 60 == 0 && seconds < 3600 -> "${seconds / 60} m"
         else -> "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
     }
 

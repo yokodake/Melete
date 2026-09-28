@@ -177,10 +177,10 @@ data class DashboardStats(
             return lifted.mapIndexed { i, h -> if (i == largest) h - deficit else h }
         }
 
-        /** "24 h", "24.5 h", "45 min", "0 h". */
+        /** "24 h", "24.5 h", "45 m", "0 h". */
         fun hours(seconds: Int): String = when {
             seconds <= 0 -> "0 h"
-            seconds < 3600 -> "${(seconds + 30) / 60} min"
+            seconds < 3600 -> "${(seconds + 30) / 60} m"
             else -> {
                 val tenths = (seconds + 180) / 360
                 if (tenths % 10 == 0) "${tenths / 10} h" else "${tenths / 10}.${tenths % 10} h"

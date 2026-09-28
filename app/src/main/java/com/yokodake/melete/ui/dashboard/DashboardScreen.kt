@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -152,12 +153,15 @@ class DashboardViewModel(
 @Composable
 fun DashboardRoute(
     bottomBar: @Composable () -> Unit,
+    onOpenRecords: (from: LocalDate, to: LocalDate, category: ExerciseCategory?, uncategorised: Boolean) -> Unit = { _, _, _, _ -> },
+    onOpenExercise: (exerciseId: String, from: LocalDate, to: LocalDate) -> Unit = { _, _, _ -> },
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     DashboardScreen(
         state, viewModel::setRange, viewModel::setMetric, bottomBar,
         onEarlier = viewModel::earlier, onLater = viewModel::later, onCurrent = viewModel::current,
+        onOpenRecords = onOpenRecords, onOpenExercise = onOpenExercise,
     )
 }
 
@@ -171,6 +175,8 @@ fun DashboardScreen(
     onEarlier: () -> Unit = {},
     onLater: () -> Unit = {},
     onCurrent: () -> Unit = {},
+    onOpenRecords: (from: LocalDate, to: LocalDate, category: ExerciseCategory?, uncategorised: Boolean) -> Unit = { _, _, _, _ -> },
+    onOpenExercise: (exerciseId: String, from: LocalDate, to: LocalDate) -> Unit = { _, _, _ -> },
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -198,11 +204,15 @@ fun DashboardScreen(
         ) {
             item {
                 Column {
+                    // The headline opens what it counts.
                     Text(
                         text = "${DashboardStats.hours(stats.totalSeconds)} · ${stats.totalCount} " +
-                            if (stats.totalCount == 1) "exercise" else "exercises",
+                            (if (stats.totalCount == 1) "exercise" else "exercises") + " ›",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable { onOpenRecords(stats.from, stats.to, null, false) }
+                            .semantics { contentDescription = "Show the records of this range" },
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -223,11 +233,22 @@ fun DashboardScreen(
                     }
                 }
             }
-            item { BarChart(stats.bars, state.metric) }
+            item {
+                BarChart(
+                    bars = stats.bars,
+                    metric = state.metric,
+                    // A bar's week or month, clipped to the range: the first and last bars can be partial.
+                    onOpenBar = { bar ->
+                        val end = if (bar.monthly) bar.start.plusMonths(1).minusDays(1) else bar.start.plusDays(6)
+                        onOpenRecords(maxOf(bar.start, stats.from), minOf(end, stats.to), null, false)
+                    },
+                )
+            }
             if (stats.categories.isNotEmpty()) {
                 item { DetailSection("Categories") }
                 items(items = stats.categories, key = { "cat-${it.category}" }) { total ->
                     TotalRow(
+                        onClick = { onOpenRecords(stats.from, stats.to, total.category, total.category == null) },
                         category = total.category,
                         name = total.category?.label ?: "No category",
                         values = valuesText(total.seconds, total.count, state.metric, inferred = false) +
@@ -239,6 +260,7 @@ fun DashboardScreen(
                 item { DetailSection("Exercises") }
                 items(items = stats.exercises, key = { "ex-${it.exerciseId}" }) { total ->
                     TotalRow(
+                        onClick = { onOpenExercise(total.exerciseId, stats.from, stats.to) },
                         category = total.category,
                         name = total.name,
                         values = valuesText(total.seconds, total.count, state.metric, total.includesInferred),
@@ -351,8 +373,11 @@ private fun MetricMenu(metric: DashboardMetric, onMetric: (DashboardMetric) -> U
  * totals above the plot; without a tap the latest bar is described.
  */
 @Composable
-private fun BarChart(bars: List<DashboardBar>, metric: DashboardMetric) {
-    var selected by remember(bars) { mutableStateOf(bars.lastIndex) }
+private fun BarChart(bars: List<DashboardBar>, metric: DashboardMetric, onOpenBar: (DashboardBar) -> Unit) {
+    // Kept across a visit to the records, so coming back finds the bar that was chosen.
+    var selected by rememberSaveable(bars.firstOrNull()?.start?.toEpochDay(), bars.size) {
+        mutableStateOf(bars.lastIndex)
+    }
     fun valueOf(bar: DashboardBar, category: ExerciseCategory?): Float = when (metric) {
         DashboardMetric.HOURS -> (bar.seconds[category] ?: 0).toFloat()
         DashboardMetric.EXERCISES -> (bar.counts[category] ?: 0).toFloat()
@@ -369,7 +394,12 @@ private fun BarChart(bars: List<DashboardBar>, metric: DashboardMetric) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         bars.getOrNull(selected)?.let { bar ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { onOpenBar(bar) }
+                    .semantics { contentDescription = "Show the records of ${periodLabel(bar)}" },
+            ) {
                 Text(
                     text = periodLabel(bar),
                     style = MaterialTheme.typography.bodyMedium,
@@ -377,7 +407,7 @@ private fun BarChart(bars: List<DashboardBar>, metric: DashboardMetric) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "${DashboardStats.hours(bar.totalSeconds)} · ${bar.totalCount}",
+                    text = "${DashboardStats.hours(bar.totalSeconds)} · ${bar.totalCount} ›",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -463,10 +493,11 @@ private fun BarChart(bars: List<DashboardBar>, metric: DashboardMetric) {
 
 /** One category or exercise: its dot and name, and its numbers with the chosen metric first. */
 @Composable
-private fun TotalRow(category: ExerciseCategory?, name: String, values: String) {
+private fun TotalRow(category: ExerciseCategory?, name: String, values: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

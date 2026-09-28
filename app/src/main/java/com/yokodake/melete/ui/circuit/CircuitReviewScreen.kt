@@ -381,7 +381,7 @@ private fun StationRow(station: StationReview, viewModel: CircuitReviewViewModel
                         Text("Time taken", style = MaterialTheme.typography.bodyMedium)
                     }
                     NumberField(
-                        label = "min",
+                        label = "m",
                         value = station.table.durationMinutes,
                         onValueChange = { viewModel.setDurationMinutes(id, it) },
                         placeholder = ((station.suggestedDurationSeconds + 30) / 60).toString(),
