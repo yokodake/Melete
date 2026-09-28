@@ -25,7 +25,7 @@ the two ever disagree, the code and the first half win.
 | Timer B — repeaters | ✅ |
 | Timer C — supersets/circuits and compact review | ✅ |
 | 4B — modules for planning | ✅ built; instrumented tests pass on the phone |
-| 5B — daily notes, trackers, export and restore | diary, export and restore built and tested on the phone; importer to come |
+| 5B — daily notes, trackers, export and restore | diary, export and restore tested on the phone; plan import built, its instrumented tests pass on the phone |
 | 6 — motivating overview dashboard | not started |
 
 Schema version **9**, and one schema only until phase 6 — see *No migration chain* below.
@@ -259,6 +259,32 @@ nothing is touched. A sound one shows what it holds beside what is on the phone 
 the current record is written to a safety copy inside the app, then replaced in one transaction.
 Safety copies are listed on the same screen with *Restore*, which is the undo — on a release build
 they cannot be reached any other way. There is no merge.
+
+## Plan import
+
+**Import a plan…** on the same screen reads a hand-written plan file (`format: "melete-plan"`,
+spec in [`plan-format.md`](plan-format.md)): exercises with variations, circuits, modules and weeks
+written out literally, everything referred to by name. **An import never deletes a record of
+training**: anything logged, done or skipped stays (a circuit or module holding any of it is kept
+whole), and so does the diary. Picking a file shows a preview before anything is written, with
+two choices:
+
+- **Add** keeps everything. A definition in the file replaces the library item of the same name
+  from now on (planned and logged copies keep their snapshots); variations are matched by tag and
+  never removed; weeks are planned after what the days hold. References resolve against the file,
+  then the library.
+- **Replace plans** saves a recovery copy, clears planned work that has not happened, retires or
+  deletes library items the file does not name (hidden when they have history), and builds from
+  the file. Items the file does name keep their ids, so their history stays attached.
+- **From today** (default) or **Include past**: whether items dated before today are planned, and
+  whether replacing clears unhappened plans before today.
+
+The preview lists what is added and updated, and what is left out and why (a field the mode does
+not read, an activity's sides or load). A file with any problem is refused whole with every
+problem named; the import is one transaction through the same repository calls the editors make.
+The test library is itself a plan file (`app/src/androidTest/assets/test-library.json`), with
+the weeks of 21 and 28 September; `LibrarySeed` imports it and then logs a few of the first
+week's days, since a plan file holds no logs.
 
 ## Counting
 
@@ -641,7 +667,9 @@ the migration suite having gone.
 - `today` is computed when the UI state is built, so an app left open across midnight keeps the old
   highlight until the state is rebuilt.
 - The month abbreviation in week labels comes from the device locale. Unit tests pin `Locale.US`.
-- No dashboard yet, and no importer for hand-written plans: restore takes only full backups.
+- No dashboard yet.
+- **Plan files cannot delete or reorder.** Adding never removes a library item, a variation or
+  anything planned; to start over, *Replace all*.
 - **Export and restore go through the file picker, not a share sheet.**
 - **A module's members cannot be reordered in the week.** Edit mode moves the module as a
   whole; the order inside it is the template's, changed in the module editor.
@@ -768,6 +796,15 @@ These are the ones no test can make.
 - [ ] **Restore that file**: the summary matches, *Replace* works, a safety copy appears below.
       Restore the safety copy: back as before.
 - [ ] **A broken file** (edit one date by hand): refused with the reason, nothing changed.
+- [ ] **Import a plan**: with the seed in place (two weeks planned, Monday, Tuesday and Friday of
+      the first logged, Thursday skipped), import `test-library.json` from Downloads with *Add* —
+      library items under *Updates*, none duplicated; the hike's warnings listed; *From today*
+      leaves out the past items and counts them; the logged days untouched.
+- [ ] **Replace plans**: the same file, *Replace plans* + *Include past* — the preview clears the
+      planned items and keeps the 5 logged or skipped ones; after it, Monday, Tuesday, Thursday and
+      Friday's pull-ups are still there with their sets, and everything else is freshly planned.
+      Switch to *Replace all*: the counts to be deleted show; cancel. Import a file with a typo'd
+      name: refused, naming it.
 
 ### 7. Variations and modules
 
@@ -1147,17 +1184,58 @@ the new four in `DiaryTrackersTest`: a renamed, re-kinded tracker leaves its rec
 were; a rescaled one keeps values outside its new range; a retired one stays on its days, ordered
 last; a value its tracker cannot hold is never stored. 172 unit tests pass.
 
+## Phase 5B, part two: plan import (2026-09-26)
+
+- **Plan files** (`data/plan`): `PlanFormat` (the file, parsed strictly — unknown keys are errors —
+  but with comments and trailing commas allowed), `PlanCheck` (pure: resolves every name against
+  the file and a `LibraryIndex`, normalises each plan to what its mode reads exactly as the editor
+  does, and returns problems, warnings, a preview and the resolved plan), `PlanImporter` (writes a
+  resolved plan in one transaction through `TrainingRepository`; *Replace all* writes a safety
+  copy and uses the new `BackupService.clearAll`).
+- **Two formats, one screen**, rather than one format with optional ids as first proposed: the
+  backup already restores exactly, and a plan written by hand wants names, units as typed and no
+  snapshots. A backup opened as a plan is pointed to *Restore*.
+- Decisions: the mode is chosen at import (*Add* / *Replace plans*); in *Add*, a file's definition
+  **updates** the library item of the same name; weeks are literal, no repeat; it lives on the
+  Backup & restore screen, so it works on release builds.
+- **Revised the same day: an import never deletes a record of training.** *Replace all* (which
+  wiped everything, logs included) became *Replace plans*: only planned cards with nothing logged,
+  done or skipped go, library items the file does not name are retired or deleted through the new
+  `TrainingRepository.retireExercise` (which, unlike `removeExercise`, leaves every copy alone)
+  and the existing template removals. A **From today / Include past** choice (default from today)
+  bounds both what is planned and what is cleared. Also removed a stale comment claiming a moved
+  item leaves its sets behind: every move re-dates logged sets with the item.
+- **The seed list is now a plan file**, `test-library.json`, and `LibrarySeed` imports it (`-e
+  planning false` still leaves out circuits and modules).
+- The spec is `docs/plan-format.md`.
+
+**Checks run:** 182 unit tests pass, 10 new in `PlanCheckTest` (the test library resolves cleanly;
+format and version refusals; comments allowed and misspelt keys refused; names matched across case
+and spacing; references resolved file-then-library, file only when replacing; unlisted variations
+still resolving; plans trimmed to their mode with warnings; every kind of mistake named; ambiguous
+library names refused; weeks into ordered slots). `PlanImportTest` (5: everything lands where the
+file says; adding updates by name and leaves planned copies alone; replacing starts over after a
+safety copy; a file with a mistake changes nothing; a backup is pointed to Restore) passes 5 of 5
+on the Pixel 9. Its first run caught a wrong expectation, not a bug: a module scheduled on a day
+brings its circuit with it, so the week holds two circuits.
+
+After the revision: 184 unit tests pass (2 more in `PlanCheckTest`: replacing matches definitions
+but not references to the library; from today, the past is left out and counted but still
+checked). `PlanImportTest` is now 6 — the replace test became "replacing clears only plans that
+have not happened" (a logged and a skipped card kept with their sets, the library the file's, a
+kept exercise's id unchanged) and "from today leaves the past alone" is new. On the Pixel 9 the
+whole instrumented suite passes, **87 of 87**.
+
 ## Next step
 
-**Phase 5B, part two: the importer** — hand-written files keyed by names (library, circuits,
-modules, weeks), per the agreed "one format, ids optional". The seed's list becomes the first such
-file.
+**Walk the plan import through by hand** (the checklist above; `test-library.json` is in the
+phone's Downloads), then **phase 6 — the overview dashboard**.
 
-Owed before or alongside it:
+Owed alongside it:
 
 - **Everything in *What still needs a phone*.** Much of it has been used by hand on the phone
   (5A, the timer extensions, variations, modules) but the boxes have not been ticked; tick the
-  ones confirmed. `LibrarySeed` refills a wiped debug database with the
-  library, variations, circuits and modules.
+  ones confirmed. `LibrarySeed` refills a wiped debug database by importing the test
+  library plan file.
 - The 4A acceptance scenarios end to end. The instrumented suite exercises the database, not the
   screens.

@@ -1,0 +1,277 @@
+// The test library: exercises covering the combinations the screens have to render — every mode,
+// sides, each load meaning, rest or none, effort or none, a few deliberately incomplete plans —
+// plus variations, circuits and modules built from them. A plan file (docs/plan-format.md).
+{
+  "format": "melete-plan",
+  "version": 1,
+  "exercises": [
+    // --- repetitions ---------------------------------------------------------------------------
+    {
+      "name": "Pull-up", "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
+      "description": "Dead hang to chin over bar, no kip.",
+      "plan": { "sets": 4, "reps": 6, "restSeconds": 180, "effort": "HARD" },
+      "variations": [
+        { "tag": "A", "plan": { "sets": 5, "reps": 5, "restSeconds": 150 } },
+        { "tag": "B", "notes": "Pause 2 s at the top of every rep.", "plan": { "sets": 3, "reps": 8, "restSeconds": 120 } }
+      ]
+    },
+    {
+      "name": "Weighted pull-up", "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
+      "unit": "kg", "meaning": "ADDED_LOAD",
+      "plan": { "sets": 5, "reps": 3, "restSeconds": 240 }
+    },
+    {
+      "name": "Band-assisted pull-up", "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
+      "unit": "kg", "meaning": "ASSISTANCE",
+      "plan": { "sets": 3, "reps": 8, "restSeconds": 120, "effort": "MODERATE" }
+    },
+    {
+      // A planned duration that overrules the estimate.
+      "name": "Back squat", "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
+      "unit": "kg", "meaning": "TOTAL_LOAD",
+      "plan": { "sets": 5, "reps": 5, "restSeconds": 180, "effort": "VERY_HARD", "plannedMinutes": 30 },
+      "variations": [
+        { "tag": "PWR", "notes": "Fast concentric at about 70% of 1RM.", "plan": { "sets": 5, "reps": 3, "restSeconds": 180 } },
+        { "tag": "STR", "plan": { "sets": 4, "reps": 5, "restSeconds": 240 } }
+      ]
+    },
+    {
+      // Unilateral with the sides back to back.
+      "name": "Bulgarian split squat", "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
+      "unilateral": true, "unit": "kg", "meaning": "TOTAL_LOAD",
+      "plan": { "sets": 3, "reps": 8, "restSeconds": 90, "sideSwitchSeconds": 0 }
+    },
+    {
+      // Unilateral, default switch, no rest, no unit.
+      "name": "Pistol squat", "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
+      "unilateral": true,
+      "plan": { "sets": 3, "reps": 5 }
+    },
+    {
+      // No target reps and no category.
+      "name": "Push-up", "mode": "REPETITIONS",
+      "plan": { "sets": 3, "restSeconds": 60 }
+    },
+    {
+      "name": "4×4 boulders", "mode": "REPETITIONS", "category": "STRUCTURED_CLIMBING",
+      "notes": "Four problems back to back, three grades below max.",
+      "plan": { "sets": 4, "reps": 4, "restSeconds": 240, "effort": "HARD" }
+    },
+
+    // --- timed sets ----------------------------------------------------------------------------
+    {
+      "name": "Max hangs 20 mm", "mode": "DURATION", "category": "FINGER_TRAINING",
+      "unit": "kg", "meaning": "ADDED_LOAD",
+      "description": "Half crimp, both hands, feet on the floor for the first second.",
+      "notes": "Beastmaker 1000, middle edge",
+      "plan": { "sets": 5, "seconds": 10, "restSeconds": 180, "effort": "HARD" },
+      "variations": [
+        { "tag": "MAX", "notes": "Heaviest load that still gives a clean 10 s.", "plan": { "sets": 5, "seconds": 10, "restSeconds": 180 } },
+        {
+          "tag": "END",
+          "notes": "First 3 reps at 60% with emphasis on speed, then add load for RIR 1–2 on the last 3.",
+          "plan": { "sets": 6, "seconds": 10, "restSeconds": 90 }
+        }
+      ]
+    },
+    {
+      "name": "One-arm hang", "mode": "DURATION", "category": "FINGER_TRAINING",
+      "unilateral": true, "unit": "kg", "meaning": "ASSISTANCE",
+      "plan": { "sets": 4, "seconds": 7, "restSeconds": 120, "sideSwitchSeconds": 30 }
+    },
+    {
+      "name": "Plank", "mode": "DURATION", "category": "STRENGTH_CONDITIONING",
+      "plan": { "sets": 3, "seconds": 60, "restSeconds": 60 }
+    },
+    {
+      "name": "Couch stretch", "mode": "DURATION", "category": "FLEXIBILITY",
+      "unilateral": true,
+      "plan": { "sets": 2, "seconds": 90 }
+    },
+    {
+      // One set: the timer button reads as a single length.
+      "name": "Dead hang", "mode": "DURATION", "category": "FINGER_TRAINING",
+      "plan": { "sets": 1, "seconds": 120 }
+    },
+    {
+      // Timed with no target length: no estimate, rest-only timer.
+      "name": "Front lever hold", "mode": "DURATION", "category": "STRENGTH_CONDITIONING",
+      "plan": { "sets": 4, "restSeconds": 120 }
+    },
+
+    // --- repeaters -----------------------------------------------------------------------------
+    {
+      "name": "7/3 repeaters 20 mm", "mode": "REPEATERS", "category": "FINGER_TRAINING",
+      "unit": "kg", "meaning": "ADDED_LOAD",
+      "plan": { "sets": 3, "restSeconds": 180, "effort": "HARD", "repeater": { "reps": 6, "workSeconds": 7, "restSeconds": 3 } }
+    },
+    {
+      "name": "One-arm repeaters", "mode": "REPEATERS", "category": "FINGER_TRAINING",
+      "unilateral": true, "unit": "kg", "meaning": "ASSISTANCE",
+      "plan": { "sets": 3, "restSeconds": 120, "sideSwitchSeconds": 20, "repeater": { "reps": 5, "workSeconds": 10, "restSeconds": 5 } }
+    },
+    {
+      // No rest between pulses: the "/rest" part of the summary disappears.
+      "name": "Continuous pulses", "mode": "REPEATERS", "category": "FINGER_TRAINING",
+      "plan": { "sets": 2, "restSeconds": 90, "repeater": { "reps": 4, "workSeconds": 10, "restSeconds": 0 } }
+    },
+    {
+      "name": "Repeaters, not set up", "mode": "REPEATERS", "category": "FINGER_TRAINING",
+      "plan": { "sets": 3, "restSeconds": 180 }
+    },
+
+    // --- activities ----------------------------------------------------------------------------
+    {
+      "name": "Bouldering session", "mode": "ACTIVITY", "category": "OPEN_CLIMBING",
+      "plan": { "minutes": 120, "effort": "MODERATE" }
+    },
+    {
+      "name": "Board session", "mode": "ACTIVITY", "category": "BOARD_CLIMBING",
+      "notes": "Moonboard 2019, 40°",
+      "plan": { "minutes": 90, "effort": "HARD" }
+    },
+    {
+      "name": "Run", "mode": "ACTIVITY", "category": "OTHER_ACTIVITY",
+      "plan": { "minutes": 45 }
+    },
+    {
+      // No duration: "Duration not set", and no estimate.
+      "name": "Yoga", "mode": "ACTIVITY", "category": "FLEXIBILITY"
+    },
+    {
+      // Contradictory on purpose: the importer drops what an activity cannot have, with warnings.
+      "name": "Hike (bad: sides, sets, rest, kg)", "mode": "ACTIVITY", "category": "OTHER_ACTIVITY",
+      "unilateral": true, "unit": "kg", "meaning": "TOTAL_LOAD",
+      "plan": { "sets": 3, "minutes": 20, "restSeconds": 60, "sideSwitchSeconds": 15 }
+    },
+
+    // --- layout stress -------------------------------------------------------------------------
+    {
+      "name": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill",
+      "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
+      "unilateral": true, "unit": "kg", "meaning": "TOTAL_LOAD",
+      "description": "A long name, a long description and large numbers, to see what wraps and what truncates. A long name, a long description and large numbers, to see what wraps and what truncates. A long name, a long description and large numbers, to see what wraps and what truncates. A long name, a long description and large numbers, to see what wraps and what truncates.",
+      "notes": "Rest over an hour, so the duration formatter's h:mm path shows up too.",
+      "plan": { "sets": 12, "reps": 15, "restSeconds": 3725, "effort": "VERY_EASY", "sideSwitchSeconds": 45 }
+    }
+  ],
+
+  "circuits": [
+    {
+      // The ordinary case: reps, a hold and reps, with both rests.
+      "name": "Pull + core", "category": "STRENGTH_CONDITIONING",
+      "rounds": 3, "transitionSeconds": 30, "roundRestSeconds": 120,
+      "stations": [
+        { "exercise": "Pull-up", "plan": { "reps": 5 } },
+        { "exercise": "Plank", "plan": { "seconds": 45 } },
+        { "exercise": "Push-up", "plan": { "reps": 12 } }
+      ]
+    },
+    {
+      // Every station one side at a time, so the switch rests appear inside the rounds.
+      "name": "Leg circuit", "category": "STRENGTH_CONDITIONING",
+      "rounds": 4, "transitionSeconds": 20, "roundRestSeconds": 90,
+      "stations": [
+        { "exercise": "Bulgarian split squat", "plan": { "reps": 8, "sideSwitchSeconds": 0 } },
+        { "exercise": "Pistol squat", "plan": { "reps": 5 } },
+        { "exercise": "Couch stretch", "plan": { "seconds": 60 } }
+      ]
+    },
+    {
+      // A repeater station, a plain hold, and a timed station with no length that must wait.
+      "name": "Hangboard density", "category": "FINGER_TRAINING",
+      "rounds": 3, "transitionSeconds": 60, "roundRestSeconds": 180,
+      "stations": [
+        { "exercise": "7/3 repeaters 20 mm", "plan": { "repeater": { "reps": 6, "workSeconds": 7, "restSeconds": 3 } } },
+        { "exercise": "Dead hang", "plan": { "seconds": 30 } },
+        { "exercise": "Front lever hold", "plan": {} }
+      ]
+    },
+    {
+      // A superset: two stations back to back, rest only after the pair.
+      "name": "Pull/push superset",
+      "rounds": 5, "transitionSeconds": 0, "roundRestSeconds": 90,
+      "stations": [
+        { "exercise": "Weighted pull-up", "plan": { "reps": 3 } },
+        { "exercise": "Push-up", "plan": { "reps": 10 } }
+      ]
+    }
+  ],
+
+  "modules": [
+    {
+      "name": "Fingers + core",
+      "description": "Base block: finger strength first, then pulling and core while fresh enough.",
+      "entries": [
+        { "exercise": "Max hangs 20 mm", "variation": "END" },
+        { "circuit": "Pull + core" },
+        { "exercise": "Couch stretch" }
+      ]
+    },
+    {
+      "name": "Strength day",
+      "description": "Max strength. Heavy, long rests, no climbing the same day.",
+      "entries": [
+        { "exercise": "Back squat", "variation": "STR" },
+        { "circuit": "Leg circuit" },
+        { "exercise": "Weighted pull-up", "plan": { "sets": 4, "reps": 3, "restSeconds": 240 } }
+      ]
+    },
+    {
+      // Activities inside a module, beside a structured climbing exercise.
+      "name": "Climbing session",
+      "description": "Performance.",
+      "entries": [
+        { "exercise": "Bouldering session" },
+        { "exercise": "4×4 boulders" },
+        { "exercise": "Yoga" }
+      ]
+    },
+    {
+      // No description: the empty case the list and editor must handle.
+      "name": "Recovery",
+      "entries": [
+        { "exercise": "Run" },
+        { "exercise": "Couch stretch" },
+        { "exercise": "Yoga" }
+      ]
+    },
+    {
+      // Mostly a circuit, with a variation chosen for the standalone exercise.
+      "name": "Hangboard block",
+      "description": "Finger endurance.",
+      "entries": [
+        { "circuit": "Hangboard density" },
+        { "exercise": "One-arm repeaters" },
+        { "exercise": "Pull-up", "variation": "B" }
+      ]
+    }
+  ],
+
+  // Two weeks: the one of 21 September (LibrarySeed logs a few of its days) and the next.
+  "weeks": [
+    {
+      "weekStart": "2026-09-21",
+      "unscheduled": [ { "exercise": "Couch stretch" } ],
+      "monday": [ { "exercise": "Max hangs 20 mm", "variation": "MAX" }, { "exercise": "Back squat", "variation": "STR" } ],
+      "tuesday": [ { "activity": "Outdoor bouldering", "minutes": 180 } ],
+      "wednesday": [ { "module": "Fingers + core" } ],
+      "thursday": [ { "exercise": "Run" } ],
+      "friday": [ { "circuit": "Pull/push superset" }, { "exercise": "Pull-up", "variation": "B" } ],
+      "saturday": [ { "exercise": "Board session" } ],
+      "sunday": [ { "module": "Strength day" } ]
+    },
+    {
+      "weekStart": "2026-09-28",
+      "unscheduled": [ { "exercise": "Yoga" } ],
+      "monday": [ { "module": "Hangboard block" } ],
+      "wednesday": [
+        // A placement's own plan, over the variation's.
+        { "exercise": "Back squat", "variation": "PWR", "plan": { "sets": 6, "reps": 2, "restSeconds": 180 } },
+        { "circuit": "Leg circuit" }
+      ],
+      "friday": [ { "exercise": "Bouldering session" } ],
+      "saturday": [ { "activity": "Hike", "minutes": 240 } ]
+    }
+  ]
+}

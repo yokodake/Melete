@@ -107,20 +107,7 @@ class BackupService(private val database: MeleteDatabase) {
         val problems = BackupValidator.problems(backup)
         if (problems.isNotEmpty()) throw BackupUnreadable(problems.first())
         database.withTransaction {
-            dao.clearDiaryValues()
-            dao.clearDiaryEntries()
-            dao.clearTrackers()
-            dao.clearSets()
-            dao.clearSessions()
-            dao.clearOccurrences()
-            dao.clearCircuitInstances()
-            dao.clearModuleInstances()
-            dao.clearRoutineEntries()
-            dao.clearRoutines()
-            dao.clearModuleEntries()
-            dao.clearModules()
-            dao.clearVariations()
-            dao.clearExercises()
+            clearAll()
 
             // Parents before children.
             dao.insertExercises(backup.exercises.map { it.toEntity() })
@@ -137,6 +124,30 @@ class BackupService(private val database: MeleteDatabase) {
             dao.insertTrackers(backup.trackers.map { it.toEntity() })
             dao.insertDiaryEntries(backup.diary.map { it.toEntity() })
             dao.insertDiaryValues(backup.diary.flatMap { it.valueEntities() })
+        }
+    }
+
+    /**
+     * Empties every table, children before parents so no foreign key ever sees a missing row.
+     * Only ever called inside a transaction that puts something back — a restore, or a plan
+     * imported to replace everything — and only after a safety copy has been written.
+     */
+    suspend fun clearAll() {
+        database.withTransaction {
+            dao.clearDiaryValues()
+            dao.clearDiaryEntries()
+            dao.clearTrackers()
+            dao.clearSets()
+            dao.clearSessions()
+            dao.clearOccurrences()
+            dao.clearCircuitInstances()
+            dao.clearModuleInstances()
+            dao.clearRoutineEntries()
+            dao.clearRoutines()
+            dao.clearModuleEntries()
+            dao.clearModules()
+            dao.clearVariations()
+            dao.clearExercises()
         }
     }
 }

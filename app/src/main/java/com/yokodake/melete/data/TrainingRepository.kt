@@ -613,6 +613,24 @@ class TrainingRepository(private val database: MeleteDatabase) {
 
     suspend fun restoreExercise(exerciseId: String) = library.restoreExercise(exerciseId)
 
+    /**
+     * Takes an exercise out of the library without touching a single copy of it: deleted when
+     * nothing was ever planned or logged from it, retired otherwise.
+     *
+     * What a plan import replacing the library uses. Unlike [removeExercise], untrained plans are
+     * not tidied away with the row — the import has already decided which plans stay, and a
+     * skipped copy, say, is part of the record it keeps.
+     */
+    suspend fun retireExercise(exerciseId: String) {
+        database.withTransaction {
+            if (library.countOccurrencesOf(exerciseId) > 0 || library.countSetsOf(exerciseId) > 0) {
+                library.markExerciseDeleted(exerciseId, System.currentTimeMillis())
+            } else {
+                library.deleteExercise(exerciseId)
+            }
+        }
+    }
+
     // ---------------------------------------------------------- variations
 
     /**
@@ -773,8 +791,9 @@ class TrainingRepository(private val database: MeleteDatabase) {
     }
 
     /**
-     * Files an occurrence under a training date, or back into the week's unscheduled area. Already
-     * recorded sets keep their own training date: correcting those is a separate, explicit action.
+     * Files an unscheduled occurrence under the date its first set is logged on. Only ever called
+     * before anything is logged against it; moving logged work goes through [moveOccurrence],
+     * which takes the sets along.
      */
     suspend fun assignOccurrenceDate(occurrenceId: String, trainingDate: LocalDate?) {
         database.withTransaction {
@@ -794,13 +813,6 @@ class TrainingRepository(private val database: MeleteDatabase) {
         }
     }
 
-    /**
-     * Moves a placement to any week, on a day or into that week's unscheduled area.
-     *
-     * Only the *plan* moves. Anything already logged against it keeps the performed date it was
-     * logged on, because moving a plan is a statement about the future and re-dating evidence is
-     * a different decision the user has to make on purpose.
-     */
     /**
      * Moves a placement, and whatever was logged against it, to another day.
      *
