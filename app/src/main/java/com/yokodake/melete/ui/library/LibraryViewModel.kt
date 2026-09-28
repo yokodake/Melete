@@ -64,18 +64,15 @@ class LibraryViewModel(
         repository.observeModules(),
         local,
     ) { exercises, circuits, modules, current ->
-        val q = current.query.trim()
-        val workouts = workoutsOf(exercises, circuits, q)
-        val matchingModules = modules.filter {
-            q.isEmpty() || it.name.contains(q, ignoreCase = true) ||
-                it.entries.any { entry -> entry.name.contains(q, ignoreCase = true) }
-        }
+        val searching = LibrarySearch.conditions(current.query).isNotEmpty()
+        val workouts = workoutsOf(exercises, circuits, current.query)
+        val matchingModules = modulesOf(modules, current.query)
         LibraryUiState(
             tab = current.tab,
             query = current.query,
             workouts = workouts,
             modules = matchingModules,
-            noMatches = q.isNotEmpty() && when (current.tab) {
+            noMatches = searching && when (current.tab) {
                 LibraryTab.WORKOUTS -> workouts.isEmpty() && (exercises + circuits).isNotEmpty()
                 LibraryTab.MODULES -> matchingModules.isEmpty() && modules.isNotEmpty()
             },

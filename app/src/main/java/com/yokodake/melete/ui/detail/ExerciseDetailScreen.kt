@@ -1,5 +1,10 @@
 package com.yokodake.melete.ui.detail
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,7 +72,7 @@ import com.yokodake.melete.ui.week.PrescriptionSummary
  */
 @Composable
 fun ExerciseDetailRoute(
-    onLog: (String) -> Unit,
+    onLog: (occurrenceId: String, discardIfUnlogged: Boolean) -> Unit,
     onOpenTimer: () -> Unit,
     onEditExercise: (String) -> Unit,
     onBack: () -> Unit,
@@ -76,7 +81,16 @@ fun ExerciseDetailRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ExerciseDetailScreen(
         state = state,
-        onLog = onLog,
+        onLog = {
+            val occurrenceId = state.occurrenceId
+            if (occurrenceId != null) onLog(occurrenceId, false) else viewModel.logFromLibrary(onLog)
+        },
+        onSelectPlan = viewModel::selectPlan,
+        onAdjustAttempt = viewModel::openAttemptEditor,
+        onAttemptChange = viewModel::updateAttemptEditor,
+        onSaveAttempt = viewModel::saveAttemptPlan,
+        onDismissAttempt = viewModel::dismissAttemptEditor,
+        onClearAttempt = viewModel::clearAttemptPlan,
         onStartTimer = { viewModel.requestStartTimer(onOpenTimer) },
         onConfirmReplace = { viewModel.confirmStartTimer(onOpenTimer) },
         onDismissReplace = viewModel::dismissReplacePrompt,
@@ -100,7 +114,7 @@ fun ExerciseDetailRoute(
 @Composable
 fun ExerciseDetailScreen(
     state: ExerciseDetailUiState,
-    onLog: (String) -> Unit,
+    onLog: () -> Unit,
     onStartTimer: () -> Unit,
     onConfirmReplace: () -> Unit,
     onDismissReplace: () -> Unit,
@@ -117,6 +131,12 @@ fun ExerciseDetailScreen(
     onDismissVariation: () -> Unit = {},
     onSchedule: (weekStart: LocalDate, variationId: String?) -> Unit = { _, _ -> },
     onMessageShown: () -> Unit = {},
+    onSelectPlan: (variationId: String?) -> Unit = {},
+    onAdjustAttempt: () -> Unit = {},
+    onAttemptChange: (PrescriptionFormState) -> Unit = {},
+    onSaveAttempt: () -> Unit = {},
+    onDismissAttempt: () -> Unit = {},
+    onClearAttempt: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var addingToPlan by remember { mutableStateOf(false) }
@@ -157,23 +177,30 @@ fun ExerciseDetailScreen(
                 // Changing what the exercise *is* — its name, category, explanation, how a set is
                 // measured — is rarer than changing its numbers, so it sits one level further in.
                 actions = {
-                    state.exerciseId?.let {
+                    val exerciseId = state.exerciseId
+                    if (state.occurrenceId == null && exerciseId != null) {
+                        // In the library, editing the exercise is the page's own explicit action.
+                        TextButton(onClick = { onEditExercise(exerciseId) }) { Text("Edit") }
+                    }
+                    if (exerciseId != null) {
                         ExerciseMenu(
-                            exerciseId = it,
-                            onEditExercise = onEditExercise,
+                            onEditExercise = { onEditExercise(exerciseId) }
+                                .takeIf { state.occurrenceId != null },
                             // Only while the entry can still be planned: a retired one is history.
                             onAddToPlan = { addingToPlan = true }
                                 .takeIf { state.libraryExercise != null },
+                            onAdjustAttempt = onAdjustAttempt
+                                .takeIf { state.occurrenceId == null && state.libraryExercise != null },
                         )
                     }
                 },
             )
         },
         bottomBar = {
-            if (state.occurrenceId != null) {
+            if (!state.loading && state.canTrain) {
                 ActionBar(
                     state = state,
-                    onLog = { onLog(state.occurrenceId) },
+                    onLog = onLog,
                     onStartTimer = onStartTimer,
                 )
             }
@@ -233,6 +260,9 @@ fun ExerciseDetailScreen(
                     else -> "Plans"
                 }
             )
+            // With more than one plan, a tap on a card chooses which one the timer and the logger
+            // use; with only the default there is nothing to choose and no marker to read.
+            val choosing = browsingLibrary && state.libraryExercise != null && state.variations.isNotEmpty()
             PlanCard(
                 summary = state.prescriptionSummary,
                 // On a planned copy, the variation it was cut from; the default has no chip.
@@ -244,7 +274,10 @@ fun ExerciseDetailScreen(
                 },
                 editDescription = "Edit this plan",
                 onEdit = onEditPlan,
+                selected = choosing && state.selectedVariationId == null && state.attemptPlan == null,
+                onSelect = { onSelectPlan(null) }.takeIf { choosing },
             )
+            state.lastLogged?.let { LastLoggedBlock(it) }
             if (browsingLibrary) {
                 // The alternatives, each edited where it is shown, exactly like the default.
                 state.variations.forEach { variation ->
@@ -258,10 +291,23 @@ fun ExerciseDetailScreen(
                         lines = listOfNotNull(variation.notes),
                         editDescription = "Edit variation ${variation.tag}",
                         onEdit = { onEditVariation(variation.id) },
+                        selected = choosing && state.selectedVariationId == variation.id &&
+                            state.attemptPlan == null,
+                        onSelect = { onSelectPlan(variation.id) }.takeIf { choosing },
                     )
                 }
                 if (state.libraryExercise != null) {
                     TextButton(onClick = { onEditVariation(null) }) { Text("+  Add a variation") }
+                }
+                // A change for today only: what the timer and the logger will use, saved nowhere
+                // but on the copy they make.
+                state.attemptPlan?.let { plan ->
+                    AttemptCard(
+                        summary = PrescriptionSummary.formatPlan(plan, state.mode, state.unilateral),
+                        tag = state.variations.firstOrNull { it.id == state.selectedVariationId }?.tag,
+                        onEdit = onAdjustAttempt,
+                        onClear = onClearAttempt,
+                    )
                 }
             }
 
@@ -310,6 +356,26 @@ fun ExerciseDetailScreen(
             },
             confirmButton = { TextButton(onClick = onSavePlan) { Text("Save") } },
             dismissButton = { TextButton(onClick = onDismissPlan) { Text("Cancel") } },
+        )
+    }
+
+    state.attemptEditor?.let { form ->
+        AlertDialog(
+            onDismissRequest = onDismissAttempt,
+            title = { Text("This attempt") },
+            text = {
+                Column {
+                    PrescriptionFields(
+                        state = form,
+                        onStateChange = onAttemptChange,
+                        mode = state.mode,
+                        unilateral = state.unilateral,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = onSaveAttempt) { Text("Use") } },
+            dismissButton = { TextButton(onClick = onDismissAttempt) { Text("Cancel") } },
         )
     }
 
@@ -367,12 +433,24 @@ private fun PlanCard(
     lines: List<String>,
     editDescription: String,
     onEdit: () -> Unit,
+    selected: Boolean = false,
+    /** Set when the card can be chosen as the plan for an attempt. */
+    onSelect: (() -> Unit)? = null,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onSelect != null) {
+                    Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+                } else {
+                    Modifier
+                }
+            ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
         ),
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
     ) {
         Row(
             modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
@@ -406,12 +484,80 @@ private fun PlanCard(
     }
 }
 
+/**
+ * A plan changed for one attempt, shown under the plans it came from. The cog changes it again;
+ * the cross goes back to the plan as saved. Nothing here reaches the library.
+ */
+@Composable
+private fun AttemptCard(summary: String, tag: String?, onEdit: () -> Unit, onClear: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("This attempt", style = MaterialTheme.typography.labelMedium)
+                    tag?.let { VariationChip(it) }
+                }
+                Text(text = summary, style = MaterialTheme.typography.bodyLarge)
+            }
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.semantics { contentDescription = "Change this attempt" },
+            ) {
+                Icon(painterResource(R.drawable.ic_edit_plan), contentDescription = null)
+            }
+            IconButton(
+                onClick = onClear,
+                modifier = Modifier.semantics { contentDescription = "Use the saved plan" },
+            ) {
+                Text("✕", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+}
+
+/** The most recent earlier result, directly under the plan: the load to pick up today. */
+@Composable
+private fun LastLoggedBlock(last: LastLogged) {
+    Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Last logged · ${lastLoggedDate(last.date)}" +
+                    if (last.otherPlan && last.variationTag == null) " · default plan" else "",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (last.otherPlan) last.variationTag?.let { VariationChip(it) }
+        }
+        Text(text = last.summary, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** "24 Sep", with the year once it is not this one. */
+private fun lastLoggedDate(date: LocalDate): String {
+    val pattern = if (date.year == LocalDate.now().year) "d MMM" else "d MMM yyyy"
+    return DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(date)
+}
+
 @Composable
 private fun ExerciseMenu(
-    exerciseId: String,
-    onEditExercise: (String) -> Unit,
+    onEditExercise: (() -> Unit)?,
     onAddToPlan: (() -> Unit)?,
+    onAdjustAttempt: (() -> Unit)?,
 ) {
+    if (onEditExercise == null && onAddToPlan == null && onAdjustAttempt == null) return
     var expanded by remember { mutableStateOf(false) }
     IconButton(
         onClick = { expanded = true },
@@ -429,13 +575,24 @@ private fun ExerciseMenu(
                 },
             )
         }
-        DropdownMenuItem(
-            text = { Text("Edit this exercise") },
-            onClick = {
-                expanded = false
-                onEditExercise(exerciseId)
-            },
-        )
+        onAdjustAttempt?.let { adjust ->
+            DropdownMenuItem(
+                text = { Text("Adjust this attempt") },
+                onClick = {
+                    expanded = false
+                    adjust()
+                },
+            )
+        }
+        onEditExercise?.let { edit ->
+            DropdownMenuItem(
+                text = { Text("Edit this exercise") },
+                onClick = {
+                    expanded = false
+                    edit()
+                },
+            )
+        }
     }
 }
 
@@ -485,7 +642,7 @@ private fun facts(state: ExerciseDetailUiState): String {
         ExerciseMode.ACTIVITY -> "activity"
     }
     if (state.unilateral) parts += "unilateral"
-//    state.measurementUnit?.let { parts += "logged in $it" }
-    state.category?.let { parts += it.label.lowercase() }
+    state.measurementUnit?.let { parts += it }
+    // No category: the header already says it.
     return parts.joinToString(" · ")
 }

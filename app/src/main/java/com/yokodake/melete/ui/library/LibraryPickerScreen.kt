@@ -47,7 +47,8 @@ fun LibraryPickerRoute(
     onNewWorkout: () -> Unit,
     onNewModule: () -> Unit,
     onOpenExercise: (String) -> Unit,
-    onEditCircuit: (String) -> Unit,
+    onOpenCircuit: (String) -> Unit,
+    onOpenModule: (String) -> Unit,
     onEditModule: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: LibraryPickerViewModel = viewModel(factory = LibraryPickerViewModel.Factory),
@@ -56,6 +57,7 @@ fun LibraryPickerRoute(
     LibraryPickerScreen(
         state = state,
         onShowTab = viewModel::showTab,
+        onQueryChange = viewModel::setQuery,
         onPickExercise = { id, variationId -> viewModel.schedule(id, variationId, onScheduled) },
         onPickCircuit = { viewModel.scheduleCircuit(it, onScheduled) },
         onPickModule = { viewModel.scheduleModule(it, onScheduled) },
@@ -64,7 +66,8 @@ fun LibraryPickerRoute(
             LibraryTab.MODULES -> onNewModule
         },
         onOpenExercise = onOpenExercise,
-        onEditCircuit = onEditCircuit,
+        onOpenCircuit = onOpenCircuit,
+        onOpenModule = onOpenModule,
         onEditModule = onEditModule,
         onBack = onBack,
     )
@@ -75,12 +78,14 @@ fun LibraryPickerRoute(
 fun LibraryPickerScreen(
     state: LibraryPickerUiState,
     onShowTab: (LibraryTab) -> Unit,
+    onQueryChange: (String) -> Unit,
     onPickExercise: (exerciseId: String, variationId: String?) -> Unit,
     onPickCircuit: (String) -> Unit,
     onPickModule: (String) -> Unit,
     onNew: () -> Unit,
     onOpenExercise: (String) -> Unit,
-    onEditCircuit: (String) -> Unit,
+    onOpenCircuit: (String) -> Unit,
+    onOpenModule: (String) -> Unit,
     onEditModule: (String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -135,6 +140,7 @@ fun LibraryPickerScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            item { LibrarySearchField(state.query, onQueryChange) }
             val empty = when (state.tab) {
                 LibraryTab.WORKOUTS -> state.workouts.isEmpty()
                 LibraryTab.MODULES -> state.modules.isEmpty()
@@ -142,10 +148,11 @@ fun LibraryPickerScreen(
             if (empty) {
                 item {
                     Text(
-                        text = when (state.tab) {
-                            LibraryTab.WORKOUTS ->
+                        text = when {
+                            state.noMatches -> "Nothing matches \"${state.query.trim()}\"."
+                            state.tab == LibraryTab.WORKOUTS ->
                                 "No workouts yet. Create an exercise or a circuit to get started."
-                            LibraryTab.MODULES ->
+                            else ->
                                 "No modules yet. Create a module to plan exercises and circuits as a group."
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -171,7 +178,7 @@ fun LibraryPickerScreen(
                         is Workout.Circuit -> RoutineRow(
                             routine = workout.routine,
                             onClick = { onPickCircuit(workout.routine.id) },
-                            secondaryAction = { onEditCircuit(workout.routine.id) } to "Edit",
+                            secondaryAction = { onOpenCircuit(workout.routine.id) } to "Open",
                         )
                     }
                 }
@@ -186,7 +193,7 @@ fun LibraryPickerScreen(
                                 confirmingModule = module
                             }
                         },
-                        secondaryAction = { onEditModule(module.id) } to "Edit",
+                        secondaryAction = { onOpenModule(module.id) } to "Open",
                     )
                 }
             }

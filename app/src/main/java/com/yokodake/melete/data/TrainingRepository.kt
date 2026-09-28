@@ -1071,6 +1071,26 @@ class TrainingRepository(private val database: MeleteDatabase) {
             }
         }
 
+    /**
+     * Takes back a copy that was made only for an attempt from the library and then never used:
+     * still planned, nothing logged, not skipped, not part of a circuit or module. Anything else
+     * is left exactly as it is. Returns whether it was removed.
+     */
+    suspend fun discardUnloggedOccurrence(occurrenceId: String): Boolean =
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction false
+            if (occurrence.state != OccurrenceState.PLANNED ||
+                occurrence.circuitInstanceId != null ||
+                occurrence.moduleInstanceId != null ||
+                logging.countSetsForOccurrence(occurrenceId) > 0
+            ) {
+                false
+            } else {
+                dao.deleteOccurrence(occurrenceId)
+                true
+            }
+        }
+
     // ----------------------------------------------------------- logging
 
     /**

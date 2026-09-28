@@ -34,6 +34,32 @@ object PrescriptionSummary {
         unilateral: Boolean,
     ): String = format(prescription, mode, unilateral, unreadable = false)
 
+    /**
+     * One station of a circuit: what a single set of it asks for, without the set count and rest
+     * the circuit replaces with its rounds and its own rests. "8 reps · 20 kg", "30 s", "6 × 7/3s".
+     */
+    fun formatStation(
+        prescription: PrescriptionPayload?,
+        mode: ExerciseMode,
+        unilateral: Boolean,
+    ): String {
+        if (prescription == null) return "No plan set"
+        val repeater = prescription.repeater
+        val target = when {
+            repeater != null -> "${repeater.repsPerSet} × ${repeater.workSecondsPerRep}" +
+                (if (repeater.restSecondsBetweenReps > 0) "/${repeater.restSecondsBetweenReps}" else "") + "s"
+            prescription.targetReps != null ->
+                "${prescription.targetReps} ${if (prescription.targetReps == 1) "rep" else "reps"}"
+            prescription.targetDurationSeconds != null -> duration(prescription.targetDurationSeconds)
+            else -> null
+        }
+        val parts = mutableListOf<String>()
+        target?.let { parts += if (unilateral && mode != ExerciseMode.ACTIVITY) "$it per side" else it }
+        prescription.measurement?.let { parts += measurement(it) }
+        prescription.effort?.let { parts += it.label.lowercase() }
+        return parts.joinToString(" · ").ifEmpty { "1 set" }
+    }
+
     private fun format(
         prescription: PrescriptionPayload?,
         mode: ExerciseMode,

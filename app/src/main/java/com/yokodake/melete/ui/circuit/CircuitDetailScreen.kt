@@ -35,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.core.WeekMath
-import com.yokodake.melete.ui.components.CategoryDot
+import com.yokodake.melete.ui.components.ContentsLine
+import com.yokodake.melete.ui.components.DetailSection
+import com.yokodake.melete.ui.components.circuitShapeLine
 import com.yokodake.melete.ui.theme.doneColors
 import com.yokodake.melete.ui.week.PrescriptionSummary
 
@@ -118,7 +120,7 @@ fun CircuitDetailScreen(
                         OutlinedButton(
                             onClick = onStartTimer,
                             modifier = Modifier.weight(1f),
-                        ) { Text("Start the circuit") }
+                        ) { Text("Start timer") }
                         Button(
                             onClick = { onLog(circuit.id) },
                             modifier = Modifier.weight(1f),
@@ -148,86 +150,45 @@ fun CircuitDetailScreen(
                 return@Column
             }
 
-            Section("The circuit")
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "${circuit.rounds} ${if (circuit.rounds == 1) "round" else "rounds"} of " +
-                            "${state.stations.size} ${if (state.stations.size == 1) "exercise" else "exercises"}",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = restLine(state),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
+            // The shape and the whole circuit's estimate. Stations carry no time of their own
+            // here: their share of the clock includes the rests, and read beside "1 × 30 s" it
+            // only looked like a contradiction.
+            DetailSection(
+                circuitShapeLine(
+                    rounds = circuit.rounds,
+                    transitionSeconds = circuit.transitionSeconds,
+                    roundRestSeconds = circuit.roundRestSeconds,
+                    estimatedSeconds = state.estimatedSeconds,
+                ) + if (state.recorded in 1 until state.stations.size) {
+                    " · ${state.recorded} of ${state.stations.size} logged"
+                } else {
+                    ""
                 }
-            }
-
-            state.estimatedSeconds?.let {
-                Text(
-                    text = "≈ ${PrescriptionSummary.duration(it)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-
-            Section("In order")
+            )
             state.stations.forEachIndexed { index, station ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = "${index + 1}.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    CategoryDot(station.occurrence.category)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = station.occurrence.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Text(
-                            text = PrescriptionSummary.format(station.occurrence),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (station.occurrence.hasRecord) {
-                        Text(
-                            text = "✓",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = doneColors().first,
-                        )
+                ContentsLine(
+                    position = index + 1,
+                    category = station.occurrence.category,
+                    name = station.occurrence.name,
+                    summary = PrescriptionSummary.formatStation(
+                        station.occurrence.prescription,
+                        station.occurrence.mode,
+                        station.occurrence.unilateral,
+                    ),
+                    tag = station.occurrence.variationTag,
+                    trailing = if (station.occurrence.hasRecord) {
+                        {
+                            Text(
+                                text = "✓",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = doneColors().first,
+                            )
+                        }
                     } else {
-                        Text(
-                            text = PrescriptionSummary.duration(station.estimatedSeconds),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                HorizontalDivider()
-            }
-
-            if (state.recorded > 0) {
-                Section("Recorded")
-                Text(
-                    text = if (state.completed) {
-                        "${state.stations.size} ${if (state.stations.size == 1) "exercise is" else "exercises are"} logged. Each counts once, " +
-                            "however many rounds it took."
-                    } else {
-                        "${state.recorded} of ${state.stations.size} exercises are logged."
+                        null
                     },
-                    style = MaterialTheme.typography.bodyMedium,
                 )
+                HorizontalDivider()
             }
         }
     }
@@ -245,26 +206,3 @@ fun CircuitDetailScreen(
     }
 }
 
-/** What falls between the exercises and between the rounds, when anything does. */
-private fun restLine(state: CircuitDetailUiState): String {
-    val circuit = state.circuit ?: return ""
-    val parts = buildList {
-        if (circuit.transitionSeconds > 0) {
-            add("${PrescriptionSummary.duration(circuit.transitionSeconds)} rest")
-        }
-        if (circuit.roundRestSeconds > 0) {
-            add("${PrescriptionSummary.duration(circuit.roundRestSeconds)} set rest")
-        }
-    }
-    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "no rest for the wicked"
-}
-
-@Composable
-private fun Section(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(top = 4.dp),
-    )
-}

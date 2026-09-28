@@ -54,6 +54,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.yokodake.melete.ui.detail.LastLoggedPicker
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -163,7 +165,19 @@ fun LoggerScreen(
                 },
             )
         },
-
+        // The one action this screen exists for stays in reach however long the table grows,
+        // and rides above the keyboard with the reason it cannot save yet.
+        bottomBar = {
+            if (occurrence != null) {
+                DoneRow(
+                    table = state.table,
+                    // An activity has nothing to check: that it happened is the whole claim.
+                    measured = !state.isActivity && occurrence.measurementUnit != null,
+                    blocked = !state.isActivity,
+                    onDone = viewModel::markDone,
+                )
+            }
+        },
     ) { padding ->
         if (occurrence == null) return@Scaffold
         LazyColumn(
@@ -194,10 +208,7 @@ fun LoggerScreen(
                 }
             }
             if (state.previousResults.isNotEmpty()) {
-                item { SectionLabel("Previous results") }
-                items(items = state.previousResults, key = { it.trainingDate.toEpochDay() }) {
-                    PreviousResultCard(it, occurrence)
-                }
+                item { PreviousResults(state.previousResults, occurrence) }
             }
             if (state.isActivity && occurrence.isOneOff) {
                 item {
@@ -282,15 +293,6 @@ fun LoggerScreen(
             item {
                 CommentBox(comment = state.comment, onChange = viewModel::updateComment)
             }
-            item {
-                DoneRow(
-                    table = state.table,
-                    // An activity has nothing to check: that it happened is the whole claim.
-                    measured = !state.isActivity && occurrence.measurementUnit != null,
-                    blocked = !state.isActivity,
-                    onDone = viewModel::markDone,
-                )
-            }
             // Taking an exercise back out of the week lives on the week screen, behind a long
             // press: it has no business sitting one mis-tap away from the sets being logged.
         }
@@ -371,26 +373,54 @@ private fun PlannedCard(occurrence: PlannedOccurrence, onEdit: () -> Unit) {
     }
 }
 
+/**
+ * Earlier results, one line each, most recent first. Only the latest shows until asked, so the
+ * inputs for today stay near the top of the page.
+ */
 @Composable
-private fun PreviousResultCard(result: PreviousResult, occurrence: PlannedOccurrence) {
+private fun PreviousResults(results: List<PreviousResult>, occurrence: PlannedOccurrence) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val shown = if (expanded) results else results.take(1)
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = WeekMath.dayLabel(result.trainingDate),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = result.sets.joinToString("  ") {
-                    formatSet(it.payload, it.side, occurrence.measurementUnit)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
+        Column(modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Previous",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (results.size > 1) {
+                    TextButton(onClick = { expanded = !expanded }) {
+                        Text(if (expanded) "Less" else "${results.size - 1} more")
+                    }
+                }
+            }
+            shown.forEach { result ->
+                Row(
+                    modifier = Modifier.padding(bottom = 4.dp, end = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = WeekMath.dayLabel(result.trainingDate),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(80.dp),
+                    )
+                    Text(
+                        text = LastLoggedPicker.summarise(occurrence, result.sets)
+                            ?: result.sets.joinToString("  ") {
+                                formatSet(it.payload, it.side, occurrence.measurementUnit)
+                            },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
         }
     }
 }
@@ -423,20 +453,27 @@ private fun DoneRow(
     blocked: Boolean,
     onDone: () -> Unit,
 ) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Button(
-            onClick = onDone,
-            modifier = Modifier.fillMaxWidth(),
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 3.dp) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Text(if (table.committed) "Save changes" else "Mark done")
-        }
-        table.blocker(measured).takeIf { blocked }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            table.blocker(measured).takeIf { blocked }?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            Button(
+                onClick = onDone,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (table.committed) "Save changes" else "Mark done")
+            }
         }
     }
 }

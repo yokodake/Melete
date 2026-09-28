@@ -61,6 +61,19 @@ class WeekViewModel(
             ),
         )
 
+    private val _moduleExpansion = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+
+    /**
+     * Modules the user has opened or closed by hand, by scheduled-module id. Display state only:
+     * it lives as long as the week screen does, so a trip into a workout and back, or to another
+     * tab, finds the list folded as it was left.
+     */
+    val moduleExpansion: StateFlow<Map<String, Boolean>> = _moduleExpansion.asStateFlow()
+
+    fun setModuleExpanded(moduleInstanceId: String, expanded: Boolean) {
+        _moduleExpansion.value = _moduleExpansion.value + (moduleInstanceId to expanded)
+    }
+
     fun showPreviousWeek() {
         weekStart.value = weekStart.value.minusWeeks(1)
     }

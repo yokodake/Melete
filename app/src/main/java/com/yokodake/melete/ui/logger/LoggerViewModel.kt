@@ -26,7 +26,10 @@ import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.ui.LoggerDestination
 import com.yokodake.melete.ui.components.PrescriptionFormState
 import com.yokodake.melete.ui.components.trimNumber
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -197,7 +200,23 @@ class LoggerViewModel(
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
 
-    private val occurrenceId: String = savedStateHandle.toRoute<LoggerDestination>().occurrenceId
+    private val destination = savedStateHandle.toRoute<LoggerDestination>()
+    private val occurrenceId: String = destination.occurrenceId
+
+    /**
+     * A copy made from the library only to be logged goes again if the logger closes without a
+     * save. The repository refuses anything that was logged, skipped or grouped in the meantime,
+     * so this can only ever remove the untouched plan it created. Its own scope, because the view
+     * model's is already cancelled by the time it is cleared.
+     */
+    override fun onCleared() {
+        if (destination.discardIfUnlogged) {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                repository.discardUnloggedOccurrence(occurrenceId)
+            }
+        }
+        super.onCleared()
+    }
 
     private val table = MutableStateFlow(SetTable())
 

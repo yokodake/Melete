@@ -23,9 +23,12 @@ import java.time.LocalDate
 data class LibraryPickerUiState(
     val targetLabel: String,
     val tab: LibraryTab = LibraryTab.WORKOUTS,
+    val query: String = "",
     /** Exercises and circuits together, alphabetical — the same list as the library tab. */
     val workouts: List<Workout> = emptyList(),
     val modules: List<TrainingModule> = emptyList(),
+    /** A search is on and matched nothing, as opposed to an empty library. */
+    val noMatches: Boolean = false,
 )
 
 /**
@@ -51,11 +54,24 @@ class LibraryPickerViewModel(
         // Saved state rather than a field, so the tab you chose is still the one showing after a
         // trip to an editor and back, or after the process is recreated.
         savedStateHandle.getStateFlow(TAB_KEY, LibraryTab.WORKOUTS),
+        savedStateHandle.getStateFlow(QUERY_KEY, ""),
         repository.observeLibrary(),
         repository.observeRoutines(),
         repository.observeModules(),
-    ) { tab, exercises, circuits, modules ->
-        LibraryPickerUiState(targetLabel, tab, workoutsOf(exercises, circuits), modules)
+    ) { tab, query, exercises, circuits, modules ->
+        val workouts = workoutsOf(exercises, circuits, query)
+        val matchingModules = modulesOf(modules, query)
+        LibraryPickerUiState(
+            targetLabel = targetLabel,
+            tab = tab,
+            query = query,
+            workouts = workouts,
+            modules = matchingModules,
+            noMatches = LibrarySearch.conditions(query).isNotEmpty() && when (tab) {
+                LibraryTab.WORKOUTS -> workouts.isEmpty() && (exercises + circuits).isNotEmpty()
+                LibraryTab.MODULES -> matchingModules.isEmpty() && modules.isNotEmpty()
+            },
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -64,6 +80,10 @@ class LibraryPickerViewModel(
 
     fun showTab(tab: LibraryTab) {
         savedStateHandle[TAB_KEY] = tab
+    }
+
+    fun setQuery(value: String) {
+        savedStateHandle[QUERY_KEY] = value
     }
 
     /** Copies an exercise into the slot, cut from the default plan or from the chosen variation. */
@@ -92,6 +112,7 @@ class LibraryPickerViewModel(
 
     companion object {
         private const val TAB_KEY = "pickerTab"
+        private const val QUERY_KEY = "pickerQuery"
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

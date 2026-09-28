@@ -7,11 +7,15 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import com.yokodake.melete.ui.components.CompactTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yokodake.melete.data.LibraryExercise
 import com.yokodake.melete.data.Routine
+import com.yokodake.melete.data.TrainingModule
+import com.yokodake.melete.data.model.ExerciseCategory
 
 /**
  * Something that can be trained on its own: an exercise, or a saved circuit.
@@ -36,25 +40,76 @@ sealed interface Workout {
 }
 
 /**
- * Exercises and circuits in one alphabetical list, narrowed by [query].
+ * The library's search: commas separate conditions, and an item must meet every one.
  *
- * An exercise matches on its name or its category; a circuit on its name or any exercise in it,
- * so searching "hang" finds the hangboard circuit as well as the hang itself.
+ * A condition is plain text — spaces inside it are part of the text, not another operator. It
+ * matches a workout's own text (its name; for a circuit, the exercises in it), its own category by
+ * any part of its name or the start of its abbreviation (`finger`, `FN`, `S&C`), or what kind of
+ * workout it is (`circuit`, `exercise`, as whole words). `!circuit` leaves circuits out; wider
+ * negation is not built. A circuit's category is the circuit's, never one borrowed from its
+ * stations.
+ */
+object LibrarySearch {
+
+    /** The conditions in [query]: trimmed, lower-cased, empty fragments dropped. */
+    fun conditions(query: String): List<String> =
+        query.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+
+    fun matches(workout: Workout, conditions: List<String>): Boolean = conditions.all { condition ->
+        // The one negation there is so far: everything but circuits.
+        if (condition in NOT_CIRCUIT_WORDS) return@all workout !is Workout.Circuit
+        when (workout) {
+            is Workout.Exercise -> workout.exercise.name.hit(condition) ||
+                categoryHit(workout.exercise.category, condition) ||
+                condition in EXERCISE_WORDS
+
+            is Workout.Circuit -> workout.routine.name.hit(condition) ||
+                workout.routine.entries.any { it.name.hit(condition) } ||
+                categoryHit(workout.routine.category, condition) ||
+                condition in CIRCUIT_WORDS
+        }
+    }
+
+    /** Modules have no category and no kind to choose between: text only, every condition. */
+    fun matches(module: TrainingModule, conditions: List<String>): Boolean = conditions.all { condition ->
+        // A module is not a circuit, so leaving circuits out leaves it in.
+        condition in NOT_CIRCUIT_WORDS ||
+            module.name.hit(condition) || module.entries.any { it.name.hit(condition) }
+    }
+
+    /** A category by any part of its name, or by the start of its abbreviation: `fn` is FNGR. */
+    private fun categoryHit(category: ExerciseCategory?, condition: String): Boolean =
+        category != null &&
+            (category.label.hit(condition) || category.shortLabel.startsWith(condition, ignoreCase = true))
+
+    private fun String.hit(condition: String) = contains(condition, ignoreCase = true)
+
+    private val EXERCISE_WORDS = setOf("exercise", "exercises")
+    private val CIRCUIT_WORDS = setOf("circuit", "circuits")
+    private val NOT_CIRCUIT_WORDS = setOf("!circuit", "!circuits")
+}
+
+/**
+ * Exercises and circuits in one alphabetical list, narrowed by [query] as [LibrarySearch] reads it.
+ *
+ * Searching "hang" finds the hangboard circuit as well as the hang itself; "circuit, FNGR" finds
+ * only the circuits filed under finger training.
  */
 fun workoutsOf(
     exercises: List<LibraryExercise>,
     circuits: List<Routine>,
     query: String = "",
 ): List<Workout> {
-    val q = query.trim()
-    fun String.hit() = contains(q, ignoreCase = true)
-    val matchingExercises = exercises
-        .filter { q.isEmpty() || it.name.hit() || it.category?.label?.hit() == true }
-        .map(Workout::Exercise)
-    val matchingCircuits = circuits
-        .filter { q.isEmpty() || it.name.hit() || it.entries.any { entry -> entry.name.hit() } }
-        .map(Workout::Circuit)
-    return (matchingExercises + matchingCircuits).sortedBy { it.name.lowercase() }
+    val conditions = LibrarySearch.conditions(query)
+    return (exercises.map(Workout::Exercise) + circuits.map(Workout::Circuit))
+        .filter { LibrarySearch.matches(it, conditions) }
+        .sortedBy { it.name.lowercase() }
+}
+
+/** The modules [query] finds, in the order given. */
+fun modulesOf(modules: List<TrainingModule>, query: String = ""): List<TrainingModule> {
+    val conditions = LibrarySearch.conditions(query)
+    return modules.filter { LibrarySearch.matches(it, conditions) }
 }
 
 /** The two halves of the library. */
@@ -102,6 +157,23 @@ fun LibraryTabs(selected: LibraryTab, onSelect: (LibraryTab) -> Unit) =
         // Under a top bar, so it takes the page's gutters itself.
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
     )
+
+/** The one search box, for the library and the week's picker alike. */
+@Composable
+fun LibrarySearchField(query: String, onQueryChange: (String) -> Unit) {
+    CompactTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        label = "Search",
+        minHeight = 48,
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                TextButton(onClick = { onQueryChange("") }) { Text("Clear") }
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
 
 /** Exercise | Circuit, at the top of a new workout. */
 @Composable

@@ -8,6 +8,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import com.yokodake.melete.ui.dashboard.DashboardRoute
+import com.yokodake.melete.ui.menu.MenuRoute
+import com.yokodake.melete.ui.module.ModuleDetailRoute
+import com.yokodake.melete.ui.routine.RoutineDetailRoute
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -92,7 +96,22 @@ data class ExerciseDetailDestination(
 )
 
 @Serializable
-data class LoggerDestination(val occurrenceId: String)
+data class LoggerDestination(
+    val occurrenceId: String,
+    /**
+     * The occurrence was created only to be logged — from the library, not placed in a week by
+     * hand — so leaving without saving takes it away again rather than leaving a stray plan.
+     */
+    val discardIfUnlogged: Boolean = false,
+)
+
+/** A saved circuit, read from the library. */
+@Serializable
+data class RoutineDetailDestination(val routineId: String)
+
+/** A saved module, read from the library. */
+@Serializable
+data class ModuleDetailDestination(val moduleId: String)
 
 @Serializable
 data class RoutineEditorDestination(
@@ -129,10 +148,18 @@ data class CircuitDetailDestination(val circuitInstanceId: String)
 @Serializable
 data class CircuitReviewDestination(val circuitInstanceId: String)
 
+/** The Menu tab: the places that are not part of a training day. */
+@Serializable
+data object MenuDestination
+
+/** The Dashboard tab. A placeholder until phase 6A fills it. */
+@Serializable
+data object DashboardDestination
+
 /**
- * The tabs of the app. Focused flows opened from a tab — the picker, the exercise editor, the
- * logger — deliberately hide the bar: they are one task with a back button, not a place to switch
- * away from mid-set.
+ * The tabs of the app, in the agreed order Menu · Calendar · Timer · Dashboard. Focused flows
+ * opened from a tab — the picker, the exercise editor, the logger — deliberately hide the bar: they
+ * are one task with a back button, not a place to switch away from mid-set.
  */
 private enum class Tab(
     val label: String,
@@ -140,14 +167,15 @@ private enum class Tab(
     val route: Any,
     val matches: (NavDestination) -> Boolean,
 ) {
-    WEEK("Week", R.drawable.ic_nav_week, WeekDestination, { it.hasRoute<WeekDestination>() }),
-    LIBRARY(
-        "Library",
-        R.drawable.ic_nav_library,
-        LibraryDestination,
-        { it.hasRoute<LibraryDestination>() },
-    ),
+    MENU("Menu", R.drawable.ic_nav_menu, MenuDestination, { it.hasRoute<MenuDestination>() }),
+    CALENDAR("Calendar", R.drawable.ic_nav_week, WeekDestination, { it.hasRoute<WeekDestination>() }),
     TIMER("Timer", R.drawable.ic_nav_timer, TimerDestination, { it.hasRoute<TimerDestination>() }),
+    DASHBOARD(
+        "Dashboard",
+        R.drawable.ic_nav_dashboard,
+        DashboardDestination,
+        { it.hasRoute<DashboardDestination>() },
+    ),
 }
 
 @Composable
@@ -160,8 +188,22 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
             onSelect = { tab -> navController.switchTab(tab.route) },
         )
     }
+    MeleteNavHost(navController, bottomBar)
+}
 
+@Composable
+private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composable () -> Unit) {
     NavHost(navController = navController, startDestination = WeekDestination) {
+        composable<MenuDestination> {
+            MenuRoute(
+                onOpenLibrary = { navController.navigate(LibraryDestination) },
+                onOpenImportExport = { navController.navigate(BackupDestination) },
+                bottomBar = bottomBar,
+            )
+        }
+        composable<DashboardDestination> {
+            DashboardRoute(bottomBar = bottomBar)
+        }
         composable<WeekDestination> {
             WeekRoute(
                 onOpenOccurrence = {
@@ -185,14 +227,27 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onOpenExercise = {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
                 },
+                onOpenCircuit = { navController.navigate(RoutineDetailDestination(it)) },
+                onOpenModule = { navController.navigate(ModuleDetailDestination(it)) },
                 onNewWorkout = {
                     navController.navigate(ExerciseEditorDestination(choosingKind = true))
                 },
                 onEditCircuit = { navController.navigate(RoutineEditorDestination(it)) },
                 onNewModule = { navController.navigate(ModuleEditorDestination()) },
                 onEditModule = { navController.navigate(ModuleEditorDestination(it)) },
-                onOpenBackup = { navController.navigate(BackupDestination) },
-                bottomBar = bottomBar,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<RoutineDetailDestination> {
+            RoutineDetailRoute(
+                onEdit = { navController.navigate(RoutineEditorDestination(it)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ModuleDetailDestination> {
+            ModuleDetailRoute(
+                onEdit = { navController.navigate(ModuleEditorDestination(it)) },
+                onBack = { navController.popBackStack() },
             )
         }
         composable<TimerDestination> {
@@ -212,7 +267,8 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
                 onOpenExercise = {
                     navController.navigate(ExerciseDetailDestination(exerciseId = it))
                 },
-                onEditCircuit = { navController.navigate(RoutineEditorDestination(it)) },
+                onOpenCircuit = { navController.navigate(RoutineDetailDestination(it)) },
+                onOpenModule = { navController.navigate(ModuleDetailDestination(it)) },
                 onEditModule = { navController.navigate(ModuleEditorDestination(it)) },
                 onBack = { navController.popBackStack() },
             )
@@ -242,7 +298,9 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         }
         composable<ExerciseDetailDestination> {
             ExerciseDetailRoute(
-                onLog = { navController.navigate(LoggerDestination(it)) },
+                onLog = { id, discardIfUnlogged ->
+                    navController.navigate(LoggerDestination(id, discardIfUnlogged))
+                },
                 // Starting a countdown moves to the timer tab, which is where it lives for as
                 // long as it runs; the exercise stays behind it on the back stack.
                 onOpenTimer = { navController.switchTab(TimerDestination) },
