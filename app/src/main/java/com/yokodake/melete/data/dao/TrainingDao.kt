@@ -159,6 +159,22 @@ interface TrainingDao {
     @Query("DELETE FROM exercise_occurrences WHERE id = :id")
     suspend fun deleteOccurrence(id: String)
 
+    /**
+     * Completed exercise occurrences trained between two dates, inclusive — circuit stations
+     * included, since each is a real exercise. Containers are other tables and never appear.
+     */
+    @Query(
+        """
+        SELECT * FROM exercise_occurrences
+        WHERE state = 'COMPLETED' AND trainingDateEpochDay BETWEEN :from AND :to
+        """
+    )
+    fun observeCompletedBetween(from: Long, to: Long): Flow<List<ExerciseOccurrenceEntity>>
+
+    /** The first training date anything was completed on, for an "all time" range. */
+    @Query("SELECT MIN(trainingDateEpochDay) FROM exercise_occurrences WHERE state = 'COMPLETED'")
+    fun observeFirstCompletedDate(): Flow<Long?>
+
     /** Every occurrence of one exercise, newest planning first. Includes retired definitions. */
     @Query(
         """

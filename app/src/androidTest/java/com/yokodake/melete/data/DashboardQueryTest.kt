@@ -1,0 +1,63 @@
+package com.yokodake.melete.data
+
+import androidx.room.Room
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.model.ExerciseMode
+import com.yokodake.melete.data.model.PrescriptionPayload
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.time.LocalDate
+
+/** What the dashboard reads: completed exercises in a date range, and nothing else. */
+@RunWith(AndroidJUnit4::class)
+class DashboardQueryTest {
+
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    private lateinit var database: MeleteDatabase
+    private lateinit var repository: TrainingRepository
+
+    private val monday = LocalDate.of(2026, 9, 21)
+
+    @Before
+    fun setUp() {
+        database = Room.inMemoryDatabaseBuilder(context, MeleteDatabase::class.java).build()
+        repository = TrainingRepository(database)
+    }
+
+    @After
+    fun tearDown() = database.close()
+
+    @Test
+    fun onlyCompletedExercisesInRangeAreRead() = runBlocking {
+        val exerciseId = repository.createExercise(
+            ExerciseDraft(
+                name = "Squat", mode = ExerciseMode.REPETITIONS, unilateral = false,
+                measurementUnit = null, measurementMeaning = null, notes = null, description = null,
+                category = null, defaultPrescription = PrescriptionPayload(sets = 3, targetReps = 5),
+            )
+        )
+        suspend fun placed(date: LocalDate) = repository.scheduleExercise(exerciseId, monday, date)
+        suspend fun complete(id: String, date: LocalDate, seconds: Int?) = repository.saveLogs(
+            date, listOf(OccurrenceLogWrite(id, completed = true, durationSeconds = seconds, durationManual = true)),
+        )
+
+        val done = placed(monday).also { complete(it, monday, 1800) }
+        placed(monday.plusDays(1)) // planned only
+        placed(monday.plusDays(2)).also { repository.setOccurrenceState(it, OccurrenceState.SKIPPED) }
+        placed(monday.plusDays(3)).also { complete(it, monday.plusDays(3), null) }
+        placed(monday.plusDays(10)).also { complete(it, monday.plusDays(10), 600) } // out of range
+
+        val read = repository.observeCompleted(monday, monday.plusDays(6)).first()
+        assertEquals(2, read.size)
+        assertEquals(setOf(1800, null), read.map { it.durationSeconds }.toSet())
+        assertEquals(monday, repository.observeFirstCompletedDate().first())
+        assertEquals(done, repository.observeOccurrence(done).first()!!.occurrence.id)
+    }
+}

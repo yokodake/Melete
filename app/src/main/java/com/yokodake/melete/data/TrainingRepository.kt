@@ -413,6 +413,18 @@ data class PerformedSet(
     val recordedAtEpochMs: Long,
 )
 
+/** One completed exercise occurrence, as the dashboard counts it. */
+data class CompletedExercise(
+    val exerciseId: String,
+    val name: String,
+    val category: ExerciseCategory?,
+    val date: LocalDate,
+    /** What was saved; null when no duration was recorded, never a stand-in zero. */
+    val durationSeconds: Int?,
+    /** Typed (true) or worked out from the plan (false). */
+    val durationManual: Boolean,
+)
+
 /** Sets performed for one exercise on one earlier training date. */
 data class PreviousResult(
     val trainingDate: LocalDate,
@@ -457,6 +469,30 @@ class TrainingRepository(private val database: MeleteDatabase) {
             )
         }
     }
+
+    /**
+     * Completed exercises trained between two dates, inclusive: what the dashboard counts. One
+     * occurrence is one count, circuit stations included; containers, benchmarks and the diary are
+     * other tables and never reach it. The duration is what was saved — absent stays absent.
+     */
+    fun observeCompleted(from: LocalDate, to: LocalDate): Flow<List<CompletedExercise>> =
+        dao.observeCompletedBetween(from.toEpochDay(), to.toEpochDay()).map { rows ->
+            rows.mapNotNull { row ->
+                val date = row.trainingDateEpochDay ?: return@mapNotNull null
+                CompletedExercise(
+                    exerciseId = row.exerciseId,
+                    name = row.exerciseNameSnapshot,
+                    category = row.categorySnapshot,
+                    date = LocalDate.ofEpochDay(date),
+                    durationSeconds = row.loggedDurationSeconds,
+                    durationManual = row.loggedDurationManual,
+                )
+            }
+        }
+
+    /** The first date anything was completed on, or null when nothing ever was. */
+    fun observeFirstCompletedDate(): Flow<LocalDate?> =
+        dao.observeFirstCompletedDate().map { it?.let(LocalDate::ofEpochDay) }
 
     /** Every placement of one exercise, including those whose definition has been retired. */
     fun observeOccurrencesOf(exerciseId: String): Flow<List<PlannedOccurrence>> =
