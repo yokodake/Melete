@@ -21,9 +21,9 @@ import java.io.File
  * step says what it did on the instrumentation output. Skipped unless asked for:
  *
  *     adb shell am instrument -w -e action restore -e copy melete-before-restore-….json \
- *         -e class com.yokodake.melete.DeviceActions com.yokodake.melete.test/androidx.test.runner.AndroidJUnitRunner
+ *         -e class com.yokodake.melete.DeviceActions com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner
  *     adb shell am instrument -w -e action import -e mode add|replace -e scope today|past [-e dry true] \
- *         -e class com.yokodake.melete.DeviceActions com.yokodake.melete.test/androidx.test.runner.AndroidJUnitRunner
+ *         -e class com.yokodake.melete.DeviceActions com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner
  *
  * `restore` reads a copy from the app's recovery copies; `import` reads the test library plan.
  * Both save a recovery copy first, exactly as the screen does. `dry` only prints the preview.
@@ -38,6 +38,9 @@ class DeviceActions {
         assumeTrue(action != null)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        check(context.packageName == "com.yokodake.melete.debug") {
+            "Device actions may only modify Melete Debug."
+        }
         val safety = File(context.filesDir, "backups")
         fun say(text: String) = instrumentation.sendStatus(0, Bundle().apply { putString("stream", "$text\n") })
 

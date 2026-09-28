@@ -1,7 +1,7 @@
 # Build status
 
-Last updated: 2026-09-26, after phase 4B, phase 5B part one (the diary with user-defined
-trackers, export and restore) and the week edit mode.
+Last updated: 2026-09-28, including separate debug/release application identities and debug-only
+device tooling. See [the side-by-side build guide](debug-release.md).
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -466,30 +466,35 @@ foreground service types and background audio.
 | --- | --- |
 | Build the debug APK | `./gradlew :app:assembleDebug` |
 | JVM unit tests | `./gradlew :app:testDebugUnitTest` |
-| Instrumented tests, keeping app data | `scripts/device-tests.sh` |
-| Instrumented tests via Gradle (WIPES app data, see below) | `./gradlew :app:connectedDebugAndroidTest` |
-| Install on a connected device | `./gradlew :app:installDebug` |
+| Instrumented tests against Melete Debug | `scripts/device-tests.sh` |
+| Instrumented tests via Gradle (debug data is disposable) | `./gradlew :app:connectedDebugAndroidTest` |
+| Install Melete Debug alongside release | `./gradlew :app:installDebug` |
 | Build a release APK | `./gradlew :app:assembleRelease` |
-| Install the release build (keeps data) | `./gradlew :app:installRelease` |
+| Update the everyday release (requires compatible schema/migrations) | `./gradlew :app:installRelease` |
 | Install a built APK by hand | `adb install -r app/build/outputs/apk/debug/app-debug.apk` |
-| Launch | `adb shell am start -n com.yokodake.melete/.MainActivity` |
+| Launch release | `adb shell am start -n com.yokodake.melete/.MainActivity` |
+| Launch debug | `adb shell am start -n com.yokodake.melete.debug/com.yokodake.melete.MainActivity` |
 | Make audio violations loud instead of silent | `adb shell cmd audio set-hardening throw` |
-| Copy the database off a debug build | `adb exec-out run-as com.yokodake.melete cat databases/melete.db > melete.db` (**and the `-wal` and `-shm` beside it** — see below) |
+| Copy the database off a debug build | `adb exec-out run-as com.yokodake.melete.debug cat databases/melete.db > melete.db` (**and the `-wal` and `-shm` beside it** — see below) |
+| Seed Melete Debug with the test library, two weeks and a few logs | `adb shell am instrument -w -e seed library -e class com.yokodake.melete.LibrarySeed com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner` (add `-e planning false` for exercises only) |
+| Try an import, or put back a recovery copy, in Melete Debug | `adb shell am instrument -w -e action import -e mode add\|replace -e scope today\|past [-e dry true] -e class com.yokodake.melete.DeviceActions com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner`; `-e action restore -e copy <file>` for a recovery copy |
+| Put the test plan in the phone's Downloads | `adb push app/src/androidTest/assets/test-library.json /sdcard/Download/test-library.json` |
 
 APKs: `app/build/outputs/apk/debug/app-debug.apk`,
 `app/build/outputs/apk/release/app-release.apk`.
 
-The release build is signed with the debug key, so it installs **over** a debug build as an update
-and the training record survives. It is not debuggable, so `adb run-as` — the only way to read the
-database off the phone without root — works against debug builds only. Put a debug build back on
-first if the data needs inspecting.
+Release retains `com.yokodake.melete` and its existing signing key. Debug now uses
+`com.yokodake.melete.debug`, the **Melete Debug** label and a grayscale icon. They install side by
+side with separate private data. Installing debug does not replace release or grant access to
+its database. Use in-app export for release backups; see [the build guide](debug-release.md)
+for the first-install transition, test isolation and release migration requirements.
 
 **A backup is three files, not one.** Room runs in WAL mode, so `melete.db` can be a day or more
 behind while the recent sessions sit in `melete.db-wal`. Pull all of them:
 
 ```
 for f in melete.db melete.db-wal melete.db-shm; do
-  adb exec-out run-as com.yokodake.melete cat "databases/$f" > "backups/$f"
+  adb exec-out run-as com.yokodake.melete.debug cat "databases/$f" > "backups/$f"
 done
 ```
 
@@ -497,9 +502,16 @@ Opening the set once with any SQLite client replays the WAL and leaves a self-co
 Check it before trusting it: `PRAGMA user_version`, `PRAGMA integrity_check`, and a row count.
 `backups/` is gitignored, because it is personal training data.
 
-**`./gradlew connectedDebugAndroidTest` uninstalls the app when it finishes**, and uninstalling
-deletes the whole training record on that device. Use `scripts/device-tests.sh` instead: it
-installs both APKs with `install -r`, which keeps app data, and drives `am instrument` directly.
+**In Git Bash, prefix adb commands that take a phone path with `MSYS_NO_PATHCONV=1`**, or
+`/sdcard/...` is rewritten into a Windows path and `adb push` fails with `secure_mkdirs() failed`.
+Gradle needs `JAVA_HOME` pointing at Android Studio's JBR (`/c/Program Files/Android/Android
+Studio/jbr`).
+
+**Debug test data is disposable.** Gradle-managed device tests may remove/reset the debug
+installation. `scripts/device-tests.sh` checks the debug IDs before installing both APKs with
+`install -r` and driving the debug runner directly. Tests and debug schema upgrades can still
+modify its data, but the everyday release is a separate app. Do not invoke a legacy pre-split
+`com.yokodake.melete.test` runner still installed on a phone.
 
 ## Checks actually run
 

@@ -25,7 +25,10 @@ exact and lowercase; **an unknown key is an error**, so a misspelt `"Monday"` or
 reported instead of silently ignored. Enum values (`mode`, `category`, `meaning`, `effort`) are
 case-insensitive, and spaces or dashes count as underscores: `"very hard"` = `"VERY_HARD"`.
 
-Names are matched ignoring case and repeated spaces, so `"pull-up"` finds `"Pull-up"`.
+Names are matched ignoring case and repeated spaces, so `"pull-up"` finds `"Pull-up"`. Within the
+file, each exercise, circuit and module name must be unique among its kind.
+
+Numbers are whole numbers, and none may be negative.
 
 ## Exercises
 
@@ -48,16 +51,18 @@ Names are matched ignoring case and repeated spaces, so `"pull-up"` finds `"Pull
 
 | Field | Values |
 | --- | --- |
-| `mode` | `REPETITIONS` (or `reps`) · `DURATION` (or `timed`) · `REPEATERS` · `ACTIVITY` |
+| `mode` | `REPETITIONS` (or `reps`) · `DURATION` (or `timed`, `timed sets`) · `REPEATERS` · `ACTIVITY` |
 | `category` | `OPEN_CLIMBING` · `BOARD_CLIMBING` · `STRUCTURED_CLIMBING` · `FINGER_TRAINING` · `STRENGTH_CONDITIONING` · `FLEXIBILITY` · `OTHER_ACTIVITY`; omit for none |
 | `meaning` | `TOTAL_LOAD` (everything lifted) · `ADDED_LOAD` (on top of bodyweight; negative loads are assistance) |
 | `variations[].tag` | capitals or digits, at most 4 (`pwr` is read as `PWR`) |
 
-An activity has no sides and no load: `unilateral`, `unit` and `meaning` are dropped with a
-warning.
+A `meaning` without a `unit` is dropped with a warning. An activity has no sides and no load:
+`unilateral`, `unit` and `meaning` are dropped with a warning.
 
-`variations` absent leaves the library's variations alone. Listed ones are added, or updated when
-the exercise already has that tag. Variations the file does not list are never removed.
+Listed variations are added, or updated when the exercise already has that tag. When **adding**,
+variations the file does not list stay, and `variations` absent leaves them all alone; when
+**replacing**, the exercise ends up with exactly the variations the file lists (others are retired,
+kept for any history that used them).
 
 ## Plans
 
@@ -99,6 +104,7 @@ shape, the day decides the weight. An omitted value is stored as absent, never a
 
 A station is an exercise, with an optional `variation` and `plan`. Without a `plan` it takes the
 variation's, else the exercise's default. `sets` in a station's plan is ignored: the rounds decide.
+A circuit needs at least one station and at least 1 round.
 
 ## Modules
 
@@ -114,7 +120,8 @@ variation's, else the exercise's default. `sets` in a station's plan is ignored:
 }
 ```
 
-An entry is an exercise (with an optional `variation` and `plan`) or a `circuit`.
+An entry is an exercise (with an optional `variation` and `plan`) or a `circuit`; a module needs
+at least one.
 
 ## Weeks
 
@@ -165,11 +172,27 @@ Pick the file, then choose a mode:
 And how far back it reaches:
 
 - **From today** (the default): nothing dated before today is planned — the preview counts what is
-  left out — and replacing clears only from today on. A week's unscheduled area counts as today
-  while the week has a day left.
+  left out, and still checks it for mistakes — and replacing clears only from today on. A week's
+  unscheduled area counts as today while the week has a day left.
 - **Include past**: the file applies as written, and replacing clears unhappened plans in the past
   too.
 
 Before anything is written you see what the file adds and updates, and what it leaves out and
 why. A file with any problem is refused whole, with every problem listed, and the phone is left
 exactly as it was; the import itself is one transaction.
+
+## Starting from nothing
+
+Because an import never deletes logged work, *Replace plans* on an app full of test data keeps the
+test logs, and the test exercises that have history stay in the record (hidden from the library).
+To start a real record from an empty app:
+
+1. Export a backup from the app, in case anything in it is wanted later.
+2. Android Settings → Apps → **Melete** (check the name: not *Melete Debug*) → Storage → **Clear
+   storage**. This empties that app only: library, weeks, logs, daily notes, trackers (the two
+   defaults come back) and its recovery copies.
+3. Import the plan with **Add** — nothing is there to keep or replace — and **From today**, unless
+   the plan deliberately includes past days.
+
+Try the file in **Melete Debug** first: the same import, previewed and written there, touches
+nothing in the everyday app.
