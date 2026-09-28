@@ -1,0 +1,812 @@
+{
+    "format": "melete-backup",
+    "formatVersion": 1,
+    "exportedAt": "2026-09-26T10:00:00Z",
+    "schemaVersion": 10,
+    "exercises": [
+        {
+            "id": "8a943f8e-01f4-499d-a151-be5c4177356a",
+            "name": "Squat",
+            "mode": "REPETITIONS",
+            "unilateral": false,
+            "measurementUnit": "kg",
+            "measurementMeaning": "ADDED_LOAD",
+            "notes": "notes for Squat",
+            "category": "STRENGTH_CONDITIONING",
+            "defaultPlan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "createdAtEpochMs": 1790607863759
+        },
+        {
+            "id": "f3831025-2b6d-4067-8f77-44f6e75bd447",
+            "name": "Row",
+            "mode": "REPETITIONS",
+            "unilateral": true,
+            "measurementUnit": "kg",
+            "measurementMeaning": "ADDED_LOAD",
+            "notes": "notes for Row",
+            "category": "STRENGTH_CONDITIONING",
+            "defaultPlan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "createdAtEpochMs": 1790607863800
+        },
+        {
+            "id": "72ca5e48-17d2-4f6c-bea5-6c565f968f7a",
+            "name": "Pull-up",
+            "mode": "REPETITIONS",
+            "unilateral": false,
+            "measurementUnit": "kg",
+            "measurementMeaning": "ADDED_LOAD",
+            "notes": "notes for Pull-up",
+            "category": "STRENGTH_CONDITIONING",
+            "defaultPlan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "createdAtEpochMs": 1790607863809
+        },
+        {
+            "id": "6d2d2d39-6e3a-4810-8736-137d6dfaa658",
+            "name": "Old lift",
+            "mode": "REPETITIONS",
+            "unilateral": false,
+            "measurementUnit": "kg",
+            "measurementMeaning": "ADDED_LOAD",
+            "notes": "notes for Old lift",
+            "category": "STRENGTH_CONDITIONING",
+            "defaultPlan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "createdAtEpochMs": 1790607864096,
+            "deletedAtEpochMs": 1790607864143
+        },
+        {
+            "id": "2f1df02c-8cff-497e-84b7-dfb395161921",
+            "name": "Band pull-up",
+            "mode": "REPETITIONS",
+            "unilateral": false,
+            "measurementUnit": "kg",
+            "measurementMeaning": "ADDED_LOAD",
+            "notes": "notes for Band pull-up",
+            "category": "STRENGTH_CONDITIONING",
+            "defaultPlan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "createdAtEpochMs": 1790607864151
+        }
+    ],
+    "variations": [
+        {
+            "id": "4b4f0b35-b3dd-4b40-a35f-5b024228cf2c",
+            "exerciseId": "8a943f8e-01f4-499d-a151-be5c4177356a",
+            "tag": "PWR",
+            "notes": "Fast",
+            "plan": {
+                "sets": 5,
+                "targetReps": 3,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": null,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 0,
+            "createdAtEpochMs": 1790607863816
+        }
+    ],
+    "routines": [
+        {
+            "id": "38c3cb98-6b48-45d4-b55d-f0244d66cafa",
+            "name": "Pull circuit",
+            "category": "FINGER_TRAINING",
+            "rounds": 3,
+            "transitionSeconds": 30,
+            "roundRestSeconds": 120,
+            "structureVersion": 1,
+            "createdAtEpochMs": 1790607863992,
+            "entries": [
+                {
+                    "id": "2bcc7383-2a16-4295-84bc-a912a3a87dfc",
+                    "orderIndex": 0,
+                    "exerciseId": "72ca5e48-17d2-4f6c-bea5-6c565f968f7a",
+                    "exerciseNameSnapshot": "Pull-up",
+                    "plan": {
+                        "sets": 1,
+                        "targetReps": 5,
+                        "targetDurationSeconds": null,
+                        "restSeconds": null,
+                        "measurement": null,
+                        "effort": null,
+                        "plannedDurationSeconds": null,
+                        "sideSwitchSeconds": null,
+                        "repeater": null
+                    }
+                },
+                {
+                    "id": "6354b241-069f-49b8-9698-3a42fc3b3ba9",
+                    "orderIndex": 1,
+                    "exerciseId": "f3831025-2b6d-4067-8f77-44f6e75bd447",
+                    "exerciseNameSnapshot": "Row",
+                    "plan": {
+                        "sets": 1,
+                        "targetReps": 8,
+                        "targetDurationSeconds": null,
+                        "restSeconds": null,
+                        "measurement": null,
+                        "effort": null,
+                        "plannedDurationSeconds": null,
+                        "sideSwitchSeconds": null,
+                        "repeater": null
+                    }
+                }
+            ]
+        }
+    ],
+    "modules": [
+        {
+            "id": "38702975-9d04-4212-9d30-a728f15ad4ef",
+            "name": "Pulling",
+            "description": "Base",
+            "createdAtEpochMs": 1790607864013,
+            "entries": [
+                {
+                    "id": "7f20ab20-f813-4a03-a8df-49f53a7cc6d6",
+                    "orderIndex": 0,
+                    "exerciseId": "8a943f8e-01f4-499d-a151-be5c4177356a",
+                    "exerciseNameSnapshot": "Squat",
+                    "plan": {
+                        "sets": 4,
+                        "targetReps": 4,
+                        "targetDurationSeconds": null,
+                        "restSeconds": null,
+                        "measurement": null,
+                        "effort": null,
+                        "plannedDurationSeconds": null,
+                        "sideSwitchSeconds": null,
+                        "repeater": null
+                    }
+                },
+                {
+                    "id": "d733d104-09b6-4489-b7a5-fd30f9bb3768",
+                    "orderIndex": 1,
+                    "routineId": "38c3cb98-6b48-45d4-b55d-f0244d66cafa",
+                    "routineNameSnapshot": "Pull circuit"
+                }
+            ]
+        }
+    ],
+    "circuitInstances": [
+        {
+            "id": "b16dd46b-dbe0-4a16-846c-668b416a175d",
+            "routineId": "38c3cb98-6b48-45d4-b55d-f0244d66cafa",
+            "routineNameSnapshot": "Pull circuit",
+            "categorySnapshot": "FINGER_TRAINING",
+            "structureVersion": 1,
+            "structureSnapshot": {
+                "version": 1,
+                "routineId": "38c3cb98-6b48-45d4-b55d-f0244d66cafa",
+                "routineName": "Pull circuit",
+                "structureVersion": 1,
+                "rounds": 3,
+                "transitionSeconds": 30,
+                "roundRestSeconds": 120,
+                "entries": [
+                    {
+                        "position": 0,
+                        "exerciseId": "72ca5e48-17d2-4f6c-bea5-6c565f968f7a",
+                        "exerciseName": "Pull-up",
+                        "mode": "REPETITIONS",
+                        "unilateral": false,
+                        "prescription": {
+                            "sets": 1,
+                            "targetReps": 5,
+                            "targetDurationSeconds": null,
+                            "restSeconds": null,
+                            "measurement": null,
+                            "effort": null,
+                            "plannedDurationSeconds": null,
+                            "sideSwitchSeconds": null,
+                            "repeater": null
+                        }
+                    },
+                    {
+                        "position": 1,
+                        "exerciseId": "f3831025-2b6d-4067-8f77-44f6e75bd447",
+                        "exerciseName": "Row",
+                        "mode": "REPETITIONS",
+                        "unilateral": true,
+                        "prescription": {
+                            "sets": 1,
+                            "targetReps": 8,
+                            "targetDurationSeconds": null,
+                            "restSeconds": null,
+                            "measurement": null,
+                            "effort": null,
+                            "plannedDurationSeconds": null,
+                            "sideSwitchSeconds": null,
+                            "repeater": null
+                        }
+                    }
+                ]
+            },
+            "weekStart": "2026-09-21",
+            "orderIndex": 1,
+            "rounds": 3,
+            "transitionSeconds": 30,
+            "roundRestSeconds": 120,
+            "createdAtEpochMs": 1790607864073,
+            "moduleInstanceId": "f4e487e6-5481-4f46-9571-20eaaa180beb",
+            "modulePosition": 1
+        }
+    ],
+    "moduleInstances": [
+        {
+            "id": "f4e487e6-5481-4f46-9571-20eaaa180beb",
+            "moduleId": "38702975-9d04-4212-9d30-a728f15ad4ef",
+            "moduleNameSnapshot": "Pulling",
+            "weekStart": "2026-09-21",
+            "orderIndex": 0,
+            "createdAtEpochMs": 1790607864054
+        }
+    ],
+    "occurrences": [
+        {
+            "id": "0d552e5c-f4d8-4d0f-91b3-d3b71059d83d",
+            "weekStart": "2026-09-21",
+            "trainingDate": "2026-09-21",
+            "exerciseId": "f3831025-2b6d-4067-8f77-44f6e75bd447",
+            "exerciseNameSnapshot": "Row",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": true,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 0,
+            "state": "COMPLETED",
+            "comment": "left weaker",
+            "createdAtEpochMs": 1790607863828,
+            "loggedDurationSeconds": 600,
+            "loggedDurationManual": true,
+            "isOneOff": false
+        },
+        {
+            "id": "679f3513-4066-4ca2-b114-22c8b4352fcf",
+            "weekStart": "2026-09-21",
+            "trainingDate": "2026-09-22",
+            "exerciseId": "8a943f8e-01f4-499d-a151-be5c4177356a",
+            "exerciseNameSnapshot": "Squat",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": false,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 5,
+                "targetReps": 3,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": null,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 0,
+            "state": "COMPLETED",
+            "createdAtEpochMs": 1790607863889,
+            "loggedDurationSeconds": 900,
+            "loggedDurationManual": false,
+            "isOneOff": false,
+            "variationId": "4b4f0b35-b3dd-4b40-a35f-5b024228cf2c",
+            "variationTagSnapshot": "PWR"
+        },
+        {
+            "id": "ced289f8-1c22-4cc0-99d7-a7dee70a7ffc",
+            "weekStart": "2026-09-21",
+            "trainingDate": "2026-09-23",
+            "exerciseId": "72ca5e48-17d2-4f6c-bea5-6c565f968f7a",
+            "exerciseNameSnapshot": "Pull-up",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": false,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 0,
+            "state": "SKIPPED",
+            "createdAtEpochMs": 1790607863924,
+            "loggedDurationManual": false,
+            "isOneOff": false
+        },
+        {
+            "id": "57e1fd27-8b01-4c88-940f-26b53f409e65",
+            "weekStart": "2026-09-21",
+            "trainingDate": "2026-09-23",
+            "exerciseId": "one-off:trail run",
+            "exerciseNameSnapshot": "Trail run",
+            "modeSnapshot": "ACTIVITY",
+            "unilateralSnapshot": false,
+            "categorySnapshot": "OTHER_ACTIVITY",
+            "plan": {
+                "sets": 1,
+                "targetReps": null,
+                "targetDurationSeconds": 2700,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": null,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 1,
+            "state": "COMPLETED",
+            "createdAtEpochMs": 1790607863955,
+            "loggedDurationSeconds": 2700,
+            "loggedDurationManual": true,
+            "loggedEffort": 3,
+            "isOneOff": true
+        },
+        {
+            "id": "4ef0a4eb-4923-44b4-9bf9-daa17b8c8bed",
+            "weekStart": "2026-09-21",
+            "exerciseId": "8a943f8e-01f4-499d-a151-be5c4177356a",
+            "exerciseNameSnapshot": "Squat",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": false,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 4,
+                "targetReps": 4,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": null,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 0,
+            "state": "PLANNED",
+            "createdAtEpochMs": 1790607864060,
+            "loggedDurationManual": false,
+            "isOneOff": false,
+            "moduleInstanceId": "f4e487e6-5481-4f46-9571-20eaaa180beb",
+            "modulePosition": 0
+        },
+        {
+            "id": "c909ba32-1013-46a7-a2d7-373a525ace09",
+            "weekStart": "2026-09-21",
+            "exerciseId": "72ca5e48-17d2-4f6c-bea5-6c565f968f7a",
+            "exerciseNameSnapshot": "Pull-up",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": false,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 1,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": null,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 1,
+            "state": "PLANNED",
+            "createdAtEpochMs": 1790607864073,
+            "loggedDurationManual": false,
+            "isOneOff": false,
+            "circuitInstanceId": "b16dd46b-dbe0-4a16-846c-668b416a175d",
+            "circuitPosition": 0,
+            "moduleInstanceId": "f4e487e6-5481-4f46-9571-20eaaa180beb",
+            "modulePosition": 1
+        },
+        {
+            "id": "bceb9b98-7e17-45a5-83a8-2030ed5e25fe",
+            "weekStart": "2026-09-21",
+            "exerciseId": "f3831025-2b6d-4067-8f77-44f6e75bd447",
+            "exerciseNameSnapshot": "Row",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": true,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 1,
+                "targetReps": 8,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": null,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 2,
+            "state": "PLANNED",
+            "createdAtEpochMs": 1790607864073,
+            "loggedDurationManual": false,
+            "isOneOff": false,
+            "circuitInstanceId": "b16dd46b-dbe0-4a16-846c-668b416a175d",
+            "circuitPosition": 1,
+            "moduleInstanceId": "f4e487e6-5481-4f46-9571-20eaaa180beb",
+            "modulePosition": 1
+        },
+        {
+            "id": "cf266c33-c674-422f-991b-5ea1e1f9551b",
+            "weekStart": "2026-09-21",
+            "trainingDate": "2026-09-21",
+            "exerciseId": "6d2d2d39-6e3a-4810-8736-137d6dfaa658",
+            "exerciseNameSnapshot": "Old lift",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": false,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 1,
+            "state": "COMPLETED",
+            "createdAtEpochMs": 1790607864111,
+            "loggedDurationManual": false,
+            "isOneOff": false
+        },
+        {
+            "id": "73b7b35d-3c38-4fc6-9474-c59e23979dbd",
+            "weekStart": "2026-09-28",
+            "trainingDate": "2026-09-30",
+            "exerciseId": "2f1df02c-8cff-497e-84b7-dfb395161921",
+            "exerciseNameSnapshot": "Band pull-up",
+            "modeSnapshot": "REPETITIONS",
+            "unilateralSnapshot": false,
+            "measurementUnitSnapshot": "kg",
+            "measurementMeaningSnapshot": "ADDED_LOAD",
+            "categorySnapshot": "STRENGTH_CONDITIONING",
+            "plan": {
+                "sets": 3,
+                "targetReps": 5,
+                "targetDurationSeconds": null,
+                "restSeconds": null,
+                "measurement": null,
+                "effort": 4,
+                "plannedDurationSeconds": null,
+                "sideSwitchSeconds": null,
+                "repeater": null
+            },
+            "orderIndex": 0,
+            "state": "COMPLETED",
+            "createdAtEpochMs": 1790607864167,
+            "loggedDurationManual": false,
+            "isOneOff": false
+        }
+    ],
+    "sessions": [
+        {
+            "id": "b9a33b36-3a09-48ee-942c-e7f9a17430e6",
+            "trainingDate": "2026-09-21",
+            "ordinal": 0,
+            "createdAtEpochMs": 1790607863842
+        },
+        {
+            "id": "20a0b571-886e-4b26-b12a-adca135f8fb4",
+            "trainingDate": "2026-09-22",
+            "ordinal": 0,
+            "createdAtEpochMs": 1790607863899
+        },
+        {
+            "id": "43357b42-ce47-4587-8e52-b29f2f18822c",
+            "trainingDate": "2026-09-23",
+            "ordinal": 0,
+            "createdAtEpochMs": 1790607863975
+        },
+        {
+            "id": "777c7da3-4419-4ea8-80b1-621928f333ef",
+            "trainingDate": "2026-09-30",
+            "ordinal": 0,
+            "createdAtEpochMs": 1790607864177
+        }
+    ],
+    "sets": [
+        {
+            "id": "150c9328-2992-40c6-99a9-5591aebf32d4",
+            "occurrenceId": "0d552e5c-f4d8-4d0f-91b3-d3b71059d83d",
+            "sessionId": "b9a33b36-3a09-48ee-942c-e7f9a17430e6",
+            "exerciseId": "f3831025-2b6d-4067-8f77-44f6e75bd447",
+            "trainingDate": "2026-09-21",
+            "orderIndex": 0,
+            "side": "LEFT",
+            "payloadVersion": 2,
+            "payload": {
+                "reps": 5,
+                "durationSeconds": null,
+                "measurement": {
+                    "value": 20.0,
+                    "unit": "kg",
+                    "meaning": "ADDED_LOAD"
+                },
+                "effort": null
+            },
+            "recordedAtEpochMs": 1790607863843
+        },
+        {
+            "id": "10de2a21-0930-4712-a57d-5249e587ba01",
+            "occurrenceId": "0d552e5c-f4d8-4d0f-91b3-d3b71059d83d",
+            "sessionId": "b9a33b36-3a09-48ee-942c-e7f9a17430e6",
+            "exerciseId": "f3831025-2b6d-4067-8f77-44f6e75bd447",
+            "trainingDate": "2026-09-21",
+            "orderIndex": 1,
+            "side": "RIGHT",
+            "payloadVersion": 2,
+            "payload": {
+                "reps": 5,
+                "durationSeconds": null,
+                "measurement": {
+                    "value": 22.5,
+                    "unit": "kg",
+                    "meaning": "ADDED_LOAD"
+                },
+                "effort": null
+            },
+            "recordedAtEpochMs": 1790607863843
+        },
+        {
+            "id": "62b75562-a769-4953-8897-cd8a4bf7b89c",
+            "occurrenceId": "cf266c33-c674-422f-991b-5ea1e1f9551b",
+            "sessionId": "b9a33b36-3a09-48ee-942c-e7f9a17430e6",
+            "exerciseId": "6d2d2d39-6e3a-4810-8736-137d6dfaa658",
+            "trainingDate": "2026-09-21",
+            "orderIndex": 0,
+            "payloadVersion": 2,
+            "payload": {
+                "reps": 5,
+                "durationSeconds": null,
+                "measurement": {
+                    "value": 10.0,
+                    "unit": "kg",
+                    "meaning": "ADDED_LOAD"
+                },
+                "effort": null
+            },
+            "recordedAtEpochMs": 1790607864121
+        },
+        {
+            "id": "0030ca1d-f04d-4924-8a0c-0b9bbf3e6977",
+            "occurrenceId": "679f3513-4066-4ca2-b114-22c8b4352fcf",
+            "sessionId": "20a0b571-886e-4b26-b12a-adca135f8fb4",
+            "exerciseId": "8a943f8e-01f4-499d-a151-be5c4177356a",
+            "trainingDate": "2026-09-22",
+            "orderIndex": 0,
+            "payloadVersion": 2,
+            "payload": {
+                "reps": 5,
+                "durationSeconds": null,
+                "measurement": {
+                    "value": 60.0,
+                    "unit": "kg",
+                    "meaning": "ADDED_LOAD"
+                },
+                "effort": null
+            },
+            "recordedAtEpochMs": 1790607863900
+        },
+        {
+            "id": "fb24434e-d4c7-4942-b66b-0435d28664b1",
+            "occurrenceId": "73b7b35d-3c38-4fc6-9474-c59e23979dbd",
+            "sessionId": "777c7da3-4419-4ea8-80b1-621928f333ef",
+            "exerciseId": "2f1df02c-8cff-497e-84b7-dfb395161921",
+            "trainingDate": "2026-09-30",
+            "orderIndex": 0,
+            "payloadVersion": 2,
+            "payload": {
+                "reps": 5,
+                "durationSeconds": null,
+                "measurement": {
+                    "value": -15.0,
+                    "unit": "kg",
+                    "meaning": "ADDED_LOAD"
+                },
+                "effort": null
+            },
+            "recordedAtEpochMs": 1790607864179
+        },
+        {
+            "id": "65d9bb19-9cbb-4fa1-b9cc-1b007976a55f",
+            "occurrenceId": "73b7b35d-3c38-4fc6-9474-c59e23979dbd",
+            "sessionId": "777c7da3-4419-4ea8-80b1-621928f333ef",
+            "exerciseId": "2f1df02c-8cff-497e-84b7-dfb395161921",
+            "trainingDate": "2026-09-30",
+            "orderIndex": 1,
+            "payloadVersion": 2,
+            "payload": {
+                "reps": 5,
+                "durationSeconds": null,
+                "measurement": {
+                    "value": -12.5,
+                    "unit": "kg",
+                    "meaning": "ADDED_LOAD"
+                },
+                "effort": null
+            },
+            "recordedAtEpochMs": 1790607864179
+        }
+    ],
+    "trackers": [
+        {
+            "id": "energy",
+            "label": "Energy",
+            "type": "SCALE",
+            "scaleMin": 1,
+            "scaleMax": 10,
+            "orderIndex": 0,
+            "createdAtEpochMs": 1790607864241
+        },
+        {
+            "id": "finger_discomfort",
+            "label": "Finger discomfort",
+            "type": "SCALE",
+            "scaleMin": 0,
+            "scaleMax": 5,
+            "orderIndex": 1,
+            "createdAtEpochMs": 1790607864241
+        },
+        {
+            "id": "72503a4b-aa2d-4b26-b78d-ae5a3915150e",
+            "label": "Weight",
+            "type": "NUMBER",
+            "unit": "kg",
+            "orderIndex": 2,
+            "createdAtEpochMs": 1790607864310
+        },
+        {
+            "id": "2f527fa5-75a4-40a0-8c88-114e6fc79d2e",
+            "label": "Stretched",
+            "type": "CHECK",
+            "orderIndex": 3,
+            "createdAtEpochMs": 1790607864320
+        },
+        {
+            "id": "a3f80650-8bbf-46e7-9db1-f43681e1aa7f",
+            "label": "Skin",
+            "type": "TEXT",
+            "orderIndex": 4,
+            "createdAtEpochMs": 1790607864334,
+            "deletedAtEpochMs": 1790607864432
+        }
+    ],
+    "diary": [
+        {
+            "date": "2026-09-21",
+            "text": "Slept badly",
+            "updatedAtEpochMs": 1790607864393,
+            "values": [
+                {
+                    "tracker": "2f527fa5-75a4-40a0-8c88-114e6fc79d2e",
+                    "label": "Stretched",
+                    "type": "CHECK",
+                    "value": 1.0
+                },
+                {
+                    "tracker": "72503a4b-aa2d-4b26-b78d-ae5a3915150e",
+                    "label": "Weight",
+                    "type": "NUMBER",
+                    "unit": "kg",
+                    "value": 72.5
+                },
+                {
+                    "tracker": "a3f80650-8bbf-46e7-9db1-f43681e1aa7f",
+                    "label": "Skin",
+                    "type": "TEXT",
+                    "value": "Split on the left index"
+                },
+                {
+                    "tracker": "energy",
+                    "label": "Energy",
+                    "type": "SCALE",
+                    "scaleMin": 0,
+                    "scaleMax": 5,
+                    "value": 2.0
+                },
+                {
+                    "tracker": "finger_discomfort",
+                    "label": "Finger discomfort",
+                    "type": "SCALE",
+                    "scaleMin": 0,
+                    "scaleMax": 5,
+                    "value": 1.0
+                }
+            ]
+        },
+        {
+            "date": "2026-09-22",
+            "updatedAtEpochMs": 1790607864414,
+            "values": [
+                {
+                    "tracker": "energy",
+                    "label": "Energy",
+                    "type": "SCALE",
+                    "scaleMin": 0,
+                    "scaleMax": 5,
+                    "value": 4.0
+                }
+            ]
+        }
+    ]
+}

@@ -22,9 +22,11 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 
@@ -164,6 +166,14 @@ class BackupRestoreTest {
         val oldOcc = repository.scheduleExercise(retired, monday, monday)
         repository.saveLogs(monday, listOf(OccurrenceLogWrite(oldOcc, true, listOf(set(10.0, null)))))
         repository.removeExercise(retired)
+        // Assistance, as added load below zero — in the following week, so this one's counts hold.
+        val band = exercise(repository, "Band pull-up")
+        val nextWednesday = wednesday.plusDays(7)
+        val bandOcc = repository.scheduleExercise(band, monday.plusDays(7), nextWednesday)
+        repository.saveLogs(
+            nextWednesday,
+            listOf(OccurrenceLogWrite(bandOcc, true, listOf(set(-15.0, null), set(-12.5, null)))),
+        )
         // The diary.
         diary.observeTrackers().first()
         diary.createTracker("Weight", TrackerType.NUMBER, null, null, "kg")
@@ -185,6 +195,20 @@ class BackupRestoreTest {
         // A retired tracker whose day still names it, and one changed after it was recorded.
         diary.retireTracker(trackers.getValue("Skin").id)
         diary.updateTracker("energy", "Energy", TrackerType.SCALE, 1, 10, null)
+    }
+
+    /**
+     * Not a test: writes the frozen version-1 backup fixture from this record, into the debug app's
+     * files. Done once, when the format was declared stable; the file is committed as
+     * `androidTest/assets/backup-v1.json` and must keep restoring from then on. Skipped unless
+     * asked for with `-e fixture write`.
+     */
+    @Test
+    fun writeCompatibilityFixture() = runBlocking<Unit> {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("fixture") == "write")
+        populate(source)
+        val service = BackupService(source)
+        File(context.filesDir, "backup-v1.json").writeText(service.encode(service.export(at)))
     }
 
     /** The file minus when it was written, which is the one thing allowed to differ. */

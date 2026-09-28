@@ -5,7 +5,8 @@ Import a plan**. Everything is referred to by **name**: there are no ids, timest
 to maintain. (A *backup* is the other kind of file — the whole record with its ids, for putting a
 phone back exactly. It goes through *Restore*.)
 
-The test library, `app/src/androidTest/assets/test-library.json`, is a complete example.
+The test library, `app/src/androidTest/assets/test-library.json`, is a complete example. Version
+1 files stay readable in every later version of the app; the test library is the check.
 
 ## The file
 

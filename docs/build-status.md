@@ -1,7 +1,7 @@
 # Build status
 
-Last updated: 2026-09-28, including separate debug/release application identities and debug-only
-device tooling. See [the side-by-side build guide](debug-release.md).
+Last updated: 2026-09-28, closing phase 5B: the stable baseline (schema 10, backup and plan format
+version 1), separate debug and release apps. See [the side-by-side build guide](debug-release.md).
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -25,10 +25,18 @@ the two ever disagree, the code and the first half win.
 | Timer B — repeaters | ✅ |
 | Timer C — supersets/circuits and compact review | ✅ |
 | 4B — modules for planning | ✅ built; instrumented tests pass on the phone |
-| 5B — daily notes, trackers, export and restore | diary, export and restore tested on the phone; plan import built, its instrumented tests pass on the phone |
-| 6 — motivating overview dashboard | not started |
+| 5B — diary, export/restore, plan import; stable baseline | ✅ instrumented tests pass on the phone; the hand checklist is still to tick |
+| 6A — overview | not started |
+| 6B — history and basic graphs | not started |
+| 6C — month view | not started |
+| 7 — profile and benchmarks | not started |
+| 8 — progression analysis | not started |
+| 9 — remote and web | not started |
+| 10 — appearance | not started |
 
-Schema version **10**, and one schema only until phase 6 — see *No migration chain* below.
+Schema version **10** is the **baseline**: from here every schema change comes with a migration
+and a test, and neither build has a destructive fallback — see *Upgrades preserve the record*
+below. Backup format **1** and plan format **1** stay readable in every later version.
 Prescription payload version **3**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -393,15 +401,22 @@ com.yokodake.melete
 - **Removing a routine never touches a scheduled copy.** Those are real occurrences and real logs;
   a template going away is a statement about what you plan next. A routine that has been scheduled
   becomes a tombstone, because its id is what a circuit log points at.
-- **No migration chain, until phase 6.** The app has never been installed by anyone but its
-  author, and the record is disposable until the first real training block, so the five migrations
-  that carried the schema from v1 to v6 were ceremony — two hundred lines and six tests proving
-  that upgrades work for data nobody would mind losing. They are gone, the schema is back to
-  version 1, and `MeleteDatabase.build()` applies `fallbackToDestructiveMigration` **in debug
-  builds only**: a schema change now costs a wipe and a re-seed, which takes seconds. The release
-  build has no fallback and still fails loudly, because that is the build trained against and a
-  silent wipe of a real diary is the outcome worth crashing to avoid. Phase 6 reverses this: the
-  record becomes the baseline, the fallback comes out, and migrations are required again.
+- **Upgrades preserve the record (since the 5B baseline).** Schema 10 is the oldest schema any
+  installed app can have. A schema change bumps `MeleteMigrations.CURRENT`, exports the new
+  `N.json` beside the old ones (never delete one), and adds a `Migration(N - 1, N)` to
+  `MeleteMigrations.ALL`. `MigrationTest` builds a database at every exported version from the
+  baseline and migrates it to the current one, and opens a baseline database through the app's own
+  builder with its rows intact; `SchemaBaselineTest` pins each released schema's identity, so an
+  entity changed without a version bump fails instead of silently rewriting `10.json`. **Neither
+  build has a destructive fallback** — debug wiped itself on schema changes until 5B, which hid a
+  missing migration until release; now Melete Debug fails on open exactly as release would.
+  Before the baseline, migrations were deliberately skipped: the five that carried v1 to v6 were
+  removed while every record was disposable.
+- **Backups stay readable.** `androidTest/assets/backup-v1.json` is a real export frozen at the
+  baseline, holding every kind of row. `BackupFixtureTest` checks it still reads and validates;
+  `BackupCompatibilityTest` restores it and checks it exports back as the same record. The fixture
+  is never edited: a change that breaks it must be made to read old files instead, and a new
+  format version gets its own fixture beside it. The test library does the same for plan files.
 - **No sample data.** `DevSampleData`, the `isSampleData` column on four entities, its DAO delete
   queries, the debug menu and the SAMPLE chips are all gone. Seeding a library is the importer's
   job, and a flag threaded through the schema to mark rows as disposable stopped earning its keep
@@ -509,8 +524,8 @@ Studio/jbr`).
 
 **Debug test data is disposable.** Gradle-managed device tests may remove/reset the debug
 installation. `scripts/device-tests.sh` checks the debug IDs before installing both APKs with
-`install -r` and driving the debug runner directly. Tests and debug schema upgrades can still
-modify its data, but the everyday release is a separate app. Do not invoke a legacy pre-split
+`install -r` and driving the debug runner directly. Seeding and device helpers can still modify
+its data, but the everyday release is a separate app. Do not invoke a legacy pre-split
 `com.yokodake.melete.test` runner still installed on a phone.
 
 ## Checks actually run
@@ -1259,10 +1274,28 @@ whole instrumented suite passes, **87 of 87**.
 total loads never go negative, the ± key, signed display; the payload test now round-trips a
 negative added load).
 
+## Phase 5B closed: the stable baseline (2026-09-28)
+
+- **Upgrades preserve data.** The debug-only destructive fallback is gone; `MeleteDatabase.build`
+  adds `MeleteMigrations.ALL` (empty at the baseline, schema 10) and nothing else. `MeleteMigrations`
+  says what a schema change requires. `MigrationTest` (2) migrates every exported schema from the
+  baseline and opens a baseline database with its rows; `SchemaBaselineTest` (2, JVM) pins the
+  identity of every released schema.
+- **Backups stay readable.** `backup-v1.json`, written once from the restore test's mixed record
+  (now with two negative added-load sets, in the following week) by the gated
+  `BackupRestoreTest.writeCompatibilityFixture`, is committed as the compatibility fixture.
+  `BackupFixtureTest` (3, JVM) and `BackupCompatibilityTest` (1) keep it restoring.
+- **Roadmap** replaced with the post-5B sequence: 6A overview, 6B history and basic graphs, 6C
+  month view, 7 profile and benchmarks, 8 progression analysis, 9 remote and web, 10 appearance.
+
+**Checks run:** 193 unit tests pass; on the Pixel 9 the instrumented suite passes, **92 of 92**.
+Melete Debug, now without a fallback, opens its seeded schema-10 database.
+
 ## Next step
 
-**Walk the plan import through by hand** (the checklist above; `test-library.json` is in the
-phone's Downloads), then **phase 6 — the overview dashboard**.
+**Phase 6A — the overview.** Before the real plan goes into release: walk the hand checklist
+above and tick what is confirmed, and follow *Starting from nothing* in
+[`plan-format.md`](plan-format.md) to empty the release app of its test data.
 
 Owed alongside it:
 
