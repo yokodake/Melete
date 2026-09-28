@@ -1570,8 +1570,9 @@ attempt, plus every rest) all follow without special cases. The logger is unchan
 one row per set, reps = attempts made. Plan files take `repRestSeconds` (reps only; dropped with a
 warning elsewhere).
 
-The winter plan now has one exercise, **Strength intervals** (2 × 3, 1 min between reps, 5 min
-between sets, hard), with `sets` 1 on the deload weeks (7 Dec, 4 Jan) and 3 on 14–28 Dec; the
+The winter plan now has one exercise, **Strength intervals** (3 × 3, 3 min between reps, 5 min
+between sets, hard), with `sets` 2 on the deload weeks (7 Dec, 4 Jan), plus an unplaced **Power
+triples** in the library (3 × 3, 1 min between reps, 5 min between sets); the
 *Strength interval* exercise and the *Strength intervals* circuit are gone. Nothing had been logged
 with the circuit (its first placement is 18 Nov), so the planned merge migration was not needed:
 importing the new file with **Replace plans** clears the unhappened circuit copies and removes both
