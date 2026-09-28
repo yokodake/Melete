@@ -1,6 +1,9 @@
 package com.yokodake.melete.ui.benchmark
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -119,10 +122,13 @@ class BenchmarkDetailViewModel(
         local.update { it.copy(editing = null) }
         viewModelScope.launch {
             when (editing) {
-                ResultEditing.New ->
-                    repository.record(id, input.date, input.value, input.valueRight, input.note)
-                is ResultEditing.Existing ->
-                    repository.updateResult(editing.result.id, input.date, input.value, input.valueRight, input.note)
+                ResultEditing.New -> repository.record(
+                    id, input.date, input.value, input.valueRight, input.note, input.text, input.bodyweightPercent,
+                )
+                is ResultEditing.Existing -> repository.updateResult(
+                    editing.result.id, input.date, input.value, input.valueRight, input.note, input.text,
+                    input.bodyweightPercent,
+                )
             }
         }
     }
@@ -289,8 +295,26 @@ fun BenchmarkDetailScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            standing.benchmark.protocol?.let {
-                item { Text(it, style = MaterialTheme.typography.bodyLarge) }
+            // Protocol on the left, goal on the right: one line for both.
+            val protocol = standing.benchmark.protocol
+            val goal = standing.benchmark.goal
+            if (protocol != null || goal != null) {
+                item {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = protocol.orEmpty(),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                        )
+                        goal?.let {
+                            Text(
+                                text = "Goal $it",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(start = 12.dp),
+                            )
+                        }
+                    }
+                }
             }
             item { StandingCard(standing) }
             if (standing.results.isNotEmpty()) {
@@ -326,8 +350,10 @@ fun BenchmarkDetailScreen(
     }
 }
 
-/** "Load · kg added · L/R · higher is better", the definition in one line. */
-private fun definitionLine(benchmark: com.yokodake.melete.data.Benchmark): String = listOfNotNull(
+/** "Load · kg added · L/R", the definition in one line. */
+private fun definitionLine(benchmark: com.yokodake.melete.data.Benchmark): String = if (benchmark.isText) {
+    listOfNotNull("Text result", "hidden".takeIf { benchmark.hidden }).joinToString(" · ")
+} else listOfNotNull(
     benchmark.measure.label,
     benchmark.unit.takeIf { it.isNotBlank() }?.let {
         if (benchmark.measure == BenchmarkMeasure.LOAD && benchmark.loadMeaning == MeasurementMeaning.ADDED_LOAD) {
@@ -337,7 +363,8 @@ private fun definitionLine(benchmark: com.yokodake.melete.data.Benchmark): Strin
         }
     },
     "L/R".takeIf { benchmark.unilateral },
-    if (benchmark.higherIsBetter) "higher is better" else "lower is better",
+    // Higher is the rule and goes unsaid; only the exception is worth the words.
+    "lower is better".takeIf { !benchmark.higherIsBetter },
     "hidden".takeIf { benchmark.hidden },
 ).joinToString(" · ")
 
@@ -358,6 +385,7 @@ private fun StandingCard(standing: BenchmarkStanding) {
                 text = buildAnnotatedString {
                     append("Latest ")
                     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(latest.text) }
+                    latest.bodyweightText?.let { append(" ($it)") }
                     append(" · ${benchmarkDate(latest.date)}")
                 },
                 style = MaterialTheme.typography.bodyLarge,
@@ -384,23 +412,41 @@ private fun bestLines(standing: BenchmarkStanding): List<String> {
     }
 }
 
+/**
+ * One recorded result. Correcting or deleting it takes a long press: a record should not change
+ * from a tap made while scrolling.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ResultRow(result: BenchmarkResult, onClick: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick()
+                },
+                onLongClickLabel = "Correct this result",
+            )
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.Top,
+        // A date with its year is wider than one without; the gap keeps it off the value.
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = benchmarkDate(result.date),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(96.dp),
+            modifier = Modifier.widthIn(min = 104.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(result.text, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = result.text + (result.bodyweightText?.let { " · $it" } ?: ""),
+                style = MaterialTheme.typography.bodyLarge,
+            )
             result.note?.let {
                 Text(
                     text = it,

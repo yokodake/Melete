@@ -52,6 +52,7 @@ data class BenchmarkForm(
     val unilateral: Boolean = false,
     val higherIsBetter: Boolean = true,
     val protocol: String = "",
+    val goal: String = "",
 ) {
     val canSave: Boolean get() = name.isNotBlank()
 
@@ -63,6 +64,7 @@ data class BenchmarkForm(
         unilateral = unilateral,
         higherIsBetter = higherIsBetter,
         protocol = protocol,
+        goal = goal,
     )
 
     /** A new measure brings its unit along, unless a unit of one's own was typed. */
@@ -107,6 +109,7 @@ class BenchmarkEditorViewModel(
                                 unilateral = b.unilateral,
                                 higherIsBetter = b.higherIsBetter,
                                 protocol = b.protocol.orEmpty(),
+                                goal = b.goal.orEmpty(),
                             )
                         } ?: it.form,
                     )
@@ -200,7 +203,7 @@ fun BenchmarkEditorScreen(
                     label = "Measurement",
                     modifier = Modifier.weight(1f),
                 )
-                CompactTextField(
+                if (form.measure != BenchmarkMeasure.TEXT) CompactTextField(
                     value = form.unit,
                     onValueChange = { onChange(form.copy(unit = it.take(8))) },
                     label = "Unit",
@@ -223,7 +226,7 @@ fun BenchmarkEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (form.measure != BenchmarkMeasure.TEXT) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChoiceField(
                     value = form.unilateral,
                     options = listOf(false, true),
@@ -247,6 +250,14 @@ fun BenchmarkEditorScreen(
                 label = "Protocol (optional)",
                 placeholder = "20 mm · 7 s · added load",
                 singleLine = false,
+                minHeight = 48,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            CompactTextField(
+                value = form.goal,
+                onValueChange = { onChange(form.copy(goal = it)) },
+                label = "Goal (optional)",
+                placeholder = "150% BW",
                 minHeight = 48,
                 modifier = Modifier.fillMaxWidth(),
             )

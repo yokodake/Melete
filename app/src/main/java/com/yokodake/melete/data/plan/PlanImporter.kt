@@ -1,6 +1,7 @@
 package com.yokodake.melete.data.plan
 
 import androidx.room.withTransaction
+import com.yokodake.melete.data.BenchmarkRepository
 import com.yokodake.melete.data.MeleteDatabase
 import com.yokodake.melete.data.ModuleDraft
 import com.yokodake.melete.data.ModuleEntryDraft
@@ -76,6 +77,7 @@ class PlanImporter(
     private val database: MeleteDatabase,
     private val repository: TrainingRepository,
     private val backups: BackupService,
+    private val benchmarks: BenchmarkRepository = BenchmarkRepository(database),
 ) {
 
     private val tables = database.backupDao()
@@ -331,6 +333,21 @@ class PlanImporter(
                 }
             }
         }
+
+        // Benchmarks: the definition by name, then the results the phone does not hold yet. Never
+        // removed by a replace — they are records, not plans.
+        plan.benchmarks.forEach { benchmark ->
+            val id = benchmark.existingId?.also { benchmarks.update(it, benchmark.draft) }
+                ?: benchmarks.create(benchmark.draft)
+            benchmark.results.forEach { result ->
+                checkNotNull(
+                    benchmarks.record(
+                        id, result.date, result.value, result.valueRight, result.note, result.text,
+                        result.bodyweightPercent,
+                    )
+                ) { "a result for ${benchmark.draft.name} was refused" }
+            }
+        }
     }
 
     /** The live library by name. A name two live items share is marked, never guessed between. */
@@ -356,6 +373,12 @@ class PlanImporter(
             circuitNames = circuits.associate { nameKey(it.name) to it.name },
             moduleNames = modules.associate { nameKey(it.name) to it.name },
             ambiguous = ambiguous,
+            benchmarks = benchmarks.observeStandings().first().associate { standing ->
+                nameKey(standing.benchmark.name) to IndexedBenchmark(
+                    id = standing.benchmark.id,
+                    resultKeys = standing.results.map { resultKey(it.date, it.value, it.valueRight, it.textValue) }.toSet(),
+                )
+            },
         )
     }
 

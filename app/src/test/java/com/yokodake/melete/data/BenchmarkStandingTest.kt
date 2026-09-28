@@ -26,7 +26,7 @@ class BenchmarkStandingTest {
     ) = Benchmark(
         id = "b", name = "Weighted pull-up", measure = BenchmarkMeasure.LOAD, unit = unit,
         loadMeaning = meaning, unilateral = unilateral, higherIsBetter = higherIsBetter,
-        protocol = null, orderIndex = 0, hidden = false,
+        protocol = null, goal = null, orderIndex = 0, hidden = false,
     )
 
     private fun result(
@@ -99,6 +99,30 @@ class BenchmarkStandingTest {
         )
         assertEquals(BestValue(30.0, sep24), standing.best)
         assertEquals(2, standing.results.size)
+    }
+
+    @Test
+    fun `a text benchmark shows its latest words and has no best`() {
+        val words = benchmark(unit = "", meaning = null).copy(measure = BenchmarkMeasure.TEXT)
+        val standing = BenchmarkStanding.of(
+            words,
+            listOf(
+                result(sep20, null, unit = "", meaning = null).copy(textValue = "finger toes"),
+                result(sep24, null, unit = "", meaning = null).copy(textValue = "touching heels"),
+            ),
+        )
+        assertTrue(words.isText)
+        assertEquals("touching heels", standing.latest!!.text)
+        assertNull(standing.best)
+        assertNull(standing.bestText)
+    }
+
+    @Test
+    fun `a reported bodyweight percentage reads beside the load, as recorded`() {
+        val withPercent = result(sep24, 20.0).copy(bodyweightPercent = 127.5)
+        assertEquals("+20 kg", withPercent.text)
+        assertEquals("127.5% BW", withPercent.bodyweightText)
+        assertNull(result(sep24, 20.0).bodyweightText)
     }
 
     @Test

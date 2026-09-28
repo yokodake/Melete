@@ -131,7 +131,7 @@ object BackupValidator {
         backup.sets.forEach { date("A logged set", it.trainingDate) }
         backup.diary.forEach { date("A diary day", it.date) }
         backup.benchmarks.forEach { b -> b.results.forEach { date("A result for ${b.name}", it.date) } }
-        backup.benchmarks.firstOrNull { b -> b.results.any { it.value == null && it.valueRight == null } }
+        backup.benchmarks.firstOrNull { b -> b.results.any { it.value == null && it.valueRight == null && it.text.isNullOrBlank() } }
             ?.let { add("A result for ${it.name} holds no value.") }
 
         fun plan(label: String, element: JsonElement?) {

@@ -145,6 +145,38 @@ at least one.
   - `{ "activity": "…", "minutes": 90 }`: a one-off, with no library entry; `minutes` optional
 - Items go in the order written, after anything the day already holds.
 
+## Benchmarks
+
+Reference tests and their results, recorded apart from training (no card, nothing counted). A file
+may hold only benchmarks.
+
+```jsonc
+"benchmarks": [
+  {
+    "name": "Max hang",
+    "measure": "load",            // load, duration, distance, other or text
+    "unit": "kg",                 // defaults: kg, s, m, none; ignored for text
+    "meaning": "ADDED_LOAD",      // loads only: TOTAL_LOAD, or ADDED_LOAD (negative = assistance)
+    "unilateral": false,          // true: results give "left" and "right"
+    "better": "higher",           // or "lower"; default higher
+    "protocol": "20 mm · 7 s",    // optional
+    "goal": "150% BW",            // optional, as written
+    "results": [
+      { "date": "2026-02-15", "value": 20, "bodyweightPercent": 127, "note": "optional" },
+      { "date": "2026-03-01", "value": 0 }
+    ]
+  },
+  { "name": "Forward bend", "measure": "text", "results": [ { "date": "2026-02-15", "text": "touching heels" } ] }
+]
+```
+
+- A benchmark matches the phone's by name: its definition is updated, results are added.
+- A result is `value`, or `left`/`right` for unilateral, or `text` for a text benchmark. Zero is a
+  result; only an added load can be negative. `bodyweightPercent` goes with loads, stored as written.
+- Results are records, so **From today** never leaves them out, and one the phone already holds
+  (same date and same value or text) is not added again: re-importing a file changes nothing.
+- **Replace plans** never removes a benchmark or a result.
+
 ## References
 
 An `exercise`, `circuit` or `module` named anywhere resolves against the file first, then — when

@@ -6,12 +6,15 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.yokodake.melete.data.model.MeasurementMeaning
 
-/** What a benchmark measures. Each is a number with a unit; the kind picks sensible defaults. */
+/** What a benchmark measures: a number with a unit (the kind picks sensible defaults), or words. */
 enum class BenchmarkMeasure(val label: String, val defaultUnit: String) {
     LOAD("Load", "kg"),
     DURATION("Duration", "s"),
     DISTANCE("Distance", "m"),
     OTHER("Other", ""),
+
+    /** A result in words ("touching heels"), for tests that have no honest number. No best. */
+    TEXT("Text", ""),
 }
 
 /**
@@ -39,6 +42,8 @@ data class BenchmarkEntity(
     val higherIsBetter: Boolean,
     /** The fixed conditions that make results comparable, e.g. "20 mm · 7 s · added load". */
     val protocol: String? = null,
+    /** What it is aiming for, as written: "150% BW", "179 cm", "face to knees". */
+    val goal: String? = null,
     val orderIndex: Int,
     val createdAtEpochMs: Long,
     val hiddenAtEpochMs: Long? = null,
@@ -48,8 +53,8 @@ data class BenchmarkEntity(
  * One recorded result: the best valid attempt on one date.
  *
  * [value] is the result, or the left side's when the benchmark is unilateral; [valueRight] is the
- * right side's. Either may be missing, never both. The unit, load meaning and sidedness the result
- * was recorded under travel with it, so editing the definition never changes what an old result
+ * right side's; [textValue] is a result in words. At least one of them is present. The unit, load
+ * meaning and sidedness the result was recorded under travel with it, so editing the definition never changes what an old result
  * says. Zero and negative values are real results, not blanks.
  */
 @Entity(
@@ -70,6 +75,10 @@ data class BenchmarkResultEntity(
     val dateEpochDay: Long,
     val value: Double? = null,
     val valueRight: Double? = null,
+    /** A result in words, for a text benchmark. */
+    val textValue: String? = null,
+    /** Bodyweight percentage as reported alongside a load, never derived. */
+    val bodyweightPercent: Double? = null,
     val unitSnapshot: String,
     val loadMeaningSnapshot: MeasurementMeaning? = null,
     val unilateralSnapshot: Boolean,

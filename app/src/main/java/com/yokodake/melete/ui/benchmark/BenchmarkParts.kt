@@ -35,12 +35,14 @@ fun benchmarkDate(date: LocalDate, today: LocalDate = LocalDate.now()): String {
     return DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(date)
 }
 
-/** What the result dialog hands back: a date, the value or both sides, and a note. */
+/** What the result dialog hands back: a date, the value, both sides or words, and extras. */
 data class ResultInput(
     val date: LocalDate,
     val value: Double?,
     val valueRight: Double?,
     val note: String?,
+    val text: String? = null,
+    val bodyweightPercent: Double? = null,
 )
 
 /**
@@ -62,6 +64,8 @@ fun ResultDialog(
     val meaning = if (existing != null) existing.loadMeaning else benchmark.loadMeaning
     val unit = existing?.unit ?: benchmark.unit
     val signed = meaning == MeasurementMeaning.ADDED_LOAD
+    val isText = existing?.textValue != null || (existing == null && benchmark.isText)
+    val isLoad = !isText && benchmark.measure == com.yokodake.melete.data.entity.BenchmarkMeasure.LOAD
     fun text(value: Double?) = value?.let { BenchmarkFormat.number(it, null) }
         ?.replace("−", "-").orEmpty()
 
@@ -69,12 +73,14 @@ fun ResultDialog(
     var left by remember { mutableStateOf(text(existing?.value)) }
     var right by remember { mutableStateOf(text(existing?.valueRight)) }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
+    var words by remember { mutableStateOf(existing?.textValue.orEmpty()) }
+    var bodyweight by remember { mutableStateOf(text(existing?.bodyweightPercent)) }
     var pickingDate by remember { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
 
     val leftValue = left.toDoubleOrNull()
     val rightValue = right.toDoubleOrNull()
-    val canSave = leftValue != null || (unilateral && rightValue != null)
+    val canSave = if (isText) words.isNotBlank() else leftValue != null || (unilateral && rightValue != null)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -97,7 +103,15 @@ fun ResultDialog(
                     TextButton(onClick = { pickingDate = true }) { Text("Change") }
                 }
                 val suffix = unit.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
-                if (unilateral) {
+                if (isText) {
+                    CompactTextField(
+                        value = words,
+                        onValueChange = { words = it },
+                        label = "Result",
+                        minHeight = 48,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else if (unilateral) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         ValueField("Left$suffix", left, signed, Modifier.weight(1f)) { left = it }
                         ValueField("Right$suffix", right, signed, Modifier.weight(1f)) { right = it }
@@ -109,6 +123,15 @@ fun ResultDialog(
                         signed = signed,
                         modifier = Modifier.fillMaxWidth(),
                     ) { left = it }
+                }
+                if (isLoad) {
+                    NumberField(
+                        label = "Bodyweight % (optional)",
+                        value = bodyweight,
+                        onValueChange = { bodyweight = it },
+                        decimal = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
                 CompactTextField(
                     value = note,
@@ -132,9 +155,11 @@ fun ResultDialog(
                     onSave(
                         ResultInput(
                             date = date,
-                            value = leftValue,
-                            valueRight = rightValue.takeIf { unilateral },
+                            value = leftValue.takeIf { !isText },
+                            valueRight = rightValue.takeIf { unilateral && !isText },
                             note = note,
+                            text = words.takeIf { isText },
+                            bodyweightPercent = bodyweight.toDoubleOrNull().takeIf { isLoad },
                         )
                     )
                 },

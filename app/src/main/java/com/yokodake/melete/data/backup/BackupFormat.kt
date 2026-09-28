@@ -86,6 +86,7 @@ data class BenchmarkRecord(
     val unilateral: Boolean,
     val higherIsBetter: Boolean,
     val protocol: String? = null,
+    val goal: String? = null,
     val orderIndex: Int,
     val createdAtEpochMs: Long,
     val hiddenAtEpochMs: Long? = null,
@@ -99,6 +100,9 @@ data class BenchmarkResultRecord(
     val date: String,
     val value: Double? = null,
     val valueRight: Double? = null,
+    /** A result in words, for a text benchmark. */
+    val text: String? = null,
+    val bodyweightPercent: Double? = null,
     val unit: String,
     val loadMeaning: MeasurementMeaning? = null,
     val unilateral: Boolean,
@@ -408,11 +412,12 @@ internal fun DiaryEntryEntity.toRecord(values: List<DiaryValueEntity>) = DiaryRe
 )
 
 internal fun BenchmarkEntity.toRecord(results: List<BenchmarkResultEntity>) = BenchmarkRecord(
-    id, name, measure, unit, loadMeaning, unilateral, higherIsBetter, protocol, orderIndex,
+    id, name, measure, unit, loadMeaning, unilateral, higherIsBetter, protocol, goal, orderIndex,
     createdAtEpochMs, hiddenAtEpochMs,
     results = results.sortedWith(compareBy({ it.dateEpochDay }, { it.recordedAtEpochMs })).map {
         BenchmarkResultRecord(
-            it.id, it.dateEpochDay.date(), it.value, it.valueRight, it.unitSnapshot,
+            it.id, it.dateEpochDay.date(), it.value, it.valueRight, it.textValue, it.bodyweightPercent,
+            it.unitSnapshot,
             it.loadMeaningSnapshot, it.unilateralSnapshot, it.note, it.recordedAtEpochMs,
         )
     },
@@ -530,14 +535,15 @@ internal fun DiaryRecord.valueEntities() = values.map { record ->
 }
 
 internal fun BenchmarkRecord.toEntity() = BenchmarkEntity(
-    id, name, measure, unit, loadMeaning, unilateral, higherIsBetter, protocol, orderIndex,
+    id, name, measure, unit, loadMeaning, unilateral, higherIsBetter, protocol, goal, orderIndex,
     createdAtEpochMs, hiddenAtEpochMs,
 )
 
 internal fun BenchmarkRecord.resultEntities() = results.map {
     BenchmarkResultEntity(
         id = it.id, benchmarkId = id, dateEpochDay = it.date.epochDay(), value = it.value,
-        valueRight = it.valueRight, unitSnapshot = it.unit, loadMeaningSnapshot = it.loadMeaning,
+        valueRight = it.valueRight, textValue = it.text, bodyweightPercent = it.bodyweightPercent,
+        unitSnapshot = it.unit, loadMeaningSnapshot = it.loadMeaning,
         unilateralSnapshot = it.unilateral, note = it.note, recordedAtEpochMs = it.recordedAtEpochMs,
     )
 }

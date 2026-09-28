@@ -104,7 +104,9 @@ class BenchmarksViewModel(private val repository: BenchmarkRepository) : ViewMod
         val id = local.value.recordingId ?: return
         local.update { it.copy(recordingId = null) }
         viewModelScope.launch {
-            repository.record(id, input.date, input.value, input.valueRight, input.note)
+            repository.record(
+                id, input.date, input.value, input.valueRight, input.note, input.text, input.bodyweightPercent,
+            )
             local.update { it.copy(message = "Result saved") }
         }
     }
@@ -335,6 +337,7 @@ private fun BenchmarkRow(
                             text = buildAnnotatedString {
                                 append("Latest ")
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(latest.text) }
+                                latest.bodyweightText?.let { append(" ($it)") }
                                 append(" · ${benchmarkDate(latest.date)}")
                             },
                             style = MaterialTheme.typography.bodyMedium,
