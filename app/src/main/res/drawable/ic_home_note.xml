@@ -1,4 +1,4 @@
-<!-- Three bars: opens the drawer. An action, never a selected tab. -->
+<!-- A page with lines: the daily note. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -6,11 +6,8 @@
     android:viewportHeight="24">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M4,6.2h16v1.6h-16z" />
+        android:pathData="M6,3h9l4,4v14h-13zM7.6,4.6v14.8h9.8v-11.7h-3.1v-3.1z" />
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M4,11.2h16v1.6h-16z" />
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M4,16.2h16v1.6h-16z" />
+        android:pathData="M9,10.2h6v1.4h-6zM9,13.2h6v1.4h-6zM9,16.2h4v1.4h-4z" />
 </vector>

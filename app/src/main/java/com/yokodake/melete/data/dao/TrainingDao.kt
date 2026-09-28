@@ -171,6 +171,22 @@ interface TrainingDao {
     )
     fun observeCompletedBetween(from: Long, to: Long): Flow<List<ExerciseOccurrenceEntity>>
 
+    /**
+     * How much planned work has not happened yet: planned exercises dated from [today] on, and
+     * planned ones without a date in this week or a later one. Skipped and completed work is not
+     * a plan any more.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM exercise_occurrences
+        WHERE state = 'PLANNED' AND (
+            trainingDateEpochDay >= :today OR
+            (trainingDateEpochDay IS NULL AND weekStartEpochDay >= :thisWeek)
+        )
+        """
+    )
+    fun observeUpcomingPlanned(today: Long, thisWeek: Long): Flow<Int>
+
     /** The first training date anything was completed on, for an "all time" range. */
     @Query("SELECT MIN(trainingDateEpochDay) FROM exercise_occurrences WHERE state = 'COMPLETED'")
     fun observeFirstCompletedDate(): Flow<Long?>

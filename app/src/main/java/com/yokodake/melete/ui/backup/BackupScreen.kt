@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -55,6 +56,8 @@ import java.time.LocalDate
 @Composable
 fun BackupRoute(
     onBack: () -> Unit,
+    /** Opens the plan picker on arrival, once: the Home shortcut's single step to importing. */
+    pickPlan: Boolean = false,
     viewModel: BackupViewModel = viewModel(factory = BackupViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -68,6 +71,14 @@ fun BackupRoute(
     val planLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(viewModel::loadPlan) }
+    // Saved, so coming back from the picker (or rotating) does not open it again.
+    var pickedOnArrival by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(pickPlan) {
+        if (pickPlan && !pickedOnArrival) {
+            pickedOnArrival = true
+            planLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+        }
+    }
 
     BackupScreen(
         state = state,
