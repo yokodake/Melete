@@ -1,5 +1,7 @@
 package com.yokodake.melete.ui.timer
 
+import androidx.compose.ui.BiasAlignment
+import androidx.compose.foundation.layout.BoxWithConstraints
 import com.yokodake.melete.ui.theme.accentButtonColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -607,71 +609,81 @@ private fun IdleControls(
             .padding(horizontal = 24.dp)
             .padding(top = 12.dp),
     ) {
-        // Top, and it stays there: what kind of timer this is, which is the first decision.
-        ModeTabs(state.mode, onMode)
+        // The form, then the kind of timer under it, then Start, sitting a little below the
+        // middle: somewhat more of the slack goes above than below. Scrolls only if a small screen (or the keyboard) cannot
+        // fit it, and then still from the bottom up. Every row has the same label gutter, so
+        // the fields keep one left edge whichever kind is selected.
+        BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            val available = maxHeight
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = available),
+                    // Between centred and low: a little more space above than below.
+                    verticalArrangement = Arrangement.spacedBy(4.dp, BiasAlignment.Vertical(0.4f)),
+                ) {
+                    // Intervals has one more row than the others. Its height is held here, above
+                    // the form where it reads as part of the space, so switching kinds moves
+                    // nothing: every row, the tabs and Start keep their places.
+                    if (state.mode != TimerCreateMode.INTERVALS) Spacer(Modifier.height(FieldRowHeight))
+                    FieldRow("Work") {
+                        when (state.mode) {
+                            TimerCreateMode.TIMED -> {
+                                NumberField("m", state.work.minutes, onWorkMinutes, FieldWidth)
+                                NumberField("s", state.work.seconds, onWorkSeconds, FieldWidth)
+                            }
 
-        // Directly under the tabs; the slack goes below the form, not around it. Every row has
-        // the same label gutter, so the fields keep one left edge whichever kind is selected.
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(top = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            FieldRow("Work") {
-                when (state.mode) {
-                    TimerCreateMode.TIMED -> {
-                        NumberField("m", state.work.minutes, onWorkMinutes, FieldWidth)
-                        NumberField("s", state.work.seconds, onWorkSeconds, FieldWidth)
+                            // Untimed by nature, so the row says why rather than standing empty.
+                            TimerCreateMode.REPS -> Text(
+                                text = "At your pace.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+
+                            // One set is a series of pulses. "Off" falls between them; the rest below is
+                            // still the rest between *sets*, which is a different and much longer thing.
+                            TimerCreateMode.REPEATERS -> {
+                                NumberField("reps", state.repeaterRepsText, onRepeaterReps, FieldWidth)
+                                NumberField("on (s)", state.repeaterWorkText, onRepeaterWork, FieldWidth)
+                                NumberField("off (s)", state.repeaterRestText, onRepeaterRest, FieldWidth)
+                            }
+
+                            // Attempts at your pace; the timer waits for each one.
+                            TimerCreateMode.INTERVALS ->
+                                NumberField("reps", state.intervalRepsText, onIntervalReps, FieldWidth)
+                        }
                     }
 
-                    // Untimed by nature, so the row says why rather than standing empty.
-                    TimerCreateMode.REPS -> Text(
-                        text = "At your pace.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-
-                    // One set is a series of pulses. "Off" falls between them; the rest below is
-                    // still the rest between *sets*, which is a different and much longer thing.
-                    TimerCreateMode.REPEATERS -> {
-                        NumberField("reps", state.repeaterRepsText, onRepeaterReps, FieldWidth)
-                        NumberField("on (s)", state.repeaterWorkText, onRepeaterWork, FieldWidth)
-                        NumberField("off (s)", state.repeaterRestText, onRepeaterRest, FieldWidth)
+                    // The rest between attempts, inside a set; the rest below is still between sets.
+                    if (state.mode == TimerCreateMode.INTERVALS) {
+                        FieldRow("Rep rest") {
+                            NumberField("m", state.intervalRest.minutes, onIntervalRestMinutes, FieldWidth)
+                            NumberField("s", state.intervalRest.seconds, onIntervalRestSeconds, FieldWidth)
+                        }
                     }
 
-                    // Attempts at your pace; the timer waits for each one.
-                    TimerCreateMode.INTERVALS ->
-                        NumberField("reps", state.intervalRepsText, onIntervalReps, FieldWidth)
+                    FieldRow(if (state.mode == TimerCreateMode.INTERVALS) "Set Rest" else "Rest") {
+                        NumberField("m", state.rest.minutes, onRestMinutes, FieldWidth)
+                        NumberField("s", state.rest.seconds, onRestSeconds, FieldWidth)
+                    }
+
+                    FieldRow(if (state.unilateral) "Sets per side" else "Sets") {
+                        NumberField(null, state.setsText, onSets, FieldWidth)
+                        if (state.unilateral) {
+                            NumberField("Switch (s)", state.sideSwitchText, onSideSwitch, FieldWidth)
+                        }
+                    }
+
+                    // One set covers both sides, left then right, so the set count does not double. A row
+                    // like the others: the label in the gutter, the switch where the fields start.
+                    FieldRow("Unilateral") {
+                        Switch(checked = state.unilateral, onCheckedChange = onUnilateral)
+                    }
+
+                    // What kind of timer this is, 24 dp under the form it shapes.
+                    Spacer(Modifier.height(20.dp))
+                    ModeTabs(state.mode, onMode)
                 }
-            }
-
-            // The rest between attempts, inside a set; the rest below is still between sets.
-            if (state.mode == TimerCreateMode.INTERVALS) {
-                FieldRow("Rep rest") {
-                    NumberField("m", state.intervalRest.minutes, onIntervalRestMinutes, FieldWidth)
-                    NumberField("s", state.intervalRest.seconds, onIntervalRestSeconds, FieldWidth)
-                }
-            }
-
-            FieldRow(if (state.mode == TimerCreateMode.INTERVALS) "Set Rest" else "Rest") {
-                NumberField("m", state.rest.minutes, onRestMinutes, FieldWidth)
-                NumberField("s", state.rest.seconds, onRestSeconds, FieldWidth)
-            }
-
-            FieldRow(if (state.unilateral) "Sets per side" else "Sets") {
-                NumberField(null, state.setsText, onSets, FieldWidth)
-                if (state.unilateral) {
-                    NumberField("Switch (s)", state.sideSwitchText, onSideSwitch, FieldWidth)
-                }
-            }
-
-            // One set covers both sides, left then right, so the set count does not double. A row
-            // like the others: the label in the gutter, the switch where the fields start.
-            FieldRow("Unilateral") {
-                Switch(checked = state.unilateral, onCheckedChange = onUnilateral)
             }
         }
 
@@ -679,7 +691,7 @@ private fun IdleControls(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 16.dp),
+                .padding(top = 32.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -704,6 +716,9 @@ private fun IdleControls(
         }
     }
 }
+
+/** The height of one row of the timer form, which a missing row's placeholder also takes. */
+private val FieldRowHeight = 64.dp
 
 /** The width of one number in the timer form: room for "999", not the whole screen. */
 private val FieldWidth = Modifier.width(80.dp)
@@ -766,7 +781,7 @@ private fun FieldRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp),
+            .heightIn(min = FieldRowHeight),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
