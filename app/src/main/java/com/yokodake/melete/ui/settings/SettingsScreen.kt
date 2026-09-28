@@ -240,7 +240,7 @@ private fun About() {
             color = if (debug) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Version ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TYPE}",
+            text = "Version ${BuildConfig.VERSION_NAME} · build ${BuildConfig.BUILD_NUMBER} · ${BuildConfig.BUILD_TYPE}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

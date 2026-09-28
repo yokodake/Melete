@@ -825,6 +825,32 @@ class TrainingRepository(private val database: MeleteDatabase) {
         return occurrence.id
     }
 
+    /**
+     * Gives one scheduled circuit its own number of rounds — one week's copy differing from the
+     * saved circuit, which keeps its own. Refused once any station has a record.
+     */
+    suspend fun setCircuitRounds(circuitInstanceId: String, rounds: Int): Boolean = database.withTransaction {
+        if (rounds < 1) return@withTransaction false
+        val circuit = dao.getCircuit(circuitInstanceId) ?: return@withTransaction false
+        if (circuitRecordedStations(circuitInstanceId) > 0) return@withTransaction false
+        dao.updateCircuit(circuit.copy(rounds = rounds))
+        true
+    }
+
+    /**
+     * Gives the exercises of one scheduled module their own plan — every standalone member cut
+     * from [exerciseId], not those inside its circuits — on this copy only. Members with a record
+     * are left alone. Returns how many were changed.
+     */
+    suspend fun overrideModulePlan(moduleInstanceId: String, exerciseId: String, plan: PrescriptionPayload): Int =
+        database.withTransaction {
+            val members = modules.occurrencesIn(moduleInstanceId).filter {
+                it.exerciseId == exerciseId && it.circuitInstanceId == null && it.state == OccurrenceState.PLANNED
+            }
+            members.forEach { dao.updateOccurrence(it.copy(prescriptionJson = plan.toJson())) }
+            members.size
+        }
+
     /** Edits this week's copy only; nothing else holds it, so nothing else is touched. */
     suspend fun updateOccurrencePrescription(occurrenceId: String, payload: PrescriptionPayload) {
         database.withTransaction {

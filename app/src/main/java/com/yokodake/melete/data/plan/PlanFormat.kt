@@ -109,6 +109,13 @@ data class PlanItem(
     val module: String? = null,
     val activity: String? = null,
     val minutes: Int? = null,
+    /**
+     * Where a module is placed in a week: plans for its exercise entries this time only, by
+     * exercise name. The module itself is untouched.
+     */
+    val plans: Map<String, PlanSpec>? = null,
+    /** Where a circuit is placed in a week: its rounds this time only. */
+    val rounds: Int? = null,
 )
 
 @Serializable

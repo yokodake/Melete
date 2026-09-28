@@ -16,3 +16,6 @@ local.properties
 
 # Training-record backups pulled off the phone. Personal data: never committed.
 /backups/
+
+# This machine's shared build counter (see app/build.gradle.kts)
+/build-number.properties

@@ -442,7 +442,10 @@ they cannot be reached any other way. There is no merge.
 
 **Import a plan…** on the same screen reads a hand-written plan file (`format: "melete-plan"`,
 spec in [`plan-format.md`](plan-format.md)): exercises with variations, circuits, modules and weeks
-written out literally, everything referred to by name. **An import never deletes a record of
+written out literally, everything referred to by name. A module or circuit placed in a week can
+override what it copies for that week only — `"plans"` for a module's own exercise entries,
+`"rounds"` for a circuit (`setCircuitRounds`, `overrideModulePlan`) — so one FA module or one
+intervals circuit serves every week of a ramp. **An import never deletes a record of
 training**: anything logged, done or skipped stays (a circuit or module holding any of it is kept
 whole), and so does the diary. Picking a file shows a preview before anything is written, with
 two choices:
@@ -646,6 +649,13 @@ foreground service types and background audio.
 
 `JAVA_HOME` must point at a JDK; Android Studio's bundled one works:
 `C:\Program Files\Android\Android Studio\jbr`.
+
+**Build numbers.** Every Gradle run that assembles, installs, bundles or packages the app — debug
+or release, from the command line or Android Studio — takes the next number from one shared
+counter in `build-number.properties` at the root (gitignored: this machine's count). Changing
+`appVersionName` in `app/build.gradle.kts` starts it again at 0. Test-only runs and syncs leave it
+alone. `versionCode` is `major·1 000 000 + minor·10 000 + build`, so it keeps rising across
+versions; About shows "Version 1.0 · build N".
 
 | Purpose | Command |
 | --- | --- |

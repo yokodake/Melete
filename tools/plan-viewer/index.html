@@ -254,15 +254,27 @@ function resolve(file) {
           const ex = exerciseOf(item.exercise, where(slot));
           return { kind: "exercise", ex, variation: item.variation ?? null, plan: planOf(ex, item.variation, item.plan, where(slot)) };
         }
-        if (item.circuit) return circuitItem(item.circuit, where(slot));
+        if (item.circuit) {
+          if (item.rounds != null && item.rounds < 1) problems.push(`${where(slot)}: ${item.circuit} needs at least 1 round.`);
+          const c = circuitItem(item.circuit, where(slot));
+          // This week's rounds, when the placement gives them.
+          if (item.rounds != null) { c.rounds = item.rounds; c.overridden = true; }
+          return c;
+        }
         if (item.module) {
           const mod = modules.get(nameKey(item.module));
           if (!mod) { missing.add(`Module "${item.module}" (${where(slot)}) is not defined in this file.`); return { kind: "module", name: item.module, entries: [] }; }
+          // This week's plans for some of its exercises, by name, when the placement gives them.
+          const own = new Map(Object.entries(item.plans ?? {}).map(([k, v]) => [nameKey(k), v]));
+          const held = new Set((mod.entries ?? []).filter(e => e.exercise).map(e => nameKey(e.exercise)));
+          own.forEach((_, k) => { if (!held.has(k)) problems.push(`${where(slot)}: ${mod.name} has no exercise "${k}" of its own to plan.`); });
           return {
             kind: "module", name: mod.name, description: mod.description,
             entries: (mod.entries ?? []).map(e => e.circuit ? circuitItem(e.circuit, `module ${mod.name}`)
               : (() => { const ex = exerciseOf(e.exercise, `module ${mod.name}`);
-                return { kind: "exercise", ex, variation: e.variation ?? null, plan: planOf(ex, e.variation, e.plan, `module ${mod.name}`) }; })()),
+                const override = own.get(nameKey(e.exercise));
+                return { kind: "exercise", ex, variation: e.variation ?? null, overridden: !!override,
+                  plan: override ?? planOf(ex, e.variation, e.plan, `module ${mod.name}`) }; })()),
           };
         }
         return { kind: "activity", name: item.activity, minutes: item.minutes ?? null };
@@ -373,10 +385,10 @@ function exerciseCard(item) {
   return h("div", { class: "card", title: exerciseDetail(item.ex, item.plan, item.variation) },
     h("div", { class: "top" }, dot(item.ex.category), h("span", { class: "name" }, item.ex.name),
       item.variation ? h("span", { class: "chip" }, String(item.variation).toUpperCase()) : null),
-    h("div", { class: "sub" }, planSummary(item.ex, item.plan, false)));
+    h("div", { class: "sub" }, planSummary(item.ex, item.plan, false) + (item.overridden ? " · this week" : "")));
 }
 function circuitCard(item) {
-  const shape = [`${item.rounds} ${item.rounds === 1 ? "round" : "rounds"}`,
+  const shape = [`${item.rounds} ${item.rounds === 1 ? "round" : "rounds"}${item.overridden ? " this week" : ""}`,
     item.transitionSeconds ? `switch ${fmtSeconds(item.transitionSeconds)}` : null,
     item.roundRestSeconds ? `rest ${fmtSeconds(item.roundRestSeconds)}` : null].filter(Boolean).join(" · ");
   return h("div", { class: "card" },
