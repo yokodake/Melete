@@ -21,9 +21,13 @@ data class Benchmark(
     val unilateral: Boolean,
     val higherIsBetter: Boolean,
     val protocol: String?,
+    val goal: String?,
     val orderIndex: Int,
     val hidden: Boolean,
-)
+) {
+    /** A result in words: no numbers, sides or best. */
+    val isText: Boolean get() = measure == BenchmarkMeasure.TEXT
+}
 
 /** Everything the benchmark editor writes. */
 data class BenchmarkDraft(
@@ -34,6 +38,7 @@ data class BenchmarkDraft(
     val unilateral: Boolean,
     val higherIsBetter: Boolean,
     val protocol: String?,
+    val goal: String? = null,
 )
 
 /** One recorded result, in the unit, meaning and sides it was recorded under. */
@@ -49,8 +54,18 @@ data class BenchmarkResult(
     val unilateral: Boolean,
     val note: String?,
     val recordedAtEpochMs: Long,
+    /** A result in words, for a text benchmark. */
+    val textValue: String? = null,
+    /** A bodyweight percentage recorded with the load, as reported. */
+    val bodyweightPercent: Double? = null,
 ) {
-    val text: String get() = BenchmarkFormat.values(value, valueRight, unilateral, unit, loadMeaning)
+    /** The result as it reads: the words, or the value(s) with the unit. */
+    val text: String
+        get() = textValue ?: BenchmarkFormat.values(value, valueRight, unilateral, unit, loadMeaning)
+
+    /** "128% BW", when one was recorded. */
+    val bodyweightText: String?
+        get() = bodyweightPercent?.let { "${BenchmarkFormat.number(it, null)}% BW" }
 }
 
 /** A best value and the date it was first reached. */
@@ -215,6 +230,7 @@ class BenchmarkRepository(private val database: MeleteDatabase) {
             unilateral = draft.unilateral,
             higherIsBetter = draft.higherIsBetter,
             protocol = draft.protocol?.trim()?.takeIf { it.isNotEmpty() },
+            goal = draft.goal?.trim()?.takeIf { it.isNotEmpty() },
             orderIndex = dao.nextOrderIndex(),
             createdAtEpochMs = System.currentTimeMillis(),
         )
@@ -235,6 +251,7 @@ class BenchmarkRepository(private val database: MeleteDatabase) {
                     unilateral = draft.unilateral,
                     higherIsBetter = draft.higherIsBetter,
                     protocol = draft.protocol?.trim()?.takeIf { it.isNotEmpty() },
+                    goal = draft.goal?.trim()?.takeIf { it.isNotEmpty() },
                 )
             )
         }
@@ -268,15 +285,22 @@ class BenchmarkRepository(private val database: MeleteDatabase) {
         value: Double?,
         valueRight: Double?,
         note: String?,
+        textValue: String? = null,
+        bodyweightPercent: Double? = null,
     ): String? = database.withTransaction {
         val benchmark = dao.getBenchmark(benchmarkId) ?: return@withTransaction null
-        if (value == null && valueRight == null) return@withTransaction null
+        val words = textValue?.trim()?.takeIf { it.isNotEmpty() }
+        val isText = benchmark.measure == BenchmarkMeasure.TEXT
+        if (isText && words == null) return@withTransaction null
+        if (!isText && value == null && valueRight == null) return@withTransaction null
         val row = BenchmarkResultEntity(
             id = UUID.randomUUID().toString(),
             benchmarkId = benchmarkId,
             dateEpochDay = date.toEpochDay(),
-            value = value,
-            valueRight = valueRight.takeIf { benchmark.unilateral },
+            value = value.takeIf { !isText },
+            valueRight = valueRight.takeIf { benchmark.unilateral && !isText },
+            textValue = words.takeIf { isText },
+            bodyweightPercent = bodyweightPercent.takeIf { benchmark.measure == BenchmarkMeasure.LOAD },
             unitSnapshot = benchmark.unit,
             loadMeaningSnapshot = benchmark.loadMeaning,
             unilateralSnapshot = benchmark.unilateral,
@@ -294,14 +318,21 @@ class BenchmarkRepository(private val database: MeleteDatabase) {
         value: Double?,
         valueRight: Double?,
         note: String?,
+        textValue: String? = null,
+        bodyweightPercent: Double? = null,
     ): Boolean = database.withTransaction {
         val row = dao.getResult(resultId) ?: return@withTransaction false
-        if (value == null && valueRight == null) return@withTransaction false
+        val words = textValue?.trim()?.takeIf { it.isNotEmpty() }
+        val isText = row.textValue != null
+        if (isText && words == null) return@withTransaction false
+        if (!isText && value == null && valueRight == null) return@withTransaction false
         dao.updateResult(
             row.copy(
                 dateEpochDay = date.toEpochDay(),
-                value = value,
-                valueRight = valueRight.takeIf { row.unilateralSnapshot },
+                value = value.takeIf { !isText },
+                valueRight = valueRight.takeIf { row.unilateralSnapshot && !isText },
+                textValue = words.takeIf { isText },
+                bodyweightPercent = bodyweightPercent.takeIf { !isText },
                 note = note?.trim()?.takeIf { it.isNotEmpty() },
             )
         )
@@ -322,6 +353,7 @@ private fun BenchmarkEntity.toModel() = Benchmark(
     unilateral = unilateral,
     higherIsBetter = higherIsBetter,
     protocol = protocol,
+    goal = goal,
     orderIndex = orderIndex,
     hidden = hiddenAtEpochMs != null,
 )
@@ -337,4 +369,6 @@ private fun BenchmarkResultEntity.toModel() = BenchmarkResult(
     unilateral = unilateralSnapshot,
     note = note,
     recordedAtEpochMs = recordedAtEpochMs,
+    textValue = textValue,
+    bodyweightPercent = bodyweightPercent,
 )

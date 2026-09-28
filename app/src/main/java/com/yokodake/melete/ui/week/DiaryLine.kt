@@ -7,7 +7,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.yokodake.melete.data.BenchmarkDayResult
 import com.yokodake.melete.data.DiaryDay
@@ -40,8 +43,13 @@ fun DiaryLine(day: DiaryDay, trackers: List<Tracker>, onClick: () -> Unit) {
  */
 @Composable
 fun BenchmarkLine(result: BenchmarkDayResult, onClick: () -> Unit) {
+    // The flag in red, so a test day stands out from the diary line and the cards around it.
+    val flag = MaterialTheme.colorScheme.error
     Text(
-        text = "\u2691 ${result.name} \u00b7 ${result.text}",
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = flag)) { append("\u2691") }
+            append(" ${result.name} \u00b7 ${result.text}")
+        },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,

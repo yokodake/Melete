@@ -36,13 +36,14 @@ object MeleteMigrations {
                 "CREATE TABLE IF NOT EXISTS `benchmarks` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
                     "`measure` TEXT NOT NULL, `unit` TEXT NOT NULL, `loadMeaning` TEXT, " +
                     "`unilateral` INTEGER NOT NULL, `higherIsBetter` INTEGER NOT NULL, `protocol` TEXT, " +
-                    "`orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, " +
+                    "`goal` TEXT, `orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, " +
                     "`hiddenAtEpochMs` INTEGER, PRIMARY KEY(`id`))"
             )
             db.execSQL(
                 "CREATE TABLE IF NOT EXISTS `benchmark_results` (`id` TEXT NOT NULL, " +
                     "`benchmarkId` TEXT NOT NULL, `dateEpochDay` INTEGER NOT NULL, `value` REAL, " +
-                    "`valueRight` REAL, `unitSnapshot` TEXT NOT NULL, `loadMeaningSnapshot` TEXT, " +
+                    "`valueRight` REAL, `textValue` TEXT, `bodyweightPercent` REAL, " +
+                    "`unitSnapshot` TEXT NOT NULL, `loadMeaningSnapshot` TEXT, " +
                     "`unilateralSnapshot` INTEGER NOT NULL, `note` TEXT, " +
                     "`recordedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`), " +
                     "FOREIGN KEY(`benchmarkId`) REFERENCES `benchmarks`(`id`) " +

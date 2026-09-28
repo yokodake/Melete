@@ -9,6 +9,8 @@ import com.yokodake.melete.data.backup.BackupService
 import com.yokodake.melete.data.plan.ImportMode
 import com.yokodake.melete.data.plan.ImportScope
 import com.yokodake.melete.data.plan.PlanImporter
+import com.yokodake.melete.data.timer.TimerCue
+import com.yokodake.melete.data.timer.TimerCuePlayer
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -25,6 +27,10 @@ import java.io.File
  *     adb shell am instrument -w -e action import -e mode add|replace -e scope today|past [-e dry true] \
  *         -e class com.yokodake.melete.DeviceActions com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner
  *
+ *     adb shell am instrument -w -e action cue [-e times 3] \
+ *         -e class com.yokodake.melete.DeviceActions com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner
+ *
+ * `cue` plays the finish cue on the phone and changes nothing.
  * `restore` reads a copy from the app's recovery copies; `import` reads the test library plan.
  * Both save a recovery copy first, exactly as the screen does. `dry` only prints the preview.
  */
@@ -43,6 +49,18 @@ class DeviceActions {
         }
         val safety = File(context.filesDir, "backups")
         fun say(text: String) = instrumentation.sendStatus(0, Bundle().apply { putString("stream", "$text\n") })
+
+        // Calls someone back to the computer: the timer's finish cue, which plays over music.
+        // Touches no data, so it works whatever state the database is in.
+        if (action == "cue") {
+            val player = TimerCuePlayer(context)
+            repeat(arguments.getString("times")?.toIntOrNull() ?: 2) {
+                player.play(TimerCue.FINISH)
+                Thread.sleep(1_500)
+            }
+            say("Cue played")
+            return@runBlocking
+        }
 
         val database = MeleteDatabase.build(context)
         try {

@@ -108,6 +108,35 @@ class BenchmarkTest {
     }
 
     @Test
+    fun aPlanFileRecordsBenchmarksOnceAndAddsNoTraining() = runBlocking {
+        val training = TrainingRepository(database)
+        val importer = com.yokodake.melete.data.plan.PlanImporter(database, training, BackupService(database), benchmarks)
+        val file = importer.decode(
+            """
+            { "format": "melete-plan", "version": 1, "benchmarks": [
+              { "name": "Forward bend", "measure": "text", "goal": "face to knees",
+                "results": [{ "date": "2025-11-15", "text": "touching heels" }] },
+              { "name": "Hang", "measure": "load", "unit": "kg", "meaning": "ADDED_LOAD",
+                "results": [{ "date": "2025-11-15", "value": 0, "bodyweightPercent": 100 }] } ] }
+            """
+        )
+        val safety = java.io.File(context.cacheDir, "benchmark-import-test")
+        repeat(2) {
+            importer.import(
+                file, com.yokodake.melete.data.plan.ImportMode.ADD,
+                com.yokodake.melete.data.plan.ImportScope.FROM_TODAY, safety,
+            )
+        }
+        val standings = benchmarks.observeStandings().first().associateBy { it.benchmark.name }
+        assertEquals(1, standings.getValue("Forward bend").results.size)
+        assertEquals("touching heels", standings.getValue("Forward bend").latest!!.text)
+        assertEquals("face to knees", standings.getValue("Forward bend").benchmark.goal)
+        assertEquals("+0 kg", standings.getValue("Hang").latest!!.text)
+        assertEquals("100% BW", standings.getValue("Hang").latest!!.bodyweightText)
+        assertEquals(0, database.backupDao().occurrences().size)
+    }
+
+    @Test
     fun benchmarksSurviveExportAndRestore() = runBlocking {
         val id = benchmarks.create(draft(unilateral = true))
         benchmarks.record(id, monday, 25.0, 23.0, "note")

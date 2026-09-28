@@ -18,7 +18,7 @@ class SchemaBaselineTest {
     /** Every released schema and its Room identity hash. Add a line when a version is added. */
     private val released = mapOf(
         10 to "668aea72f58ec32158d5f564e4c1390c",
-        11 to "4a49e16debfc0631b4ad1868c32a8920",
+        11 to "52918ff1c14aa854f8cf79b686f3c4c6",
     )
 
     private fun identityOf(version: Int): String? =

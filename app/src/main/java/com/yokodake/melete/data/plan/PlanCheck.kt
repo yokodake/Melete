@@ -24,6 +24,8 @@ data class LibraryIndex(
     val moduleNames: Map<String, String> = emptyMap(),
     /** Names two live library items share, which a file therefore cannot point at. */
     val ambiguous: Set<String> = emptySet(),
+    /** The phone's benchmarks by name, with the results they already hold. */
+    val benchmarks: Map<String, IndexedBenchmark> = emptyMap(),
 ) {
     companion object {
         val EMPTY = LibraryIndex()
@@ -94,6 +96,7 @@ data class ResolvedPlan(
     val circuits: List<ResolvedCircuit>,
     val modules: List<ResolvedModule>,
     val slots: List<ResolvedSlot>,
+    val benchmarks: List<ResolvedBenchmark> = emptyList(),
 )
 
 /** What an import would do, in the terms the preview shows. */
@@ -109,6 +112,10 @@ data class PlanPreview(
     val planned: Int = 0,
     /** Items dated before the cut-off, left out because the import is from today on. */
     val skippedPast: Int = 0,
+    val benchmarksAdded: List<String> = emptyList(),
+    val benchmarksUpdated: List<String> = emptyList(),
+    /** Results to record: never cut off by scope, and never ones the phone already holds. */
+    val benchmarkResults: Int = 0,
 )
 
 /**
@@ -473,6 +480,8 @@ object PlanCheck {
             }
         }
 
+        val benchmarks = PlanBenchmarkCheck.resolve(file, library.benchmarks, problems, warnings)
+
         val preview = PlanPreview(
             exercisesAdded = exercises.filter { it.existingId == null }.map { it.draft.name },
             exercisesUpdated = exercises.filter { it.existingId != null }.map { it.draft.name },
@@ -486,6 +495,9 @@ object PlanCheck {
             planned = slots.filter { cutoff == null || (it.date ?: it.weekStart.plusDays(6)) >= cutoff }
                 .sumOf { it.items.size },
             skippedPast = skippedPast,
+            benchmarksAdded = benchmarks.filter { it.existingId == null }.map { it.draft.name },
+            benchmarksUpdated = benchmarks.filter { it.existingId != null }.map { it.draft.name },
+            benchmarkResults = benchmarks.sumOf { it.results.size },
         )
         val distinctProblems = problems.distinct()
         return PlanResolution(
@@ -496,6 +508,7 @@ object PlanCheck {
                 ResolvedPlan(
                     exercises, circuits, modules,
                     slots.filter { cutoff == null || (it.date ?: it.weekStart.plusDays(6)) >= cutoff },
+                    benchmarks,
                 )
             } else {
                 null

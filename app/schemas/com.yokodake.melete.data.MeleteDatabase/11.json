@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 11,
-    "identityHash": "4a49e16debfc0631b4ad1868c32a8920",
+    "identityHash": "52918ff1c14aa854f8cf79b686f3c4c6",
     "entities": [
       {
         "tableName": "exercises",
@@ -1211,7 +1211,7 @@
       },
       {
         "tableName": "benchmarks",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `measure` TEXT NOT NULL, `unit` TEXT NOT NULL, `loadMeaning` TEXT, `unilateral` INTEGER NOT NULL, `higherIsBetter` INTEGER NOT NULL, `protocol` TEXT, `orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `hiddenAtEpochMs` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `measure` TEXT NOT NULL, `unit` TEXT NOT NULL, `loadMeaning` TEXT, `unilateral` INTEGER NOT NULL, `higherIsBetter` INTEGER NOT NULL, `protocol` TEXT, `goal` TEXT, `orderIndex` INTEGER NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `hiddenAtEpochMs` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -1260,6 +1260,11 @@
             "affinity": "TEXT"
           },
           {
+            "fieldPath": "goal",
+            "columnName": "goal",
+            "affinity": "TEXT"
+          },
+          {
             "fieldPath": "orderIndex",
             "columnName": "orderIndex",
             "affinity": "INTEGER",
@@ -1286,7 +1291,7 @@
       },
       {
         "tableName": "benchmark_results",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `benchmarkId` TEXT NOT NULL, `dateEpochDay` INTEGER NOT NULL, `value` REAL, `valueRight` REAL, `unitSnapshot` TEXT NOT NULL, `loadMeaningSnapshot` TEXT, `unilateralSnapshot` INTEGER NOT NULL, `note` TEXT, `recordedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`benchmarkId`) REFERENCES `benchmarks`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `benchmarkId` TEXT NOT NULL, `dateEpochDay` INTEGER NOT NULL, `value` REAL, `valueRight` REAL, `textValue` TEXT, `bodyweightPercent` REAL, `unitSnapshot` TEXT NOT NULL, `loadMeaningSnapshot` TEXT, `unilateralSnapshot` INTEGER NOT NULL, `note` TEXT, `recordedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`benchmarkId`) REFERENCES `benchmarks`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "id",
@@ -1314,6 +1319,16 @@
           {
             "fieldPath": "valueRight",
             "columnName": "valueRight",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "textValue",
+            "columnName": "textValue",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bodyweightPercent",
+            "columnName": "bodyweightPercent",
             "affinity": "REAL"
           },
           {
@@ -1388,7 +1403,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4a49e16debfc0631b4ad1868c32a8920')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '52918ff1c14aa854f8cf79b686f3c4c6')"
     ]
   }
 }

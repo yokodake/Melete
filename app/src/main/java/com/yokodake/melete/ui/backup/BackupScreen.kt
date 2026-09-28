@@ -422,5 +422,8 @@ private fun planLines(preview: PlanPreview): List<String> {
             "Plans ${countLabel(it, "item")} across ${countLabel(preview.weeks, "week")}"
         },
         preview.skippedPast.takeIf { it > 0 }?.let { "Leaves out ${countLabel(it, "item")} dated before today" },
+        line("Adds", preview.benchmarksAdded, "benchmark"),
+        line("Updates", preview.benchmarksUpdated, "benchmark"),
+        preview.benchmarkResults.takeIf { it > 0 }?.let { "Records ${countLabel(it, "benchmark result")}" },
     ).ifEmpty { listOf("The file holds nothing to import.") }
 }

@@ -26,6 +26,8 @@ data class PlanFile(
     val circuits: List<PlanCircuit> = emptyList(),
     val modules: List<PlanModule> = emptyList(),
     val weeks: List<PlanWeek> = emptyList(),
+    /** Benchmarks and their results; see [PlanBenchmark]. */
+    val benchmarks: List<PlanBenchmark> = emptyList(),
 )
 
 @Serializable

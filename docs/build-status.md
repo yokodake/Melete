@@ -55,18 +55,28 @@ again.
 
 A definition is a name, a measurement (load, duration, distance, other) with a unit, for a load
 whether it is total or **added to bodyweight** (signed: assistance below zero), one value or
-**left and right**, whether **higher or lower** is better, and an optional protocol ("20 mm · 7 s ·
-added load"). A benchmark can be deleted only while it has no results.
+**left and right**, whether **higher or lower** is better, an optional protocol ("20 mm · 7 s ·
+added load") and an optional **goal** as written ("150% BW", "face to knees"). A **text** benchmark
+records words ("touching heels"): it shows its latest result and has no best. A load result may
+carry the **bodyweight %** reported with it, stored as written and shown as "(128% BW)". A
+benchmark can be deleted only while it has no results.
+
+**Plan files** can carry a `benchmarks` section (definitions and results; see
+[plan-format.md](plan-format.md)), imported with *Add* under Import / export. Results ignore the
+From today scope and are never added twice, so re-importing changes nothing; Replace plans never
+removes benchmarks.
 
 **Recording** is one dialog: the date (today, *Change*), the value or L and R, an optional note,
 Save — the best valid attempt, not the set logger. Zero and negative added loads are results. The
 detail page shows the protocol, **Latest** and **Best** (kept apart: the latest test may be below
-an older best; each side's best keeps its own date), and the dated results, each opened to
-correct or delete it. The graph over time is **deferred** to the exercise graphs.
+an older best; each side's best keeps its own date), and the dated results, each corrected or
+deleted after a **long press** (a tap does nothing, so scrolling cannot change a record). The
+protocol and the goal share a line; the subtitle says the measure and unit, and "lower is better"
+only when it is. The graph over time is **deferred** to the exercise graphs.
 
 **A record apart from training (decision A):** a result is written to `benchmark_results` only —
 no occurrence, session or set, nothing counted or totalled. The calendar shows it on its date as a
-read-only line under the day (⚑ name · value), like the diary; a tap opens the benchmark. Each
+read-only line under the day (a red ⚑, then name · value), like the diary; a tap opens the benchmark. Each
 result keeps the unit, load meaning and sidedness it was recorded under, so editing a definition
 never rewrites an old result, and only results in the current unit and meaning compete for Best
 (`BenchmarkStanding`). Results are in backups (format 2) and survive restore; a plan import never
@@ -1412,8 +1422,8 @@ Brought forward ahead of 6A because this is the user's baseline week for measuri
 split into **7A benchmarks** (this) and **7B profile and settings**. The spec agreed with the user
 is in `ui-ux-handoff.md`, including decision A: results are records, not training.
 
-Schema **11**, the first change since the baseline: two new tables, `benchmarks` and
-`benchmark_results` (foreign key RESTRICT, so a benchmark with results cannot be deleted from under
+Schema **11**, the first change since the baseline: two new tables, `benchmarks` (with `goal`) and
+`benchmark_results` (with `textValue` and `bodyweightPercent`) (foreign key RESTRICT, so a benchmark with results cannot be deleted from under
 them), created by `MIGRATION_10_11` with nothing existing touched; `11.json` exported and pinned in
 `SchemaBaselineTest`. Backup format **2** adds `benchmarks` (with nested results); a version 1
 file reads as having none, and the version went up so an older app refuses a file holding
@@ -1430,6 +1440,17 @@ unused benchmark deletes; correction; export and restore round trip), `BackupCom
 (the frozen version 1 fixture still restores and exports back the same) and `BackupRestoreTest`.
 The full device suite was not run. **Release has not been updated**: installing it runs
 `MIGRATION_10_11` on the real record, which the tests above cover; take an in-app export first.
+
+Then, same day, before release: text results, goals and reported bodyweight % were folded into
+schema 11 rather than a schema 12, since no release had it yet (11.json re-exported and re-pinned;
+Melete Debug, which had opened the first draft, had its two empty benchmark tables dropped and
+was set back to 10 by a one-off instrumentation step, then migrated). Plan files gained
+`benchmarks`, which is how the user's historical results (five benchmarks, twenty results, kept
+out of the repository in `backups/`) are loaded. 226 unit tests pass (new `PlanBenchmarkTest`);
+on the phone `MigrationTest`, `BenchmarkTest` (now with an import-twice test), `PlanImportTest`,
+`BackupCompatibilityTest` and `BackupRestoreTest` pass, 21 tests; Melete Debug opens its own
+migrated database without error. `DeviceActions` gained `-e action cue`, which plays the timer's
+finish cue on the phone and touches no data.
 
 ## Next step
 
