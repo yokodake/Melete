@@ -105,6 +105,8 @@ class TimerController(
     val lastRepeaterReps: Int get() = store.lastRepeaterReps
     val lastRepeaterWorkSeconds: Int get() = store.lastRepeaterWorkSeconds
     val lastRepeaterRestSeconds: Int get() = store.lastRepeaterRestSeconds
+    val lastIntervalReps: Int get() = store.lastIntervalReps
+    val lastIntervalRestSeconds: Int get() = store.lastIntervalRestSeconds
 
     fun lastDurationSeconds(phase: TimerPhase): Int =
         // A preparation has a fixed length, so there is nothing remembered about it; asking
@@ -155,6 +157,10 @@ class TimerController(
                 store.lastRepeaterReps = it.repsPerSet
                 store.lastRepeaterWorkSeconds = it.workSecondsPerRep
                 store.lastRepeaterRestSeconds = it.restSecondsBetweenReps
+            }
+            if (entry.paced) {
+                entry.workReps?.let { store.lastIntervalReps = it }
+                store.lastIntervalRestSeconds = entry.repRestSeconds
             }
         }
         // The store is the one source of cue settings, because every interval after the first is

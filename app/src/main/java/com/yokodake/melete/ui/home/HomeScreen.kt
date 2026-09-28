@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -256,6 +257,8 @@ fun HomeScreen(
                         detail = null,
                         onClick = onOpenLibrary,
                         modifier = Modifier.weight(1f),
+                        // The progress bar's blue: a pale wash behind, the icon in full.
+                        accent = progressColor(),
                     )
                     // The benchmark due a test rides inside its own destination, not beside it.
                     HomeTile(
@@ -265,6 +268,7 @@ fun HomeScreen(
                         onClick = onOpenBenchmarks,
                         onHideDetail = onDismissReminder.takeIf { state.reminder != null },
                         modifier = Modifier.weight(1f),
+                        iconTint = progressColor(),
                     )
                 }
             }
@@ -413,12 +417,19 @@ private fun HomeTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onHideDetail: (() -> Unit)? = null,
+    /** Tints the tile: a pale wash of it behind, the icon in it. The label keeps its ink. */
+    accent: androidx.compose.ui.graphics.Color? = null,
+    /** The icon's colour alone, without the wash; [accent] sets both. */
+    iconTint: androidx.compose.ui.graphics.Color? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val surface = MaterialTheme.colorScheme.surface
     val haptics = LocalHapticFeedback.current
     Box(modifier = modifier) {
         Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            color = accent?.copy(alpha = 0.14f)?.compositeOver(surface)
+                ?: MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.onSurface,
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier
                 .fillMaxWidth()
@@ -443,7 +454,7 @@ private fun HomeTile(
                     Icon(
                         painter = painterResource(icon),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = accent ?: iconTint ?: MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
                     Text(label, style = MaterialTheme.typography.titleSmall)

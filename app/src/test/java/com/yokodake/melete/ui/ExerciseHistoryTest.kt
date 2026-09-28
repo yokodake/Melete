@@ -169,7 +169,7 @@ class ExerciseHistoryTest {
     }
 
     @Test
-    fun `without loads, reps are plotted, and an activity plots its duration`() {
+    fun `without loads, reps are plotted, and durations never are`() {
         val reps = build(listOf(OccurrenceDetail(occurrence("a", sep(21)), listOf(set("a", sep(21), 0, reps = 12, load = null)))))
         assertEquals(HistoryMeasure.REPS, reps.measure)
         assertEquals("12 reps", reps.format(12.0))
@@ -181,9 +181,23 @@ class ExerciseHistoryTest {
             ),
             mode = ExerciseMode.ACTIVITY,
         )
-        assertEquals(HistoryMeasure.DURATION, activity.measure)
-        assertEquals(listOf(5400.0), activity.series.single().points.map { it.value })
+        assertNull(activity.measure)
+        assertFalse(activity.hasGraph)
         assertEquals(2, activity.records.size)
+
+        // A timed set without a load is not graphed; a hold recorded in seconds is a load.
+        val hang = build(
+            listOf(OccurrenceDetail(occurrence("a", sep(21), mode = ExerciseMode.DURATION), listOf(set("a", sep(21), 0, reps = null, load = null)))),
+            mode = ExerciseMode.DURATION,
+        )
+        assertFalse(hang.hasGraph)
+        val hold = ExerciseHistory.build(
+            listOf(OccurrenceDetail(occurrence("a", sep(21), mode = ExerciseMode.DURATION),
+                listOf(set("a", sep(21), 0, reps = null, load = 45.0, unit = "s", meaning = MeasurementMeaning.TOTAL_LOAD)))),
+            ExerciseMode.DURATION, "s", MeasurementMeaning.TOTAL_LOAD,
+        )
+        assertEquals(HistoryMeasure.LOAD, hold.measure)
+        assertEquals("45 s", hold.format(45.0))
     }
 
     @Test

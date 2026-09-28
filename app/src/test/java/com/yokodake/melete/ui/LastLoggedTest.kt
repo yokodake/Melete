@@ -148,12 +148,29 @@ class LastLoggedTest {
     }
 
     @Test
-    fun `different loads are listed set by set, with the unit once`() {
+    fun `different sets read as their count and max load, or set by set when asked`() {
         val occ = occurrence("o", sep24)
         val sets = listOf(
             set("o", sep24, 0), set("o", sep24, 1), set("o", sep24, 2, reps = 6, load = 22.0),
         )
-        assertEquals("8 × 20 · 8 × 20 · 6 × 22 kg", LastLoggedPicker.summarise(occ, sets))
+        assertEquals("3 sets · max 6 × 22 kg", LastLoggedPicker.summarise(occ, sets))
+        // On a tie in load, the set with more reps.
+        val tie = listOf(set("o", sep24, 0, reps = 3, load = 22.0), set("o", sep24, 1, reps = 5, load = 22.0), set("o", sep24, 2))
+        assertEquals("3 sets · max 5 × 22 kg", LastLoggedPicker.summarise(occ, tie))
+        assertEquals("8 × 20 · 8 × 20 · 6 × 22 kg", LastLoggedPicker.summarise(occ, sets, perSet = true))
+        // Without loads there is no max to give, so the reps are listed.
+        val unloaded = listOf(set("o", sep24, 0, load = null), set("o", sep24, 1, reps = 6, load = null))
+        assertEquals("8 · 6", LastLoggedPicker.summarise(occ, unloaded))
+    }
+
+    @Test
+    fun `a unilateral max load is each side's own`() {
+        val occ = occurrence("o", sep24, unilateral = true)
+        val sets = listOf(
+            set("o", sep24, 0, side = BodySide.LEFT, load = 20.0), set("o", sep24, 0, side = BodySide.RIGHT, load = 22.5),
+            set("o", sep24, 1, side = BodySide.LEFT, load = 25.0), set("o", sep24, 1, side = BodySide.RIGHT, load = 22.5),
+        )
+        assertEquals("2 sets · max 8 × L 25 / R 22.5 kg", LastLoggedPicker.summarise(occ, sets))
     }
 
     @Test
@@ -181,7 +198,8 @@ class LastLoggedTest {
             set("o", sep24, 0, load = -10.0, meaning = MeasurementMeaning.ADDED_LOAD),
             set("o", sep24, 1, load = 0.0, meaning = MeasurementMeaning.ADDED_LOAD),
         )
-        assertEquals("8 × −10 · 8 × +0 kg", LastLoggedPicker.summarise(occ, assisted))
+        assertEquals("2 sets · max 8 × +0 kg", LastLoggedPicker.summarise(occ, assisted))
+        assertEquals("8 × −10 · 8 × +0 kg", LastLoggedPicker.summarise(occ, assisted, perSet = true))
     }
 
     @Test

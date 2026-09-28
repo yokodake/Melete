@@ -146,4 +146,36 @@ class TimerCreateTest {
         assertNull(base.copy(setsText = "0", mode = TimerCreateMode.REPS).draftProgram)
         assertNull(base.copy(setsText = "", mode = TimerCreateMode.REPS).draftProgram)
     }
+
+    @Test
+    fun `intervals built by hand are the same sequence as planned attempts`() {
+        val program = base.copy(
+            mode = TimerCreateMode.INTERVALS,
+            intervalRepsText = "3",
+            intervalRest = com.yokodake.melete.ui.timer.DurationDraft.of(180),
+            rest = com.yokodake.melete.ui.timer.DurationDraft.of(300),
+        ).draftProgram!!
+        val planned = com.yokodake.melete.data.timer.PrescriptionProgram.of(
+            null, com.yokodake.melete.data.model.ExerciseMode.REPETITIONS, false,
+            com.yokodake.melete.data.model.PrescriptionPayload(sets = 3, targetReps = 3, restSeconds = 300, restSecondsBetweenReps = 180),
+        )
+        assertEquals(planned.steps, program.steps)
+        assertEquals(TimerPhase.REP_REST, program.steps[1].phase)
+    }
+
+    @Test
+    fun `intervals need two reps and a rest between them`() {
+        val one = base.copy(mode = TimerCreateMode.INTERVALS, intervalRepsText = "1")
+        assertNull(one.draftProgram)
+        val noRest = base.copy(mode = TimerCreateMode.INTERVALS, intervalRest = com.yokodake.melete.ui.timer.DurationDraft.of(0))
+        assertNull(noRest.draftProgram)
+    }
+
+    @Test
+    fun `a long set is run as typed, never cut to an hour`() {
+        val ninety = com.yokodake.melete.ui.timer.DurationDraft(minutes = "90", seconds = "00")
+        assertEquals(5400, ninety.totalSeconds)
+        val program = base.copy(mode = TimerCreateMode.TIMED, setsText = "1", work = ninety).draftProgram!!
+        assertEquals(5400, program.workSeconds)
+    }
 }

@@ -92,6 +92,23 @@ fun doneColors(): Pair<Color, Color> =
 fun progressColor(): Color =
     if (isSystemInDarkTheme()) Color(0xFF7FA7D9) else Color(0xFF4A78B5)
 
+/**
+ * The app's one accent for the action a screen exists for — Start, Log exercise, Update log:
+ * the progress blue, with ink that reads on it in either theme.
+ */
+@Composable
+fun accentButtonColors(): androidx.compose.material3.ButtonColors =
+    androidx.compose.material3.ButtonDefaults.buttonColors(
+        containerColor = progressColor(),
+        contentColor = onProgressColor(),
+    )
+
+/** Ink on the progress blue: white on the light theme's blue, dark on the dark theme's lighter one. */
+@Composable
+@ReadOnlyComposable
+fun onProgressColor(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF0D1B2E) else Color.White
+
 /** The last seconds of a rest, when the work is about to start. */
 @Composable
 @ReadOnlyComposable

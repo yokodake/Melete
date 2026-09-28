@@ -1,5 +1,6 @@
 package com.yokodake.melete.ui.detail
 
+import com.yokodake.melete.ui.theme.accentButtonColors
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.RadioButton
 import androidx.compose.ui.semantics.Role
@@ -273,11 +274,6 @@ fun ExerciseDetailScreen(
                 onEdit = onEditPlan,
             )
             state.lastLogged?.let { LastLoggedBlock(it) }
-            // Every earlier result and the graph, from the planned copy and the library alike.
-            val historyId = state.exerciseId
-            if (historyId != null && !state.isOneOff) {
-                TextButton(onClick = { onOpenHistory(historyId) }) { Text("History ›") }
-            }
             if (browsingLibrary) {
                 // The alternatives, each edited where it is shown, exactly like the default.
                 state.variations.forEach { variation ->
@@ -296,6 +292,12 @@ fun ExerciseDetailScreen(
                 if (state.libraryExercise != null) {
                     TextButton(onClick = { onEditVariation(null) }) { Text("+  Add a variation") }
                 }
+            }
+            // Every earlier result and the graph, below the plans so the default and its
+            // variations stay together.
+            val historyId = state.exerciseId
+            if (historyId != null && !state.isOneOff) {
+                TextButton(onClick = { onOpenHistory(historyId) }) { Text("History ›") }
             }
 
             state.loggedDurationSeconds?.let { seconds ->
@@ -629,7 +631,7 @@ private fun ActionBar(
             OutlinedButton(onClick = onStartTimer, modifier = Modifier.weight(1f)) {
                 Text(state.timerButtonLabel)
             }
-            Button(onClick = onLog, modifier = Modifier.weight(1f)) {
+            Button(onClick = onLog, colors = accentButtonColors(), modifier = Modifier.weight(1f)) {
                 Text(state.logButtonLabel)
             }
         }

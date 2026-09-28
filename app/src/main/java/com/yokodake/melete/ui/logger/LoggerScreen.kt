@@ -413,7 +413,8 @@ private fun PreviousResults(results: List<PreviousResult>, occurrence: PlannedOc
                         modifier = Modifier.width(80.dp),
                     )
                     Text(
-                        text = LastLoggedPicker.summarise(occurrence, result.sets)
+                        // Set by set here: the logger is where last time's sets are copied from.
+                        text = LastLoggedPicker.summarise(occurrence, result.sets, perSet = true)
                             ?: result.sets.joinToString("  ") {
                                 formatSet(it.payload, it.side, occurrence.measurementUnit)
                             },

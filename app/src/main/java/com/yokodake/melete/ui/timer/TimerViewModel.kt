@@ -27,15 +27,17 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** A minutes-and-seconds pair, kept as typed text so a half-typed field is not silently a zero. */
+/**
+ * A minutes-and-seconds pair, kept as typed text so a half-typed field is not silently a zero.
+ *
+ * Never capped: 90 minutes typed is 90 minutes run. The fields themselves bound it (three digits
+ * of minutes), so there is no hidden ceiling for a typed number to be quietly cut to.
+ */
 data class DurationDraft(val minutes: String = "0", val seconds: String = "00") {
     val totalSeconds: Int
-        get() = ((minutes.toIntOrNull() ?: 0) * 60 + (seconds.toIntOrNull() ?: 0))
-            .coerceIn(0, MAX_SECONDS)
+        get() = ((minutes.toIntOrNull() ?: 0) * 60 + (seconds.toIntOrNull() ?: 0)).coerceAtLeast(0)
 
     companion object {
-        const val MAX_SECONDS = 60 * 60
-
         fun of(seconds: Int) = DurationDraft(
             minutes = (seconds / 60).toString(),
             seconds = (seconds % 60).toString().padStart(2, '0'),
@@ -54,6 +56,9 @@ enum class TimerCreateMode(val label: String) {
     TIMED("Timed"),
     REPS("Reps"),
     REPEATERS("Repeaters"),
+
+    /** Attempts: untimed reps, each waited for, with a counted rest between them. */
+    INTERVALS("Intervals"),
 }
 
 data class TimerUiState(
@@ -70,6 +75,8 @@ data class TimerUiState(
     val repeaterRepsText: String = "6",
     val repeaterWorkText: String = "7",
     val repeaterRestText: String = "3",
+    val intervalRepsText: String = "3",
+    val intervalRest: DurationDraft = DurationDraft.of(180),
     val cues: CueSettings = CueSettings(),
 ) {
     val isRunning: Boolean get() = state is TimerState.Running
@@ -119,6 +126,24 @@ data class TimerUiState(
 
                 TimerCreateMode.REPEATERS ->
                     repeaterSpec?.let { program(WorkKind.TIMED, repeater = it) }
+
+                // At least two attempts and a rest between them; anything less is plain reps.
+                TimerCreateMode.INTERVALS -> {
+                    val reps = intervalRepsText.toIntOrNull() ?: 0
+                    if (reps < 2 || intervalRest.totalSeconds < 1) {
+                        null
+                    } else {
+                        TimerProgram(
+                            sets = sets,
+                            work = WorkKind.REPS,
+                            workReps = reps,
+                            restSeconds = rest.totalSeconds,
+                            unilateral = unilateral,
+                            sideSwitchSeconds = sideSwitchSeconds,
+                            repRestSeconds = intervalRest.totalSeconds,
+                        )
+                    }
+                }
             }
         }
 
@@ -134,7 +159,11 @@ data class TimerUiState(
         get() = when (state) {
             is TimerState.Running -> state.phase
             is TimerState.Paused -> state.phase
-            else -> if (mode == TimerCreateMode.REPS) TimerPhase.REST else TimerPhase.WORK
+            else -> when (mode) {
+                TimerCreateMode.REPS -> TimerPhase.REST
+                TimerCreateMode.INTERVALS -> TimerPhase.REP_REST
+                else -> TimerPhase.WORK
+            }
         }
 
     /**
@@ -149,6 +178,7 @@ data class TimerUiState(
                 TimerCreateMode.TIMED -> work.totalSeconds * 1000L
                 TimerCreateMode.REPS -> rest.totalSeconds * 1000L
                 TimerCreateMode.REPEATERS -> (repeaterSpec?.workSecondsPerRep ?: 0) * 1000L
+                TimerCreateMode.INTERVALS -> intervalRest.totalSeconds * 1000L
             }
         }
 
@@ -221,6 +251,8 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
             repeaterReps = controller.lastRepeaterReps.toString(),
             repeaterWork = controller.lastRepeaterWorkSeconds.toString(),
             repeaterRest = controller.lastRepeaterRestSeconds.toString(),
+            intervalReps = controller.lastIntervalReps.toString(),
+            intervalRest = DurationDraft.of(controller.lastIntervalRestSeconds),
             cues = controller.cueSettings,
         )
     )
@@ -253,6 +285,8 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
                 repeaterRepsText = currentDraft.repeaterReps,
                 repeaterWorkText = currentDraft.repeaterWork,
                 repeaterRestText = currentDraft.repeaterRest,
+                intervalRepsText = currentDraft.intervalReps,
+                intervalRest = currentDraft.intervalRest,
                 cues = currentDraft.cues,
             )
         }.stateIn(
@@ -292,6 +326,15 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
 
     fun setRepeaterRest(value: String) =
         draft.update { it.copy(repeaterRest = value.filter(Char::isDigit).take(3)) }
+
+    fun setIntervalReps(value: String) =
+        draft.update { it.copy(intervalReps = value.filter(Char::isDigit).take(2)) }
+
+    fun setIntervalRestMinutes(value: String) =
+        draft.update { it.copy(intervalRest = it.intervalRest.copy(minutes = value.take(3))) }
+
+    fun setIntervalRestSeconds(value: String) =
+        draft.update { it.copy(intervalRest = it.intervalRest.copy(seconds = value.take(2))) }
 
     fun setWorkMinutes(value: String) =
         draft.update { it.copy(work = it.work.copy(minutes = value.take(3))) }
@@ -343,6 +386,8 @@ class TimerViewModel(private val controller: TimerController) : ViewModel() {
         val repeaterReps: String,
         val repeaterWork: String,
         val repeaterRest: String,
+        val intervalReps: String,
+        val intervalRest: DurationDraft,
         val cues: CueSettings,
     )
 

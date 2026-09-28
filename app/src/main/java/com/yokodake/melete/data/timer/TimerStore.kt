@@ -118,6 +118,15 @@ class TimerStore(context: Context) {
         get() = preferences.getInt(KEY_LAST_REPEATER_REST, DEFAULT_REPEATER_REST)
         set(value) = preferences.edit().putInt(KEY_LAST_REPEATER_REST, value).apply()
 
+    /** The last hand-built set of attempts: how many, and the rest between them. */
+    var lastIntervalReps: Int
+        get() = preferences.getInt(KEY_LAST_INTERVAL_REPS, DEFAULT_INTERVAL_REPS)
+        set(value) = preferences.edit().putInt(KEY_LAST_INTERVAL_REPS, value).apply()
+
+    var lastIntervalRestSeconds: Int
+        get() = preferences.getInt(KEY_LAST_INTERVAL_REST, DEFAULT_INTERVAL_REST)
+        set(value) = preferences.edit().putInt(KEY_LAST_INTERVAL_REST, value).apply()
+
     private companion object {
         const val KEY_SNAPSHOT = "snapshot"
         const val KEY_THIRTY_SECONDS = "cue-thirty-seconds"
@@ -131,6 +140,8 @@ class TimerStore(context: Context) {
         const val KEY_LAST_REPEATER_REPS = "last-repeater-reps"
         const val KEY_LAST_REPEATER_WORK = "last-repeater-work-seconds"
         const val KEY_LAST_REPEATER_REST = "last-repeater-rest-seconds"
+        const val KEY_LAST_INTERVAL_REPS = "last-interval-reps"
+        const val KEY_LAST_INTERVAL_REST = "last-interval-rest-seconds"
         const val DEFAULT_REST_SECONDS = 180
         const val DEFAULT_WORK_SECONDS = 10
         const val DEFAULT_SETS = 3
@@ -139,5 +150,7 @@ class TimerStore(context: Context) {
         const val DEFAULT_REPEATER_REPS = 6
         const val DEFAULT_REPEATER_WORK = 7
         const val DEFAULT_REPEATER_REST = 3
+        const val DEFAULT_INTERVAL_REPS = 3
+        const val DEFAULT_INTERVAL_REST = 180
     }
 }

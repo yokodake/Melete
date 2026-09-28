@@ -12,19 +12,19 @@ import com.yokodake.melete.ui.detail.LastLoggedPicker
 import com.yokodake.melete.ui.week.PrescriptionSummary
 import java.time.LocalDate
 
-/** What an exercise's graph plots, chosen from what it actually records. */
+/**
+ * What an exercise's graph plots, chosen from what it actually records.
+ *
+ * Durations are never graphed: how long a set or a session took is not a measure of progress. A
+ * hold that is one is recorded as a load in seconds (total load, unit "s"), the way a distance is
+ * recorded in centimetres, and is graphed as a load.
+ */
 enum class HistoryMeasure(val label: String) {
     /** The heaviest set of each workout, in the exercise's current unit and meaning. */
     LOAD("Heaviest set"),
 
     /** The most reps in one set, for reps work that records no load. */
     REPS("Most reps in a set"),
-
-    /** The longest set, for timed work that records no load. */
-    SET_LENGTH("Longest set"),
-
-    /** How long it took, for an activity. */
-    DURATION("Duration"),
 }
 
 /** One workout's value on the graph. */
@@ -83,7 +83,6 @@ data class ExerciseHistory(
             Measurement(value, unit.orEmpty(), meaning ?: MeasurementMeaning.TOTAL_LOAD)
         ).trim()
         HistoryMeasure.REPS -> value.toInt().let { "$it ${if (it == 1) "rep" else "reps"}" }
-        HistoryMeasure.SET_LENGTH, HistoryMeasure.DURATION -> PrescriptionSummary.duration(value.toInt())
         null -> value.toString()
     }
 
@@ -162,22 +161,16 @@ data class ExerciseHistory(
             val measure = when {
                 loads.any(::comparable) -> HistoryMeasure.LOAD
                 mode == ExerciseMode.REPETITIONS -> HistoryMeasure.REPS
-                mode == ExerciseMode.DURATION || mode == ExerciseMode.REPEATERS -> HistoryMeasure.SET_LENGTH
-                else -> HistoryMeasure.DURATION
+                else -> null
             }
 
             fun valueOf(set: PerformedSet): Double? = when (measure) {
                 HistoryMeasure.LOAD -> set.payload.measurement?.takeIf(::comparable)?.value
                 HistoryMeasure.REPS -> set.payload.reps?.toDouble()
-                HistoryMeasure.SET_LENGTH -> set.payload.durationSeconds?.toDouble()
-                HistoryMeasure.DURATION -> null
+                null -> null
             }
             val chronological = records.reversed()
             val points: List<Pair<BodySide?, HistoryPoint>> = chronological.flatMap { record ->
-                if (measure == HistoryMeasure.DURATION) {
-                    val seconds = record.occurrence.loggedDurationSeconds ?: return@flatMap emptyList()
-                    return@flatMap listOf(null to HistoryPoint(record.date, seconds.toDouble(), record.occurrence.id))
-                }
                 val sided = record.occurrence.unilateral
                 record.sets.filter(::matches)
                     .groupBy { if (sided) it.side else null }

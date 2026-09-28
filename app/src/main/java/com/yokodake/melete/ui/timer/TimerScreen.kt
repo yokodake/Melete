@@ -1,5 +1,13 @@
 package com.yokodake.melete.ui.timer
 
+import com.yokodake.melete.ui.theme.accentButtonColors
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -165,6 +173,9 @@ fun TimerScreen(
                 onRepeaterReps = viewModel::setRepeaterReps,
                 onRepeaterWork = viewModel::setRepeaterWork,
                 onRepeaterRest = viewModel::setRepeaterRest,
+                onIntervalReps = viewModel::setIntervalReps,
+                onIntervalRestMinutes = viewModel::setIntervalRestMinutes,
+                onIntervalRestSeconds = viewModel::setIntervalRestSeconds,
                 onStart = ::startWithNotifications,
             )
             return@Scaffold
@@ -529,9 +540,9 @@ private fun FinishedCard(
             // its exercises are confirmed at once.
             val circuitId = state.program.circuitInstanceId
             when {
-                circuitId != null -> Button(onClick = { onReview(circuitId) }) { Text("Log circuit") }
+                circuitId != null -> Button(onClick = { onReview(circuitId) }, colors = accentButtonColors()) { Text("Log circuit") }
                 state.program.occurrenceId != null ->
-                    Button(onClick = { onLog(state.program.occurrenceId) }) { Text("Log exercise") }
+                    Button(onClick = { onLog(state.program.occurrenceId) }, colors = accentButtonColors()) { Text("Log exercise") }
             }
         }
     }
@@ -585,6 +596,9 @@ private fun IdleControls(
     onRepeaterWork: (String) -> Unit,
     onRepeaterRest: (String) -> Unit,
     onStart: () -> Unit,
+    onIntervalReps: (String) -> Unit = {},
+    onIntervalRestMinutes: (String) -> Unit = {},
+    onIntervalRestSeconds: (String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -594,36 +608,22 @@ private fun IdleControls(
             .padding(top = 12.dp),
     ) {
         // Top, and it stays there: what kind of timer this is, which is the first decision.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TimerCreateMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = state.mode == mode,
-                    onClick = { onMode(mode) },
-                    label = { Text(mode.label, style = MaterialTheme.typography.labelLarge) },
-                    modifier = Modifier.height(FilterChipDefaults.Height + 8.dp).weight(1f),
-                )
-            }
-        }
+        ModeTabs(state.mode, onMode)
 
-        // The middle takes the slack, so the rows can differ between modes without anything above
-        // or below them moving. Every row is the full width with the same label gutter, so the
-        // fields keep one left edge whichever kind of timer is selected.
+        // Directly under the tabs; the slack goes below the form, not around it. Every row has
+        // the same label gutter, so the fields keep one left edge whichever kind is selected.
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                .verticalScroll(rememberScrollState())
+                .padding(top = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FieldRow("Work") {
                 when (state.mode) {
                     TimerCreateMode.TIMED -> {
-                        NumberField("m", state.work.minutes, onWorkMinutes, Modifier.weight(1f))
-                        NumberField("s", state.work.seconds, onWorkSeconds, Modifier.weight(1f))
+                        NumberField("m", state.work.minutes, onWorkMinutes, FieldWidth)
+                        NumberField("s", state.work.seconds, onWorkSeconds, FieldWidth)
                     }
 
                     // Untimed by nature, so the row says why rather than standing empty.
@@ -637,44 +637,51 @@ private fun IdleControls(
                     // One set is a series of pulses. "Off" falls between them; the rest below is
                     // still the rest between *sets*, which is a different and much longer thing.
                     TimerCreateMode.REPEATERS -> {
-                        NumberField("reps", state.repeaterRepsText, onRepeaterReps, Modifier.weight(1f))
-                        NumberField("on (s)", state.repeaterWorkText, onRepeaterWork, Modifier.weight(1f))
-                        NumberField("off (s)", state.repeaterRestText, onRepeaterRest, Modifier.weight(1f))
+                        NumberField("reps", state.repeaterRepsText, onRepeaterReps, FieldWidth)
+                        NumberField("on (s)", state.repeaterWorkText, onRepeaterWork, FieldWidth)
+                        NumberField("off (s)", state.repeaterRestText, onRepeaterRest, FieldWidth)
                     }
+
+                    // Attempts at your pace; the timer waits for each one.
+                    TimerCreateMode.INTERVALS ->
+                        NumberField("reps", state.intervalRepsText, onIntervalReps, FieldWidth)
+                }
+            }
+
+            // The rest between attempts, inside a set; the rest below is still between sets.
+            if (state.mode == TimerCreateMode.INTERVALS) {
+                FieldRow("Between reps") {
+                    NumberField("m", state.intervalRest.minutes, onIntervalRestMinutes, FieldWidth)
+                    NumberField("s", state.intervalRest.seconds, onIntervalRestSeconds, FieldWidth)
                 }
             }
 
             FieldRow("Rest") {
-                NumberField("m", state.rest.minutes, onRestMinutes, Modifier.weight(1f))
-                NumberField("s", state.rest.seconds, onRestSeconds, Modifier.weight(1f))
+                NumberField("m", state.rest.minutes, onRestMinutes, FieldWidth)
+                NumberField("s", state.rest.seconds, onRestSeconds, FieldWidth)
             }
 
             FieldRow(if (state.unilateral) "Sets per side" else "Sets") {
-                NumberField(null, state.setsText, onSets, Modifier.weight(1f))
-                // The gutter is held whether or not the switch is shown, so turning unilateral on
-                // widens nothing and moves nothing.
+                NumberField(null, state.setsText, onSets, FieldWidth)
                 if (state.unilateral) {
-                    NumberField(
-                        "Switch sides (s)",
-                        state.sideSwitchText,
-                        onSideSwitch,
-                        Modifier.weight(1f),
-                    )
-                } else {
-                    Spacer(modifier = Modifier.weight(1f))
+                    NumberField("Switch (s)", state.sideSwitchText, onSideSwitch, FieldWidth)
                 }
             }
 
-            // One set covers both sides, left then right, so the set count does not double.
-            FieldRow(null) {
-                Switch(checked = state.unilateral, onCheckedChange = onUnilateral)
+            // One set covers both sides, left then right, so the set count does not double. The
+            // label sits where the others do; the switch ends the row.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = "Unilateral",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
                 )
+                Switch(checked = state.unilateral, onCheckedChange = onUnilateral)
             }
         }
 
@@ -686,21 +693,70 @@ private fun IdleControls(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // One quiet line, always there, so it cannot push the button about.
             Text(
                 text = summarise(state),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                // Two lines of room, always, so a long summary cannot push the button down.
-                minLines = 2,
-                maxLines = 3,
+                minLines = 1,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Button(
                 onClick = onStart,
                 enabled = state.canStart,
+                colors = accentButtonColors(),
                 modifier = Modifier.fillMaxWidth(0.7f),
             ) {
                 Text("Start")
+            }
+        }
+    }
+}
+
+/** The width of one number in the timer form: room for "999", not the whole screen. */
+private val FieldWidth = Modifier.width(88.dp)
+
+/**
+ * The kinds of timer as one compact row of tabs, each label on one line. Plain surfaces rather
+ * than chips, so four fit across a phone without "Repeaters" breaking in two.
+ */
+@Composable
+private fun ModeTabs(selected: TimerCreateMode, onMode: (TimerCreateMode) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(MaterialTheme.shapes.small)
+            .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small),
+    ) {
+        TimerCreateMode.entries.forEachIndexed { index, mode ->
+            val on = mode == selected
+            if (index > 0) {
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.outline)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(if (on) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
+                    .selectable(selected = on, onClick = { onMode(mode) }, role = Role.Tab)
+                    .padding(horizontal = 2.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = mode.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
         }
     }
@@ -772,57 +828,19 @@ private fun summarise(state: TimerUiState): String {
         state.sets < 1 -> "How many sets?"
         state.mode == TimerCreateMode.REPEATERS ->
             "How many reps, and how long is each?"
+        state.mode == TimerCreateMode.INTERVALS ->
+            "At least 2 reps, and a rest between them?"
         else -> "How long is a set?"
     }
 
-    val entry = program.entry
-    val repeater = entry.repeater
-
-    return buildString {
-        append(program.sets)
-        append(if (program.sets == 1) " set" else " sets")
-        if (entry.unilateral) append(" per side")
-        append(" · ")
-
-        when {
-            repeater != null -> {
-                append(repeater.repsPerSet)
-                append(" × ")
-                append(PrescriptionSummary.duration(repeater.workSecondsPerRep))
-                append(" on")
-                if (repeater.restSecondsBetweenReps > 0) {
-                    append(" / ")
-                    append(
-                        PrescriptionSummary.duration(repeater.restSecondsBetweenReps)
-                    )
-                    append(" off")
-                }
-            }
-
-            entry.work == WorkKind.REPS -> append("at your pace")
-
-            else -> {
-                append(PrescriptionSummary.duration(entry.workSeconds))
-                append(" each")
-            }
-        }
-
-        val details = buildList {
-            if (program.restSeconds > 0 && program.sets > 1) {
-                add("${PrescriptionSummary.duration(program.restSeconds)} rest")
-            }
-
-            // Includes preparation, both sides and every repeater pulse. Offered only when
-            // every interval has a length: a program with a set of reps in it has no honest total.
-            if (program.isFullyTimed) {
-                add("${PrescriptionSummary.duration(program.estimatedSeconds())} total")
-            }
-        }
-
-        if (details.isNotEmpty()) {
-            append("\n")
-            append(details.joinToString(" · "))
-        }
+    // The fields already say the sets and their shape; what they do not say is how long it all
+    // takes, which is only honest when every interval has a length. With untimed sets, the rest
+    // is the part that can be added up; with no rest at all, there is nothing to count.
+    val rest = program.steps.filter { it.phase.isRest }.sumOf { it.seconds }
+    return when {
+        program.isFullyTimed -> "${PrescriptionSummary.duration(program.estimatedSeconds())} total"
+        rest > 0 -> "${PrescriptionSummary.duration(rest)} rest in total"
+        else -> "Goes at your pace"
     }
 }
 

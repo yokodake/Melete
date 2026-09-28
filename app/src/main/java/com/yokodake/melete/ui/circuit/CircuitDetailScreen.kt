@@ -1,5 +1,6 @@
 package com.yokodake.melete.ui.circuit
 
+import com.yokodake.melete.ui.theme.accentButtonColors
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -123,6 +124,7 @@ fun CircuitDetailScreen(
                         ) { Text("Start timer") }
                         Button(
                             onClick = { onLog(circuit.id) },
+                            colors = accentButtonColors(),
                             modifier = Modifier.weight(1f),
                         ) { Text(state.logButtonLabel) }
                     }

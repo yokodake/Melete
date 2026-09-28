@@ -20,6 +20,7 @@ import com.yokodake.melete.data.DiaryDay
 import com.yokodake.melete.data.Tracker
 import com.yokodake.melete.data.TrackerReading
 import com.yokodake.melete.data.entity.TrackerType
+import com.yokodake.melete.ui.theme.progressColor
 
 data class DiarySummary(
     val note: String? = null,
@@ -110,8 +111,9 @@ private fun Tracker.summaryValue(reading: TrackerReading): String? = when (type)
  */
 @Composable
 fun BenchmarkLine(result: BenchmarkDayResult, onClick: () -> Unit) {
-    // The flag in red, so a test day stands out from the diary line and the cards around it.
-    val flag = MaterialTheme.colorScheme.error
+    // The flag in the progress blue, like the Benchmarks icon on Home, so a test day stands out
+    // from the diary line and the cards around it without reading as an error.
+    val flag = progressColor()
     Text(
         text = buildAnnotatedString {
             withStyle(SpanStyle(color = flag)) { append("\u2691") }
