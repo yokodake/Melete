@@ -14,6 +14,12 @@ import com.yokodake.melete.data.backup.BackupSummary
 import com.yokodake.melete.data.backup.BackupUnreadable
 import com.yokodake.melete.data.backup.BackupValidator
 import com.yokodake.melete.data.backup.MeleteBackup
+import com.yokodake.melete.data.plan.ImportCheck
+import com.yokodake.melete.data.plan.ImportMode
+import com.yokodake.melete.data.plan.ImportScope
+import com.yokodake.melete.data.plan.PlanFile
+import com.yokodake.melete.data.plan.PlanImporter
+import com.yokodake.melete.data.plan.PlanUnreadable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +37,16 @@ data class PendingRestore(
     val source: String,
 )
 
+/** A plan file read and checked, waiting for a mode, a scope and a yes. */
+data class PendingPlan(
+    val file: PlanFile,
+    val source: String,
+    val mode: ImportMode,
+    val scope: ImportScope,
+    /** The verdict for [mode] and [scope]: a name the library resolves when adding may not exist when replacing. */
+    val check: ImportCheck,
+)
+
 /** A copy of the record saved automatically before a restore replaced it. */
 data class SafetyCopy(val file: File, val label: String)
 
@@ -39,8 +55,11 @@ data class BackupUiState(
     /** What is on the phone now, for comparing with what a restore would put back. */
     val current: BackupSummary? = null,
     val pending: PendingRestore? = null,
+    val pendingPlan: PendingPlan? = null,
     /** Why the chosen file cannot be restored, one reason per line. Nothing was changed. */
     val problems: List<String> = emptyList(),
+    /** What the problems are about, for the dialog's title. */
+    val problemsTitle: String = "Can't restore this file",
     val safetyCopies: List<SafetyCopy> = emptyList(),
     val message: String? = null,
 )
@@ -53,6 +72,7 @@ data class BackupUiState(
  */
 class BackupViewModel(
     private val service: BackupService,
+    private val importer: PlanImporter,
     private val resolver: ContentResolver,
     private val safetyDirectory: File,
 ) : ViewModel() {
@@ -90,17 +110,64 @@ class BackupViewModel(
 
     /** Reads and validates a picked file; offers it for restore only if it is sound. */
     fun load(uri: Uri) = work {
-        val text = withContext(Dispatchers.IO) {
-            resolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
-        } ?: throw BackupUnreadable("That file could not be opened.")
-        val name = withContext(Dispatchers.IO) {
-            runCatching {
-                resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0) else null
-                }
-            }.getOrNull()
+        val (text, name) = read(uri)
+        offer(service.decode(text), source = name ?: "Selected backup")
+    }
+
+    /** A picked file's text and display name. */
+    private suspend fun read(uri: Uri): Pair<String, String?> = withContext(Dispatchers.IO) {
+        val text = resolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+            ?: throw BackupUnreadable("That file could not be opened.")
+        val name = runCatching {
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }.getOrNull()
+        text to name?.takeIf { it.isNotBlank() }
+    }
+
+    // ------------------------------------------------------------------ plans
+
+    /** Reads a picked plan and shows what adding it would do. Nothing is written yet. */
+    fun loadPlan(uri: Uri) = work(problemsTitle = "Can't import this file") {
+        val (text, name) = read(uri)
+        val file = importer.decode(text)
+        val mode = ImportMode.ADD
+        // The past stays as it was unless it is deliberately included.
+        val scope = ImportScope.FROM_TODAY
+        _state.update {
+            it.copy(pendingPlan = PendingPlan(file, name ?: "Selected plan", mode, scope, importer.check(file, mode, scope)))
         }
-        offer(service.decode(text), source = name?.takeIf { it.isNotBlank() } ?: "Selected backup")
+    }
+
+    /** Switches between adding and replacing, re-judging the file for the new mode. */
+    fun setPlanMode(mode: ImportMode) = recheck { it.copy(mode = mode) }
+
+    /** Switches between from-today and including the past, re-judging the file. */
+    fun setPlanScope(scope: ImportScope) = recheck { it.copy(scope = scope) }
+
+    private fun recheck(change: (PendingPlan) -> PendingPlan) {
+        val pending = _state.value.pendingPlan ?: return
+        val next = change(pending)
+        if (next == pending) return
+        work(problemsTitle = "Can't import this file") {
+            val check = importer.check(next.file, next.mode, next.scope)
+            _state.update { it.copy(pendingPlan = next.copy(check = check)) }
+        }
+    }
+
+    fun cancelPlan() = _state.update { it.copy(pendingPlan = null) }
+
+    /** Imports the pending plan in its chosen mode, atomically; a replace saves a copy first. */
+    fun confirmPlan() {
+        val pending = _state.value.pendingPlan ?: return
+        if (pending.check.resolution.plan == null) return
+        _state.update { it.copy(pendingPlan = null) }
+        work(problemsTitle = "Can't import this file") {
+            importer.import(pending.file, pending.mode, pending.scope, safetyDirectory)
+            _state.update { it.copy(message = "Plan imported") }
+            refresh()
+        }
     }
 
     /** Offers a copy saved before an earlier restore — the way back from a restore. */
@@ -115,7 +182,7 @@ class BackupViewModel(
             if (problems.isEmpty()) {
                 it.copy(pending = PendingRestore(backup, service.summarise(backup), source), problems = emptyList())
             } else {
-                it.copy(pending = null, problems = problems)
+                it.copy(pending = null, problems = problems, problemsTitle = "Can't restore this file")
             }
         }
     }
@@ -141,16 +208,21 @@ class BackupViewModel(
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
     /** Runs one step with the busy flag up, turning any failure into words rather than a crash. */
-    private fun work(block: suspend () -> Unit) {
+    private fun work(problemsTitle: String = "Can't restore this file", block: suspend () -> Unit) {
         viewModelScope.launch {
             _state.update { it.copy(busy = true) }
             try {
                 block()
             } catch (unreadable: BackupUnreadable) {
-                _state.update { it.copy(problems = listOf(unreadable.message.orEmpty())) }
+                _state.update { it.copy(problems = listOf(unreadable.message.orEmpty()), problemsTitle = problemsTitle) }
+            } catch (unreadable: PlanUnreadable) {
+                _state.update { it.copy(problems = listOf(unreadable.message.orEmpty()), problemsTitle = problemsTitle) }
             } catch (failure: Exception) {
                 _state.update {
-                    it.copy(problems = listOf("Nothing was changed: ${failure.message ?: "unexpected error"}."))
+                    it.copy(
+                        problems = listOf("Nothing was changed: ${failure.message ?: "unexpected error"}."),
+                        problemsTitle = problemsTitle,
+                    )
                 }
             } finally {
                 _state.update { it.copy(busy = false) }
@@ -165,6 +237,7 @@ class BackupViewModel(
                     as MeleteApplication
                 BackupViewModel(
                     service = application.container.backupService,
+                    importer = application.container.planImporter,
                     resolver = application.contentResolver,
                     safetyDirectory = File(application.filesDir, "backups"),
                 )

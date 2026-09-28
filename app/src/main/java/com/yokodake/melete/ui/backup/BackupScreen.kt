@@ -45,6 +45,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.data.backup.BackupSummary
+import com.yokodake.melete.data.plan.ImportMode
+import com.yokodake.melete.data.plan.ImportScope
+import com.yokodake.melete.data.plan.ReplaceImpact
+import com.yokodake.melete.data.plan.PlanPreview
+import com.yokodake.melete.ui.library.SegmentedChoice
 import java.time.LocalDate
 
 @Composable
@@ -60,11 +65,19 @@ fun BackupRoute(
     val restoreLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(viewModel::load) }
+    val planLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let(viewModel::loadPlan) }
 
     BackupScreen(
         state = state,
         onExport = { exportLauncher.launch("melete-${LocalDate.now()}.json") },
         onPickRestore = { restoreLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+        onPickPlan = { planLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+        onPlanMode = viewModel::setPlanMode,
+        onPlanScope = viewModel::setPlanScope,
+        onConfirmPlan = viewModel::confirmPlan,
+        onCancelPlan = viewModel::cancelPlan,
         onRestoreSafetyCopy = viewModel::loadSafetyCopy,
         onConfirmRestore = viewModel::confirmRestore,
         onCancelRestore = viewModel::cancelRestore,
@@ -80,6 +93,11 @@ fun BackupScreen(
     state: BackupUiState,
     onExport: () -> Unit,
     onPickRestore: () -> Unit,
+    onPickPlan: () -> Unit = {},
+    onPlanMode: (ImportMode) -> Unit = {},
+    onPlanScope: (ImportScope) -> Unit = {},
+    onConfirmPlan: () -> Unit = {},
+    onCancelPlan: () -> Unit = {},
     onRestoreSafetyCopy: (SafetyCopy) -> Unit,
     onConfirmRestore: () -> Unit,
     onCancelRestore: () -> Unit,
@@ -151,6 +169,18 @@ fun BackupScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            item {
+                Section("Plan")
+                OutlinedButton(onClick = onPickPlan, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                    Text("Import a plan…")
+                }
+                Text(
+                    text = "A hand-written file of exercises, circuits, modules and weeks. You see what " +
+                        "it will add or change before anything is written. Logged work is never deleted.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (state.safetyCopies.isNotEmpty()) {
                 item { Section("Recovery copies") }
                 items(items = state.safetyCopies, key = { it.file.name }) { copy ->
@@ -192,13 +222,23 @@ fun BackupScreen(
         )
     }
 
+    state.pendingPlan?.let { pending ->
+        PlanDialog(
+            pending = pending,
+            onMode = onPlanMode,
+            onScope = onPlanScope,
+            onConfirm = onConfirmPlan,
+            onCancel = onCancelPlan,
+        )
+    }
+
     if (state.problems.isNotEmpty()) {
         var showDetails by remember(state.problems) { mutableStateOf(false) }
         val summaries = state.problems.map(::problemSummary).distinct()
         val hasDetails = state.problems.any { problemSummary(it) != it }
         AlertDialog(
             onDismissRequest = onDismissProblems,
-            title = { Text("Can't restore this file") },
+            title = { Text(state.problemsTitle) },
             text = {
                 Column(
                     modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
@@ -264,4 +304,123 @@ private fun problemSummary(problem: String): String = when {
             .removeSuffix(" has an unreadable snapshot.")
     problem.startsWith("A logged set (") && problem.endsWith("cannot be read.") -> "Couldn’t read a logged set"
     else -> problem
+}
+
+/**
+ * What a plan would do, before it does it: the mode, what is added and what is changed, what is
+ * left out and why, and — if the file cannot be imported in this mode — every reason.
+ */
+@Composable
+private fun PlanDialog(
+    pending: PendingPlan,
+    onMode: (ImportMode) -> Unit,
+    onScope: (ImportScope) -> Unit,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val resolution = pending.check.resolution
+    var showWarnings by remember(resolution) { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Import plan") },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(pending.source, style = MaterialTheme.typography.bodySmall)
+                SegmentedChoice(
+                    options = ImportMode.entries,
+                    selected = pending.mode,
+                    label = { if (it == ImportMode.ADD) "Add" else "Replace plans" },
+                    onSelect = onMode,
+                )
+                SegmentedChoice(
+                    options = ImportScope.entries,
+                    selected = pending.scope,
+                    label = { if (it == ImportScope.FROM_TODAY) "From today" else "Include past" },
+                    onSelect = onScope,
+                )
+                val reach = if (pending.scope == ImportScope.FROM_TODAY) "from today on" else "past days included"
+                Text(
+                    text = when (pending.mode) {
+                        ImportMode.ADD -> "Keeps everything. Items with the same name are updated from " +
+                            "now on; weeks already planned and logged keep what they say. Plans $reach."
+                        ImportMode.REPLACE -> "Clears planned work that hasn't happened, $reach, and " +
+                            "takes what the file doesn't name out of the library, then builds from the " +
+                            "file. Anything logged, done or skipped stays, and so do daily notes. A " +
+                            "recovery copy is saved."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                pending.check.replace?.let { impact ->
+                    replaceLines(impact).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                }
+                if (resolution.problems.isNotEmpty()) {
+                    Text(
+                        text = "Can't import in this mode:",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    resolution.problems.forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
+                } else {
+                    planLines(resolution.preview).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                }
+                if (resolution.warnings.isNotEmpty()) {
+                    TextButton(onClick = { showWarnings = !showWarnings }) {
+                        val count = resolution.warnings.size
+                        Text(if (showWarnings) "Hide what is left out" else "$count thing${if (count == 1) "" else "s"} left out")
+                    }
+                    if (showWarnings) {
+                        resolution.warnings.forEach { Text("· $it", style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = resolution.plan != null) {
+                Text(if (pending.mode == ImportMode.REPLACE) "Replace" else "Import")
+            }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
+}
+
+/** What replacing clears, keeps and removes, before the file's own additions. */
+private fun replaceLines(impact: ReplaceImpact): List<String> {
+    fun names(list: List<String>) = if (list.size <= 4) ": " + list.joinToString(", ") else ""
+    return listOfNotNull(
+        "Clears ${countLabel(impact.cleared, "planned item")} that haven't happened",
+        impact.kept.takeIf { it > 0 }?.let { "Keeps ${countLabel(it, "logged or skipped item")}" },
+        impact.removedExercises.takeIf { it.isNotEmpty() }?.let {
+            "Removes ${countLabel(it.size, "exercise")} from the library${names(it)}"
+        },
+        impact.removedCircuits.takeIf { it.isNotEmpty() }?.let {
+            "Removes ${countLabel(it.size, "circuit")}${names(it)}"
+        },
+        impact.removedModules.takeIf { it.isNotEmpty() }?.let {
+            "Removes ${countLabel(it.size, "module")}${names(it)}"
+        },
+    )
+}
+
+/** The preview in lines: added and updated per kind, with names while there are few. */
+private fun planLines(preview: PlanPreview): List<String> {
+    fun names(list: List<String>) = if (list.size <= 4) ": " + list.joinToString(", ") else ""
+    fun line(verb: String, list: List<String>, singular: String) =
+        list.takeIf { it.isNotEmpty() }?.let { "$verb ${countLabel(it.size, singular)}${names(it)}" }
+    return listOfNotNull(
+        line("Adds", preview.exercisesAdded, "exercise"),
+        line("Updates", preview.exercisesUpdated, "exercise"),
+        preview.variations.takeIf { it > 0 }?.let { "Sets ${countLabel(it, "variation")}" },
+        line("Adds", preview.circuitsAdded, "circuit"),
+        line("Updates", preview.circuitsUpdated, "circuit"),
+        line("Adds", preview.modulesAdded, "module"),
+        line("Updates", preview.modulesUpdated, "module"),
+        preview.planned.takeIf { it > 0 }?.let {
+            "Plans ${countLabel(it, "item")} across ${countLabel(preview.weeks, "week")}"
+        },
+        preview.skippedPast.takeIf { it > 0 }?.let { "Leaves out ${countLabel(it, "item")} dated before today" },
+    ).ifEmpty { listOf("The file holds nothing to import.") }
 }
