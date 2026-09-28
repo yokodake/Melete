@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Runs the instrumented tests WITHOUT wiping the app database.
-#
-# ./gradlew connectedDebugAndroidTest uninstalls the app when it finishes, and uninstalling takes
-# /data/user/0/com.yokodake.melete with it — including the training record. This script installs
-# both APKs over the existing ones (install -r keeps app data) and drives the test runner directly,
-# so whatever is in the app survives the run.
+# Runs instrumented tests against Melete Debug, never the everyday release app.
+# Installs with -r to preserve debug data on install; tests and debug schema changes can still
+# modify or reset debug data. Release uses a separate application ID and private storage.
 #
 # Usage: scripts/device-tests.sh [class-or-method filter]
 #   scripts/device-tests.sh
@@ -12,12 +9,24 @@
 set -euo pipefail
 
 ADB="${ADB:-$HOME/AppData/Local/Android/Sdk/platform-tools/adb.exe}"
-PACKAGE="com.yokodake.melete"
-RUNNER="$PACKAGE.test/androidx.test.runner.AndroidJUnitRunner"
+readonly PACKAGE="com.yokodake.melete.debug"
+readonly RUNNER="$PACKAGE.test/androidx.test.runner.AndroidJUnitRunner"
 
 cd "$(dirname "$0")/.."
 
 ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
+
+# Reject stale builds from before the application-ID split before installing either APK.
+check_package() {
+  local metadata="$1" expected="$2" actual
+  actual="$(sed -n 's/^[[:space:]]*"applicationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$metadata")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Refusing to install: $metadata must identify $expected" >&2
+    exit 1
+  fi
+}
+check_package app/build/outputs/apk/debug/output-metadata.json "$PACKAGE"
+check_package app/build/outputs/apk/androidTest/debug/output-metadata.json "$PACKAGE.test"
 
 "$ADB" install -r app/build/outputs/apk/debug/app-debug.apk
 "$ADB" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk

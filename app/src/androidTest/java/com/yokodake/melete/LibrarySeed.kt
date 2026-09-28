@@ -31,7 +31,7 @@ import java.time.LocalDate
  *
  *     adb shell am instrument -w -e seed library \
  *         -e class com.yokodake.melete.LibrarySeed \
- *         com.yokodake.melete.test/androidx.test.runner.AndroidJUnitRunner
+ *         com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner
  *
  * Pass `-e planning false` for the exercises alone, without circuits, modules, weeks or logs.
  * Re-running updates what the file names and adds what is missing; the weeks and logs are only
@@ -48,6 +48,9 @@ class LibrarySeed {
         val arguments = InstrumentationRegistry.getArguments()
         assumeTrue(arguments.getString("seed") == "library")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        check(instrumentation.targetContext.packageName == "com.yokodake.melete.debug") {
+            "Library seeding may only modify Melete Debug."
+        }
         val text = instrumentation.context.assets.open("test-library.json").use { it.readBytes().decodeToString() }
         val database = MeleteDatabase.build(instrumentation.targetContext)
         try {
