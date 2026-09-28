@@ -1,8 +1,9 @@
 package com.yokodake.melete.ui.detail
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.RadioButton
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.foundation.layout.Arrangement
@@ -85,13 +86,12 @@ fun ExerciseDetailRoute(
             val occurrenceId = state.occurrenceId
             if (occurrenceId != null) onLog(occurrenceId, false) else viewModel.logFromLibrary(onLog)
         },
-        onSelectPlan = viewModel::selectPlan,
-        onAdjustAttempt = viewModel::openAttemptEditor,
-        onAttemptChange = viewModel::updateAttemptEditor,
-        onSaveAttempt = viewModel::saveAttemptPlan,
-        onDismissAttempt = viewModel::dismissAttemptEditor,
-        onClearAttempt = viewModel::clearAttemptPlan,
-        onStartTimer = { viewModel.requestStartTimer(onOpenTimer) },
+        onStartTimer = viewModel::openTimerSetup,
+        onChooseSetupVariation = viewModel::chooseSetupVariation,
+        onCustomSetup = viewModel::chooseCustomSetup,
+        onSetupChange = viewModel::updateTimerSetup,
+        onStartFromSetup = { viewModel.startFromSetup(onOpenTimer) },
+        onDismissSetup = viewModel::dismissTimerSetup,
         onConfirmReplace = { viewModel.confirmStartTimer(onOpenTimer) },
         onDismissReplace = viewModel::dismissReplacePrompt,
         onEditPlan = viewModel::openPrescriptionEditor,
@@ -131,12 +131,11 @@ fun ExerciseDetailScreen(
     onDismissVariation: () -> Unit = {},
     onSchedule: (weekStart: LocalDate, variationId: String?) -> Unit = { _, _ -> },
     onMessageShown: () -> Unit = {},
-    onSelectPlan: (variationId: String?) -> Unit = {},
-    onAdjustAttempt: () -> Unit = {},
-    onAttemptChange: (PrescriptionFormState) -> Unit = {},
-    onSaveAttempt: () -> Unit = {},
-    onDismissAttempt: () -> Unit = {},
-    onClearAttempt: () -> Unit = {},
+    onChooseSetupVariation: (variationId: String?) -> Unit = {},
+    onCustomSetup: () -> Unit = {},
+    onSetupChange: (PrescriptionFormState) -> Unit = {},
+    onStartFromSetup: () -> Unit = {},
+    onDismissSetup: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var addingToPlan by remember { mutableStateOf(false) }
@@ -189,8 +188,6 @@ fun ExerciseDetailScreen(
                             // Only while the entry can still be planned: a retired one is history.
                             onAddToPlan = { addingToPlan = true }
                                 .takeIf { state.libraryExercise != null },
-                            onAdjustAttempt = onAdjustAttempt
-                                .takeIf { state.occurrenceId == null && state.libraryExercise != null },
                         )
                     }
                 },
@@ -260,9 +257,6 @@ fun ExerciseDetailScreen(
                     else -> "Plans"
                 }
             )
-            // With more than one plan, a tap on a card chooses which one the timer and the logger
-            // use; with only the default there is nothing to choose and no marker to read.
-            val choosing = browsingLibrary && state.libraryExercise != null && state.variations.isNotEmpty()
             PlanCard(
                 summary = state.prescriptionSummary,
                 // On a planned copy, the variation it was cut from; the default has no chip.
@@ -274,8 +268,6 @@ fun ExerciseDetailScreen(
                 },
                 editDescription = "Edit this plan",
                 onEdit = onEditPlan,
-                selected = choosing && state.selectedVariationId == null && state.attemptPlan == null,
-                onSelect = { onSelectPlan(null) }.takeIf { choosing },
             )
             state.lastLogged?.let { LastLoggedBlock(it) }
             if (browsingLibrary) {
@@ -291,23 +283,10 @@ fun ExerciseDetailScreen(
                         lines = listOfNotNull(variation.notes),
                         editDescription = "Edit variation ${variation.tag}",
                         onEdit = { onEditVariation(variation.id) },
-                        selected = choosing && state.selectedVariationId == variation.id &&
-                            state.attemptPlan == null,
-                        onSelect = { onSelectPlan(variation.id) }.takeIf { choosing },
                     )
                 }
                 if (state.libraryExercise != null) {
                     TextButton(onClick = { onEditVariation(null) }) { Text("+  Add a variation") }
-                }
-                // A change for today only: what the timer and the logger will use, saved nowhere
-                // but on the copy they make.
-                state.attemptPlan?.let { plan ->
-                    AttemptCard(
-                        summary = PrescriptionSummary.formatPlan(plan, state.mode, state.unilateral),
-                        tag = state.variations.firstOrNull { it.id == state.selectedVariationId }?.tag,
-                        onEdit = onAdjustAttempt,
-                        onClear = onClearAttempt,
-                    )
                 }
             }
 
@@ -359,23 +338,15 @@ fun ExerciseDetailScreen(
         )
     }
 
-    state.attemptEditor?.let { form ->
-        AlertDialog(
-            onDismissRequest = onDismissAttempt,
-            title = { Text("This attempt") },
-            text = {
-                Column {
-                    PrescriptionFields(
-                        state = form,
-                        onStateChange = onAttemptChange,
-                        mode = state.mode,
-                        unilateral = state.unilateral,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-            },
-            confirmButton = { TextButton(onClick = onSaveAttempt) { Text("Use") } },
-            dismissButton = { TextButton(onClick = onDismissAttempt) { Text("Cancel") } },
+    state.timerSetup?.let { setup ->
+        TimerSetupDialog(
+            state = state,
+            setup = setup,
+            onChooseVariation = onChooseSetupVariation,
+            onCustom = onCustomSetup,
+            onChange = onSetupChange,
+            onStart = onStartFromSetup,
+            onDismiss = onDismissSetup,
         )
     }
 
@@ -433,24 +404,12 @@ private fun PlanCard(
     lines: List<String>,
     editDescription: String,
     onEdit: () -> Unit,
-    selected: Boolean = false,
-    /** Set when the card can be chosen as the plan for an attempt. */
-    onSelect: (() -> Unit)? = null,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (onSelect != null) {
-                    Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
-                } else {
-                    Modifier
-                }
-            ),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
         ),
-        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
     ) {
         Row(
             modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
@@ -485,41 +444,100 @@ private fun PlanCard(
 }
 
 /**
- * A plan changed for one attempt, shown under the plans it came from. The cog changes it again;
- * the cross goes back to the plan as saved. Nothing here reaches the library.
+ * Start timer: the plans to start from — the planned copy (or the default), then each variation —
+ * each with its plan in one line, and *Custom* for a plan of one's own, which opens the fields
+ * seeded from the plan chosen so far. Start runs it (asking first only if another timer is going);
+ * Cancel changes nothing. A custom plan is for this attempt alone.
  */
 @Composable
-private fun AttemptCard(summary: String, tag: String?, onEdit: () -> Unit, onClear: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text("This attempt", style = MaterialTheme.typography.labelMedium)
-                    tag?.let { VariationChip(it) }
+private fun TimerSetupDialog(
+    state: ExerciseDetailUiState,
+    setup: TimerSetup,
+    onChooseVariation: (String?) -> Unit,
+    onCustom: () -> Unit,
+    onChange: (PrescriptionFormState) -> Unit,
+    onStart: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Start timer") },
+        text = {
+            Column(
+                // Room above the first row, so nothing sits under the title.
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp),
+            ) {
+                SetupOption(
+                    selected = !setup.custom && setup.variationId == null,
+                    title = { Text(state.basePlanLabel, style = MaterialTheme.typography.titleSmall) },
+                    summary = PrescriptionSummary.formatPlan(state.planFor(null), state.mode, state.unilateral),
+                    note = null,
+                    onClick = { onChooseVariation(null) },
+                )
+                state.variations.forEach { variation ->
+                    SetupOption(
+                        selected = !setup.custom && setup.variationId == variation.id,
+                        title = { VariationChip(variation.tag) },
+                        summary = PrescriptionSummary.formatPlan(variation.prescription, state.mode, state.unilateral),
+                        note = variation.notes,
+                        onClick = { onChooseVariation(variation.id) },
+                    )
                 }
-                Text(text = summary, style = MaterialTheme.typography.bodyLarge)
+                SetupOption(
+                    selected = setup.custom,
+                    title = { Text("Custom", style = MaterialTheme.typography.titleSmall) },
+                    summary = null,
+                    note = null,
+                    onClick = onCustom,
+                )
+                if (setup.custom) {
+                    PrescriptionFields(
+                        state = setup.form,
+                        onStateChange = onChange,
+                        mode = state.mode,
+                        unilateral = state.unilateral,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
-            IconButton(
-                onClick = onEdit,
-                modifier = Modifier.semantics { contentDescription = "Change this attempt" },
-            ) {
-                Icon(painterResource(R.drawable.ic_edit_plan), contentDescription = null)
+        },
+        confirmButton = { TextButton(onClick = onStart) { Text("Start") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** One plan to start from: a radio, its name or tag, its plan in one line, and its notes, short. */
+@Composable
+private fun SetupOption(
+    selected: Boolean,
+    title: @Composable () -> Unit,
+    summary: String?,
+    note: String?,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Column(modifier = Modifier.padding(start = 8.dp)) {
+            title()
+            summary?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(
-                onClick = onClear,
-                modifier = Modifier.semantics { contentDescription = "Use the saved plan" },
-            ) {
-                Text("✕", style = MaterialTheme.typography.titleMedium)
+            note?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -555,9 +573,8 @@ private fun lastLoggedDate(date: LocalDate): String {
 private fun ExerciseMenu(
     onEditExercise: (() -> Unit)?,
     onAddToPlan: (() -> Unit)?,
-    onAdjustAttempt: (() -> Unit)?,
 ) {
-    if (onEditExercise == null && onAddToPlan == null && onAdjustAttempt == null) return
+    if (onEditExercise == null && onAddToPlan == null) return
     var expanded by remember { mutableStateOf(false) }
     IconButton(
         onClick = { expanded = true },
@@ -572,15 +589,6 @@ private fun ExerciseMenu(
                 onClick = {
                     expanded = false
                     add()
-                },
-            )
-        }
-        onAdjustAttempt?.let { adjust ->
-            DropdownMenuItem(
-                text = { Text("Adjust this attempt") },
-                onClick = {
-                    expanded = false
-                    adjust()
                 },
             )
         }
