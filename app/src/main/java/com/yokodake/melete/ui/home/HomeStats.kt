@@ -76,14 +76,21 @@ data class BenchmarkReminder(val benchmarkId: String, val name: String, val last
     companion object {
         /**
          * Among visible benchmarks with a result, the one tested longest ago, if that was at least
-         * six months before [today]; null otherwise, or while dismissed until after [today].
+         * [months] before [today]; null otherwise, when reminders are off ([months] 0), or while
+         * dismissed until after [today].
          */
-        fun pick(standings: List<BenchmarkStanding>, today: LocalDate, dismissedUntil: LocalDate?): BenchmarkReminder? {
+        fun pick(
+            standings: List<BenchmarkStanding>,
+            today: LocalDate,
+            dismissedUntil: LocalDate?,
+            months: Int = 6,
+        ): BenchmarkReminder? {
+            if (months <= 0) return null
             if (dismissedUntil != null && today <= dismissedUntil) return null
             return standings
                 .filter { !it.benchmark.hidden }
                 .mapNotNull { standing -> standing.latest?.let { standing to it.date } }
-                .filter { (_, date) -> date <= today.minusMonths(6) }
+                .filter { (_, date) -> date <= today.minusMonths(months.toLong()) }
                 .minByOrNull { (_, date) -> date }
                 ?.let { (standing, date) -> BenchmarkReminder(standing.benchmark.id, standing.benchmark.name, date) }
         }

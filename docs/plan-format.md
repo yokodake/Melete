@@ -5,6 +5,10 @@ Import a plan**. Everything is referred to by **name**: there are no ids, timest
 to maintain. (A *backup* is the other kind of file — the whole record with its ids, for putting a
 phone back exactly. It goes through *Restore*.)
 
+To look at a plan file before importing it, open `tools/plan-viewer/index.html` in a browser and
+pick the file: a weekly view like the app's, a global table of exercises by week, and the problems
+the importer would report. It reads the file locally; nothing is uploaded.
+
 The test library, `app/src/androidTest/assets/test-library.json`, is a complete example. Version
 1 files stay readable in every later version of the app; the test library is the check.
 

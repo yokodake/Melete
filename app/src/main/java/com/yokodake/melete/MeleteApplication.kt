@@ -2,6 +2,7 @@ package com.yokodake.melete
 
 import android.app.Application
 import android.content.Context
+import com.yokodake.melete.data.AppSettings
 import com.yokodake.melete.data.BenchmarkRepository
 import com.yokodake.melete.data.DiaryRepository
 import com.yokodake.melete.data.backup.BackupService
@@ -30,6 +31,9 @@ class AppContainer(context: Context) {
     val diaryRepository: DiaryRepository by lazy { DiaryRepository(database) }
 
     val benchmarkRepository: BenchmarkRepository by lazy { BenchmarkRepository(database) }
+
+    /** Preferences: how the app behaves, never what was trained. */
+    val settings: AppSettings by lazy { AppSettings(applicationContext) }
 
     val backupService: BackupService by lazy { BackupService(database) }
 

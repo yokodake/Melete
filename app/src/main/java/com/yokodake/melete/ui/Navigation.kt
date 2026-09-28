@@ -13,6 +13,7 @@ import com.yokodake.melete.ui.benchmark.BenchmarkEditorRoute
 import com.yokodake.melete.ui.benchmark.BenchmarksRoute
 import com.yokodake.melete.ui.dashboard.DashboardRoute
 import com.yokodake.melete.ui.home.HomeRoute
+import com.yokodake.melete.data.KeepAwake
 import com.yokodake.melete.ui.settings.SettingsRoute
 import androidx.compose.runtime.collectAsState
 import com.yokodake.melete.ui.module.ModuleDetailRoute
@@ -449,8 +450,10 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
 private fun KeepScreenOnWhileCountingDown() {
     val application = LocalContext.current.applicationContext as? MeleteApplication ?: return
     val timerState by application.container.timerController.state.collectAsStateWithLifecycle()
+    val setting by application.container.settings.keepAwake.collectAsStateWithLifecycle()
     val view = LocalView.current
-    val keepAwake = timerState is TimerState.Running
+    // "Always" holds it for as long as the app is in front: reading, logging between sets.
+    val keepAwake = setting == KeepAwake.ALWAYS || timerState is TimerState.Running
     DisposableEffect(view, keepAwake) {
         view.keepScreenOn = keepAwake
         onDispose { view.keepScreenOn = false }
