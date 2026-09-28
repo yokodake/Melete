@@ -1545,8 +1545,28 @@ Melete Debug updated; not checked by eye.
 
 ## Next step
 
-**Phase 6A — the overview.** Before the real plan goes into release: walk the hand checklist
-above and tick what is confirmed, and follow *Starting from nothing* in
+**Attempt-based sets — before 6B.** Strength intervals are a set of *attempts* on a hard problem
+(3 attempts, 1 min between, 5 min between sets): a repeater whose pulses are untimed reps rather
+than timed work. The app cannot express that, so the winter plan works around it with a circuit of
+three one-attempt stations per round. The cost is real: **one session logs as three exercises and
+counts three times** on the dashboard and on Home, and it needs a circuit where an exercise should
+do. The fix is an exercise mode (or a repeater shape) whose set is N untimed attempts with a rest
+between them — the timer waits for each attempt, then counts the rest — logged and counted as one
+exercise. Once it exists, move the plan to it and correct the sessions already logged with the
+circuit (merge each circuit's three station occurrences into one), with a migration and a test.
+This comes **before 6B**.
+
+Small follow-ups recorded with it (2026-09-28):
+
+- An `"omit"` placement override for modules (`{"module": "Shoulder support", "omit": ["Bent-over
+  fly"]}`): importer-only, no schema change.
+- Optional exercises: a flag on the scheduled copy, overridable per placement, shown as a chip;
+  Home's Today target and remaining time leave an unfinished optional exercise out. Needs a schema
+  change and a backup format bump. Module variations were considered and set aside: `omit` covers
+  the case for far less.
+
+**Phase 6A — the overview** is built. Before the real plan goes into release: walk the hand
+checklist above and tick what is confirmed, and follow *Starting from nothing* in
 [`plan-format.md`](plan-format.md) to empty the release app of its test data.
 
 Owed alongside it:
