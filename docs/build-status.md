@@ -161,16 +161,19 @@ its abbreviation, case-insensitive (`finger`, `FN`, `S&C`), or its kind as a who
 `!circuit, fn`. Spaces are part of the text. Modules match by text only. Any other negation is
 **deferred**.
 
-**From the library, an exercise can be timed or logged directly.** With variations, a tap on a
-plan card chooses which plan (outlined); **⋮ → Adjust this attempt** changes the plan for this
-attempt only — saved on the copy it makes, never on the template or as a variation. *Start timer*
-and *Log exercise* then put one copy of that plan into this week's unscheduled area and use it:
-the timer runs linked to it (a timer records nothing), and its *Log* opens the logger on that same
-copy, so nothing is duplicated; pressing either again on the same page reuses it, and choosing
-another plan swaps out the untouched copy. *Log* from the library defaults to today with the
-usual *Change*; leaving the logger without saving removes the copy it made for that
-(`discardUnloggedOccurrence`, which refuses anything logged, skipped, completed or grouped). A
-copy made for a timer that is never logged stays in Unscheduled as a plan. *New workout* opens the exercise editor with **Exercise |
+**Start timer is one step**, from the library and the week alike: a *Start timer* dialog listing
+the plans to start from — *Planned* (the week's copy) or *Default* (the library's), then each
+variation with its chip — each with its plan in one line and its notes shortened, and **Custom**
+last, which opens the prescription fields seeded from the plan chosen so far. The first is
+selected; Start runs the choice; Cancel changes nothing. A running timer is asked about only after Start (declining starts nothing). The edit is
+for this attempt only: a planned copy in the week is timed as edited but its plan and log are
+never rewritten; from the library, Start puts one copy of that plan into this week's unscheduled
+area and runs the timer linked to it (a timer records nothing), so the timer's *Log* opens that
+same copy. Pressing Start again with the same plan reuses the copy; with another, the untouched
+old copy goes. *Log exercise* from the library opens that timer's copy when there is one, else a
+copy of the default dated today (with the usual *Change*), which is removed again if the logger is
+left without saving (`discardUnloggedOccurrence`, which refuses anything logged, skipped,
+completed or grouped). A copy made for a timer that is never logged stays in Unscheduled as a plan. *New workout* opens the exercise editor with **Exercise |
 Circuit** at the top, and the rest of the form follows that choice — switching replaces the editor
 rather than stacking one on the other. Editing an existing exercise or circuit never offers the
 switch.
