@@ -80,6 +80,8 @@ import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.CategoryChip
 import com.yokodake.melete.ui.components.VariationChip
 import com.yokodake.melete.ui.theme.MeleteTheme
+import com.yokodake.melete.ui.theme.progressColor
+import com.yokodake.melete.ui.theme.onProgressColor
 import com.yokodake.melete.ui.theme.doneColors
 import java.time.LocalDate
 
@@ -642,7 +644,8 @@ private fun DayHeading(
                 },
             )
             if (row.isToday) {
-                Chip("Today", MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
+                // The progress blue, like Home's Library tile.
+                Chip("Today", progressColor(), onProgressColor())
             }
             Spacer(modifier = Modifier.weight(1f))
             AddButton(

@@ -106,7 +106,7 @@ only when it is. The graph over time is **deferred** to the exercise graphs.
 
 **A record apart from training (decision A):** a result is written to `benchmark_results` only —
 no occurrence, session or set, nothing counted or totalled. The calendar shows it on its date as a
-read-only line under the day (a red ⚑, then name · value), like the diary; a tap opens the benchmark. Each
+read-only line under the day (a blue ⚑ in the progress colour, then name · value), like the diary; a tap opens the benchmark. Each
 result keeps the unit, load meaning and sidedness it was recorded under, so editing a definition
 never rewrites an old result, and only results in the current unit and meaning compete for Best
 (`BenchmarkStanding`). Results are in backups (format 2) and survive restore; a plan import never
@@ -1054,15 +1054,15 @@ These are the ones no test can make.
       with *Replace*, the list and picker warn, and scheduling asks before leaving it out.
 - [ ] **Circuit fixes**: a station's form has no sets / rest / total time; the review has one row
       per round; an unscheduled circuit's review says *Logging for …* with *Change*.
-- [ ] **Remove a completed activity** from the week: it offers *Delete activity and log*, and it
+- [x] **Remove a completed activity** from the week: it offers *Delete activity and log*, and it
       works.
 
 ### 6. Background and audio
 
-- [ ] Everything in sections 4 and 5 at least once **with Spotify playing**: the music keeps going
+- [x] Everything in sections 4 and 5 at least once **with Spotify playing**: the music keeps going
       and the cue is audible over it.
-- [ ] At least one whole program **with the screen off**, confirming every cue is heard.
-- [ ] The ongoing notification's *Pause* / *Resume* / *Set done* / *Cancel* buttons all work from
+- [x] At least one whole program **with the screen off**, confirming every cue is heard.
+- [x] The ongoing notification's *Pause* / *Resume* / *Set done* / *Cancel* buttons all work from
       the lock screen.
 
 ---
@@ -1608,7 +1608,8 @@ library entry (all time). It holds:
   date it was reached).
 - **The graph**, one point per workout: the heaviest set in the exercise's current unit and load
   meaning (loads in another unit stay listed but off the graph); without loads, the most reps in
-  a set, the longest set, or an activity's duration. Unilateral work draws L (blue, circles) and
+  a set. Durations are never graphed: a hold that is a measure is recorded as a load in seconds
+  (total load, unit `s`), as a distance is in `cm`, and is graphed as a load. Unilateral work draws L (blue, circles) and
   R (orange, squares) with a legend. The scale runs from the lowest recorded value to the highest,
   with a dashed zero line when values cross it — zero and assistance are real loads. A tap
   inspects the nearest date: the line above names it and every line's value on it.
@@ -1641,6 +1642,19 @@ Hand checks to do:
 - [ ] The graph: tap points; L/R legend on a unilateral exercise; a negative or zero load.
 - [ ] A benchmark with a few results shows its graph.
 - [ ] Strength intervals read "3 × 3 · rest 5m/3m · hard".
+
+### After 6B, from use (2026-09-28)
+
+- *Last logged* (and History and Records lines) gives sets that differ as their count and the
+  heaviest set with its reps: "4 sets · max 5 × 92.5 kg · Moderate"; each side's own for
+  unilateral work; more reps wins a tie in load. The logger's previous results stay set by set.
+- *History ›* sits below the plans on an exercise page, so the default and its variations stay
+  together.
+- Home's Library tile is washed in the progress blue with a blue icon; the Benchmarks icon, the
+  week's benchmark ⚑ and the week's *Today* chip use the same blue.
+- The Timer tab builds **Intervals**: so many reps a set, a rest between reps (m/s), the usual
+  rest between sets, sides and sets. The same sequence as planned attempts; the last numbers are
+  remembered like the repeater's.
 
 ## Next step
 

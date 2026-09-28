@@ -72,11 +72,14 @@ object LastLoggedPicker {
 
     /**
      * What one earlier workout recorded, compactly and truthfully: "3 × 8 · 20 kg · Hard" when
-     * every set agrees, "8 × 20 · 8 × 20 · 6 × 22 kg" when they do not. Only recorded values are
-     * shown — no reps or loads are invented — and an activity with no sets says how long and how
-     * hard. Null when nothing was recorded worth repeating.
+     * every set agrees; when they do not, the set count and the heaviest set with its reps,
+     * "4 sets · max 5 × 92.5 kg" (each side's own for unilateral work; on a tie in load, the set
+     * with more reps or the longer one). With [perSet], or when no set has a load, the sets are
+     * listed one by one instead: "8 × 20 · 8 × 20 · 6 × 22 kg". Only recorded values are shown —
+     * no reps or loads are invented — and an activity with no sets says how long and how hard.
+     * Null when nothing was recorded worth repeating.
      */
-    fun summarise(occurrence: PlannedOccurrence, sets: List<PerformedSet>): String? {
+    fun summarise(occurrence: PlannedOccurrence, sets: List<PerformedSet>, perSet: Boolean = false): String? {
         if (sets.isEmpty()) {
             return listOfNotNull(
                 occurrence.loggedDurationSeconds?.let(PrescriptionSummary::duration),
@@ -98,12 +101,31 @@ object LastLoggedPicker {
             val volume = line.target()?.let { "$count × $it" } ?: "$count ${if (count == 1) "set" else "sets"}"
             listOfNotNull(volume, line.loadText(sidesSpelled = true)?.let { "$it $unit" })
                 .joinToString(" · ")
+        } else if (!perSet && lines.any { it.left != null || it.right != null }) {
+            // The heaviest set of each side, which is what to pick up from next time.
+            fun heaviest(load: (SetLine) -> Measurement?): SetLine? = lines
+                .filter { load(it) != null }
+                .maxWithOrNull(compareBy({ load(it)!!.value }, { it.reps ?: 0 }, { it.seconds ?: 0 }))
+            val left = heaviest { it.left }
+            val right = heaviest { it.right }
+            val count = lines.size
+            val max = when {
+                right == null || left == null || left.target() == right.target() -> {
+                    val target = (left ?: right)?.target()
+                    val load = SetLine(null, null, left?.left, right?.right).loadText(sidesSpelled = true)
+                    listOfNotNull(target, load).joinToString(" × ")
+                }
+                // The sides peaked on different sets: each with its own reps.
+                else -> "L ${left.target()} × ${SetLine(null, null, left.left, null).loadText(true)} / " +
+                    "R ${right.target()} × ${SetLine(null, null, right.right, null).loadText(true)}"
+            }
+            "$count ${if (count == 1) "set" else "sets"} · max $max $unit"
         } else {
-            val perSet = lines.joinToString(" · ") { line ->
+            val listed = lines.joinToString(" · ") { line ->
                 listOfNotNull(line.target(), line.loadText(sidesSpelled = false)).joinToString(" × ")
                     .ifEmpty { "—" }
             }
-            if (unit != null && lines.any { it.left != null || it.right != null }) "$perSet $unit" else perSet
+            if (unit != null && lines.any { it.left != null || it.right != null }) "$listed $unit" else listed
         }
         return listOfNotNull(body, effort?.label).joinToString(" · ")
     }

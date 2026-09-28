@@ -230,8 +230,7 @@ fun ExerciseHistoryScreen(
                             )
                         }
                         if (history.targetOptions.isNotEmpty()) {
-                            val timed = history.measure == HistoryMeasure.SET_LENGTH ||
-                                history.records.firstOrNull()?.occurrence?.mode == ExerciseMode.DURATION
+                            val timed = history.records.firstOrNull()?.occurrence?.mode == ExerciseMode.DURATION
                             fun label(value: Int) = if (timed) "${value} s sets" else "$value reps"
                             Choice(
                                 current = history.target?.let(::label) ?: if (timed) "All lengths" else "All reps",
@@ -312,7 +311,7 @@ private fun Standing(history: ExerciseHistory) {
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "${if (history.measure == HistoryMeasure.DURATION) "Longest" else "Best"} ${line(history.best)}",
+            text = "Best ${line(history.best)}",
             style = MaterialTheme.typography.bodyMedium,
         )
     }
