@@ -468,8 +468,14 @@ private fun AwaitingSet(
     onCancel: () -> Unit,
 ) {
     ProgramHeading(state)
+    // One attempt of a paced set is simply "go": which one it is is on the status line.
+    val attempt = state.state.currentStep?.let { it.untimed && it.repIndex != null } == true
     Text(
-        text = state.state.activeProgram?.workLabel(unknownReps = "ALLEZ !").orEmpty(),
+        text = if (attempt) {
+            "ALLEZ !"
+        } else {
+            state.state.activeProgram?.workLabel(unknownReps = "ALLEZ !").orEmpty()
+        },
         style = MaterialTheme.typography.displayLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
@@ -885,6 +891,8 @@ private fun nextUp(state: TimerUiState): String? {
     } ?: return null
     val entry = program.entries.getOrNull(next.entryIndex)
     return when {
+        next.untimed && next.repIndex != null ->
+            "rep ${next.repIndex + 1} of ${entry?.repsPerSetOnTimer ?: "?"}"
         next.untimed -> entry?.workReps?.let { "$it ${if (it == 1) "rep" else "reps"}" } ?: "a set"
         next.phase == TimerPhase.WORK -> buildString {
             append(PrescriptionSummary.duration(next.seconds))

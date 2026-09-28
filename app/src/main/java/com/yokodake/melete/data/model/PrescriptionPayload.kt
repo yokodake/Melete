@@ -7,7 +7,7 @@ import kotlinx.serialization.json.Json
  * Version of the named-field prescription payload. Bump it whenever the meaning of a field
  * changes, never reuse a name for a different quantity, and keep old versions readable.
  */
-const val PRESCRIPTION_PAYLOAD_VERSION: Int = 3
+const val PRESCRIPTION_PAYLOAD_VERSION: Int = 4
 
 /** How the app asks for a performed set. */
 enum class ExerciseMode(val label: String) {
@@ -85,6 +85,13 @@ data class PrescriptionPayload(
      * plain timed set and a series of efforts.
      */
     val repeater: RepeaterPrescription? = null,
+    /**
+     * v4. Timed rest between the reps of one set, for a reps exercise whose reps are *attempts*:
+     * three goes at a hard problem, a minute apart. The reps stay untimed — the timer waits for
+     * each one — and only the gap between them is counted. Absent (or zero) is an ordinary set.
+     * Meaningful only in [ExerciseMode.REPETITIONS].
+     */
+    val restSecondsBetweenReps: Int? = null,
 ) {
     init {
         require(sets >= 0) { "sets must not be negative" }

@@ -175,7 +175,7 @@ internal fun TimerState.positionDetail(): String? {
             null -> Unit
         }
         val rep = currentRep
-        val reps = currentStep?.entryIndex?.let { program.entries.getOrNull(it) }?.repeater?.repsPerSet
+        val reps = currentStep?.entryIndex?.let { program.entries.getOrNull(it) }?.repsPerSetOnTimer
         if (rep != null && reps != null) add("rep $rep of $reps")
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")

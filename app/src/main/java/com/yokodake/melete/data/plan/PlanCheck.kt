@@ -583,7 +583,8 @@ object PlanCheck {
         if (spec == null) return PrescriptionPayload(sets = 1)
         val numbers = listOf(
             "sets" to spec.sets, "reps" to spec.reps, "seconds" to spec.seconds,
-            "restSeconds" to spec.restSeconds, "sideSwitchSeconds" to spec.sideSwitchSeconds,
+            "restSeconds" to spec.restSeconds, "repRestSeconds" to spec.repRestSeconds,
+            "sideSwitchSeconds" to spec.sideSwitchSeconds,
             "minutes" to spec.minutes, "plannedMinutes" to spec.plannedMinutes,
             "repeater.reps" to spec.repeater?.reps, "repeater.workSeconds" to spec.repeater?.workSeconds,
             "repeater.restSeconds" to spec.repeater?.restSeconds,
@@ -601,6 +602,7 @@ object PlanCheck {
             dropped("reps", spec.reps, why)
             dropped("seconds", spec.seconds, "an activity's length is \"minutes\"")
             dropped("restSeconds", spec.restSeconds, why)
+            dropped("repRestSeconds", spec.repRestSeconds, why)
             dropped("sideSwitchSeconds", spec.sideSwitchSeconds, why)
             dropped("plannedMinutes", spec.plannedMinutes, "an activity's length is \"minutes\"")
             dropped("repeater", spec.repeater, why)
@@ -613,6 +615,9 @@ object PlanCheck {
 
         dropped("minutes", spec.minutes, "that is an activity's length; use \"plannedMinutes\"")
         if (mode != ExerciseMode.REPETITIONS) dropped("reps", spec.reps, "only reps exercises count reps")
+        if (mode != ExerciseMode.REPETITIONS) {
+            dropped("repRestSeconds", spec.repRestSeconds, "only reps exercises rest between reps")
+        }
         if (mode != ExerciseMode.DURATION) dropped("seconds", spec.seconds, "only timed sets have a length")
         if (mode != ExerciseMode.REPEATERS) dropped("repeater", spec.repeater, "only repeaters have pulses")
         if (!unilateral) dropped("sideSwitchSeconds", spec.sideSwitchSeconds, "it is not one side at a time")
@@ -635,6 +640,7 @@ object PlanCheck {
             plannedDurationSeconds = spec.plannedMinutes?.let { it * 60 },
             sideSwitchSeconds = spec.sideSwitchSeconds?.takeIf { unilateral },
             repeater = repeater,
+            restSecondsBetweenReps = spec.repRestSeconds?.takeIf { it > 0 && mode == ExerciseMode.REPETITIONS },
         )
     }
 

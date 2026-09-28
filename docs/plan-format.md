@@ -81,6 +81,7 @@ has the same fields, in the units you type them in:
 | `seconds` | length of one timed set | `DURATION` |
 | `repeater` | `{ "reps": 6, "workSeconds": 7, "restSeconds": 3 }` | `REPEATERS` |
 | `restSeconds` | rest between sets | all but activities |
+| `repRestSeconds` | rest between the reps of one set, when the reps are attempts (the timer waits for each, then counts this); omit or `0` for an ordinary set | `REPETITIONS` |
 | `sideSwitchSeconds` | time to change sides; omit for the default, `0` = back to back | unilateral exercises |
 | `plannedMinutes` | how long it should take, overruling the estimate | all but activities |
 | `minutes` | the activity's length | `ACTIVITY` |

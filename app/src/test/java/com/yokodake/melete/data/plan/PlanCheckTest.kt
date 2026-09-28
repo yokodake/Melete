@@ -160,6 +160,28 @@ class PlanCheckTest {
     }
 
     @Test
+    fun `a rest between reps is read for reps only, and kept in a station`() {
+        val problems = mutableListOf<String>()
+        val warnings = mutableListOf<String>()
+        val spec = PlanSpec(sets = 2, reps = 3, restSeconds = 300, repRestSeconds = 60, effort = "HARD")
+
+        val reps = PlanCheck.payloadFor(spec, ExerciseMode.REPETITIONS, unilateral = false, "Strength intervals", station = false, problems, warnings)
+        assertEquals(
+            PrescriptionPayload(sets = 2, targetReps = 3, restSeconds = 300, effort = EffortLevel.HARD, restSecondsBetweenReps = 60),
+            reps,
+        )
+        assertEquals(emptyList<String>(), warnings)
+        assertEquals(60, PlanCheck.payloadFor(spec, ExerciseMode.REPETITIONS, false, "S", station = true, problems, warnings).restSecondsBetweenReps)
+
+        val timed = PlanCheck.payloadFor(spec.copy(seconds = 10), ExerciseMode.DURATION, unilateral = false, "Hang", station = false, problems, warnings)
+        assertNull(timed.restSecondsBetweenReps)
+        assertTrue(warnings.any { "repRestSeconds" in it })
+
+        PlanCheck.payloadFor(PlanSpec(repRestSeconds = -1), ExerciseMode.REPETITIONS, false, "Bad", station = false, problems, warnings)
+        assertTrue(problems.any { "repRestSeconds" in it })
+    }
+
+    @Test
     fun `mistakes are all named, and nothing is planned while any remain`() {
         val resolution = resolve(
             """ "exercises": [
