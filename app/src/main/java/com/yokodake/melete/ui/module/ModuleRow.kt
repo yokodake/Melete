@@ -24,6 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yokodake.melete.data.TrainingModule
+import com.yokodake.melete.data.model.ExerciseCategory
+import com.yokodake.melete.ui.components.CategoryChip
+import com.yokodake.melete.ui.components.dominantCategory
+import androidx.compose.foundation.layout.Spacer
 
 /**
  * One saved module: its name, what is in it, and what it is for.
@@ -62,8 +66,10 @@ internal fun ModuleRow(
                         text = module.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    CategoryChip(module.category, modifier = Modifier.padding(start = 8.dp))
+                    Spacer(Modifier.weight(1f))
                     secondaryAction?.let { (action, label) ->
                         TextButton(onClick = action) { Text(label) }
                     }
@@ -105,6 +111,13 @@ internal fun ModuleRow(
         }
     }
 }
+
+/**
+ * What a saved module reads as: the most common category among its entries, a circuit entry
+ * counting as its circuit's category, ties to the first. Derived, never stored.
+ */
+internal val TrainingModule.category: ExerciseCategory?
+    get() = dominantCategory(entries.map { if (it.isCircuit) it.routine?.category ?: it.category else it.category })
 
 /** "1 unavailable — left out when added", or null when everything in it still exists. */
 internal fun unavailableNote(module: TrainingModule): String? {

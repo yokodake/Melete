@@ -77,6 +77,7 @@ import com.yokodake.melete.data.model.Measurement
 import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
 import com.yokodake.melete.ui.components.CategoryDot
+import com.yokodake.melete.ui.components.CategoryChip
 import com.yokodake.melete.ui.components.VariationChip
 import com.yokodake.melete.ui.theme.MeleteTheme
 import com.yokodake.melete.ui.theme.doneColors
@@ -933,6 +934,7 @@ private fun ModuleCard(
                         }
                     }
                 }
+                CategoryChip(item.category, modifier = Modifier.padding(start = 8.dp))
                 if (item.completed) {
                     val colors = doneColors()
                     Chip("Done", colors.first, colors.second)

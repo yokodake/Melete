@@ -7,6 +7,8 @@ import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.Tracker
 import com.yokodake.melete.data.WeekCircuit
 import com.yokodake.melete.data.WeekModule
+import com.yokodake.melete.data.model.ExerciseCategory
+import com.yokodake.melete.ui.components.dominantCategory
 import java.time.LocalDate
 
 /**
@@ -63,6 +65,21 @@ sealed interface WeekItem {
             }
 
         val recordedExercises: Int get() = exercises.count { it.hasRecord }
+
+        /**
+         * What the module reads as: the most common category among its members, a circuit
+         * counting as its own category, ties to the first. Derived, never stored.
+         */
+        val category: ExerciseCategory?
+            get() = dominantCategory(
+                members.map {
+                    when (it) {
+                        is Single -> it.occurrence.category
+                        is Circuit -> it.circuit.category
+                        is Module -> null
+                    }
+                }
+            )
 
         val completed: Boolean get() = exercises.isNotEmpty() && exercises.all { it.hasRecord }
     }
