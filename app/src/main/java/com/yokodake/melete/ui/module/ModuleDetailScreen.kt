@@ -42,6 +42,9 @@ import com.yokodake.melete.data.TrainingModule
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.ui.ModuleDetailDestination
 import com.yokodake.melete.ui.components.BackButton
+import com.yokodake.melete.ui.components.CategoryChip
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
 import com.yokodake.melete.ui.components.ContentsLine
 import com.yokodake.melete.ui.components.DetailActionBar
 import com.yokodake.melete.ui.components.DetailSection
@@ -149,7 +152,13 @@ fun ModuleDetailScreen(
                 title = {
                     Column {
                         Text(module?.name.orEmpty(), style = MaterialTheme.typography.titleMedium)
-                        Text("Module", style = MaterialTheme.typography.bodySmall)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("Module", style = MaterialTheme.typography.bodySmall)
+                            CategoryChip(module?.category)
+                        }
                     }
                 },
                 navigationIcon = { BackButton(onBack) },

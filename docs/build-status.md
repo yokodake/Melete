@@ -227,7 +227,9 @@ top of the next day. Crossing a day is a real move: logged sets go with it, and 
 refused the unscheduled area. A copy cut from a
 variation carries the variation's tag as a chip beside its name.
 
-A **module** is an outlined group under its name, holding the ordinary cards of its members —
+A **module** is an outlined group under its name and a category chip (the most common category
+among its entries, a circuit counting as its own, ties to the first — derived, never stored;
+`dominantCategory`, also on the library row and the module page), holding the ordinary cards of its members —
 each opened, moved and logged as it would be on its own, with one extra menu item, *Take out of
 module*. The group's own menu moves it (with the members still in its slot, taking their logs to
 the new date), ungroups it (every member stays exactly where it is), or removes it. Moving a member
