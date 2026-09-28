@@ -90,6 +90,45 @@ class PlanImportTest {
         today: LocalDate = monday.minusDays(7),
     ) = importer.import(importer.decode(text), mode, scope, safety, today)
 
+    /** A week's own module plans and circuit rounds land on that week's copies, and nowhere else. */
+    @Test
+    fun placementOverridesChangeThatWeeksCopyOnly() = runBlocking {
+        import(
+            """
+            { "format": "melete-plan", "version": 1,
+              "exercises": [
+                { "name": "Cossack", "mode": "reps", "plan": { "sets": 2, "reps": 6 } },
+                { "name": "Clamshell", "mode": "reps", "plan": { "sets": 2, "reps": 10 } },
+                { "name": "Attempt", "mode": "reps", "plan": { "reps": 1 } }
+              ],
+              "circuits": [ { "name": "Intervals", "rounds": 2, "transitionSeconds": 60, "roundRestSeconds": 300,
+                "stations": [ { "exercise": "Attempt" }, { "exercise": "Attempt" }, { "exercise": "Attempt" } ] } ],
+              "modules": [ { "name": "FA", "entries": [ { "exercise": "Cossack" }, { "exercise": "Clamshell" } ] } ],
+              "weeks": [
+                { "weekStart": "2026-10-05", "wednesday": [ { "module": "FA" }, { "circuit": "Intervals" } ] },
+                { "weekStart": "2026-10-12", "wednesday": [
+                  { "module": "FA", "plans": { "Cossack": { "sets": 4, "reps": 6 } } },
+                  { "circuit": "Intervals", "rounds": 3 } ] }
+              ] }
+            """
+        )
+        fun cossackSets(week: LocalDate) =
+            kotlinx.coroutines.runBlocking { repository.observeWeek(week).first() }
+                .single { it.name == "Cossack" }.prescription?.sets
+        fun clamshellSets(week: LocalDate) =
+            kotlinx.coroutines.runBlocking { repository.observeWeek(week).first() }
+                .single { it.name == "Clamshell" }.prescription?.sets
+        assertEquals(2, cossackSets(monday))
+        assertEquals(4, cossackSets(monday.plusWeeks(1)))
+        assertEquals(2, clamshellSets(monday.plusWeeks(1)))
+
+        assertEquals(2, repository.observeWeekCircuits(monday).first().single().rounds)
+        assertEquals(3, repository.observeWeekCircuits(monday.plusWeeks(1)).first().single().rounds)
+        // The saved templates keep their own.
+        assertEquals(2, repository.observeRoutines().first().single().rounds)
+        assertEquals(2, repository.observeModules().first().single().entries.first { it.name == "Cossack" }.prescription?.sets)
+    }
+
     @Test
     fun everythingTheFileNamesLandsWhereItSays() = runBlocking {
         import(plan)

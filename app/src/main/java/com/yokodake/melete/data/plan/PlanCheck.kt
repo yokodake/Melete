@@ -83,8 +83,12 @@ data class ResolvedModule(
 
 sealed interface ResolvedItem {
     data class Exercise(val pick: ResolvedPick) : ResolvedItem
-    data class Circuit(val key: String) : ResolvedItem
-    data class Module(val key: String) : ResolvedItem
+
+    /** A circuit placed in a week, with its own rounds there when the file gives them. */
+    data class Circuit(val key: String, val rounds: Int? = null) : ResolvedItem
+
+    /** A module placed in a week, with plans for some of its exercises there, by exercise key. */
+    data class Module(val key: String, val plans: Map<String, PrescriptionPayload> = emptyMap()) : ResolvedItem
     data class Activity(val name: String, val minutes: Int?) : ResolvedItem
 }
 
@@ -328,6 +332,12 @@ object PlanCheck {
                     if (kind != "activity" && item.minutes != null) {
                         problems += "$where: \"minutes\" only goes with an activity; put it in \"plan\" for an exercise."
                     }
+                    if (kind != "module" && item.plans != null) {
+                        problems += "$where: \"plans\" only goes with a module placed in a week."
+                    }
+                    if (kind != "circuit" && item.rounds != null) {
+                        problems += "$where: \"rounds\" only goes with a circuit placed in a week."
+                    }
                     return kind
                 }
             }
@@ -358,6 +368,7 @@ object PlanCheck {
             if (source.stations.isEmpty()) problems += "$name has no stations."
             val stations = source.stations.mapNotNull { item ->
                 kindOf(item, name, setOf("exercise")) ?: return@mapNotNull null
+                if (item.plans != null || item.rounds != null) problems += "$name: \"plans\" and \"rounds\" go where it is placed in a week."
                 pick(item, name, station = true, overridable = true)
             }
             ResolvedCircuit(
@@ -387,6 +398,7 @@ object PlanCheck {
             if (ambiguous(name)) return@mapIndexedNotNull null
             if (source.entries.isEmpty()) problems += "$name has no entries."
             val entries = source.entries.mapNotNull { item ->
+                if (item.plans != null || item.rounds != null) problems += "$name: \"plans\" and \"rounds\" go where it is placed in a week."
                 when (kindOf(item, name, setOf("exercise", "circuit"))) {
                     "exercise" -> pick(item, name, station = false, overridable = true)?.let(ResolvedEntry::Exercise)
                     "circuit" -> {
@@ -411,6 +423,34 @@ object PlanCheck {
         }
         fun moduleKnown(name: String) =
             nameKey(name).let { it in fileModules || (referencesFromLibrary && it in library.modules) }
+
+        /**
+         * A module placement's own plans, by exercise key. Each must name an exercise the module
+         * holds on its own (not inside one of its circuits) when the file defines the module; one
+         * from the library is checked when it is written. Each plan is judged by that exercise's
+         * mode, exactly as a plan placed on its own would be.
+         */
+        fun modulePlans(module: String, plans: Map<String, PlanSpec>?, where: String): Map<String, PrescriptionPayload> {
+            if (plans.isNullOrEmpty()) return emptyMap()
+            val defined = modules.firstOrNull { it.key == nameKey(module) }
+            val holds = defined?.entries?.filterIsInstance<ResolvedEntry.Exercise>()?.map { it.pick.exerciseKey }?.toSet()
+            return plans.mapNotNull { (exercise, spec) ->
+                val found = target(exercise)
+                when {
+                    found == null -> {
+                        problems += "$where: no exercise called \"$exercise\" in the file or the library."
+                        null
+                    }
+                    holds != null && nameKey(exercise) !in holds -> {
+                        problems += "$where: ${defined.name} has no exercise ${found.name} of its own to plan."
+                        null
+                    }
+                    else -> nameKey(exercise) to payloadFor(
+                        spec, found.mode, found.unilateral, "${found.name} in $module, $where", false, problems, warnings,
+                    )
+                }
+            }.toMap()
+        }
 
         // ---------------------------------------------------------- weeks
 
@@ -452,8 +492,11 @@ object PlanCheck {
                         when (kindOf(item, where, setOf("exercise", "circuit", "module", "activity"))) {
                             "exercise" -> pick(item, where, station = false, overridable = true)?.let(ResolvedItem::Exercise)
                             "circuit" -> item.circuit!!.trim().let { circuit ->
+                                if (item.rounds != null && item.rounds < 1) {
+                                    problems += "$where: $circuit needs at least 1 round."
+                                }
                                 if (circuitKnown(circuit)) {
-                                    ResolvedItem.Circuit(nameKey(circuit))
+                                    ResolvedItem.Circuit(nameKey(circuit), item.rounds?.takeIf { it >= 1 })
                                 } else {
                                     problems += "$where: no circuit called \"$circuit\" in the file or the library."
                                     null
@@ -461,7 +504,7 @@ object PlanCheck {
                             }
                             "module" -> item.module!!.trim().let { module ->
                                 if (moduleKnown(module)) {
-                                    ResolvedItem.Module(nameKey(module))
+                                    ResolvedItem.Module(nameKey(module), modulePlans(module, item.plans, where))
                                 } else {
                                     problems += "$where: no module called \"$module\" in the file or the library."
                                     null

@@ -1,9 +1,50 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
+}
+
+/** The version people talk about. Changing it starts the build number again from 0. */
+val appVersionName = "1.0"
+
+/**
+ * One build number for debug and release alike, counting every build of the app: any invocation
+ * that assembles, installs, bundles or packages it. Kept in build-number.properties at the root
+ * (not versioned — it is this machine's count), and reset to 0 when [appVersionName] changes.
+ * Test-only runs and IDE syncs leave it alone.
+ */
+val buildNumber: Int = run {
+    val file = rootProject.file("build-number.properties")
+    val stored = Properties().apply { if (file.exists()) file.inputStream().use { load(it) } }
+    val sameVersion = stored.getProperty("versionName") == appVersionName
+    val previous = if (sameVersion) stored.getProperty("build")?.toIntOrNull() else null
+    val building = gradle.startParameter.taskNames.any { requested ->
+        val task = requested.substringAfterLast(':')
+        listOf("assemble", "install", "bundle", "package").any { task.startsWith(it) }
+    }
+    val number = when {
+        !building -> previous ?: 0
+        previous == null -> 0
+        else -> previous + 1
+    }
+    if (building) {
+        stored.setProperty("versionName", appVersionName)
+        stored.setProperty("build", number.toString())
+        file.outputStream().use {
+            stored.store(it, "Shared build counter for debug and release; resets when versionName changes.")
+        }
+    }
+    number
+}
+
+/** Android's own versionCode has to keep rising across version changes: major, minor, then build. */
+val appVersionCode: Int = run {
+    val (major, minor) = (appVersionName.split('.') + "0").map { it.toIntOrNull() ?: 0 }
+    major * 1_000_000 + minor * 10_000 + buildNumber
 }
 
 android {
@@ -16,8 +57,9 @@ android {
         applicationId = "com.yokodake.melete"
         minSdk = 33
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+        buildConfigField("int", "BUILD_NUMBER", buildNumber.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

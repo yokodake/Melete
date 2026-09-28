@@ -321,12 +321,24 @@ class PlanImporter(
                         )
                         item.pick.plan?.let { repository.updateOccurrencePrescription(occurrence, it) }
                     }
-                    is ResolvedItem.Circuit -> repository.scheduleRoutine(
-                        circuitIds[item.key] ?: error("unresolved circuit ${item.key}"), slot.weekStart, slot.date,
-                    )
-                    is ResolvedItem.Module -> repository.scheduleModule(
-                        moduleIds[item.key] ?: error("unresolved module ${item.key}"), slot.weekStart, slot.date,
-                    )
+                    is ResolvedItem.Circuit -> {
+                        val circuit = repository.scheduleRoutine(
+                            circuitIds[item.key] ?: error("unresolved circuit ${item.key}"), slot.weekStart, slot.date,
+                        )
+                        // This week's rounds, on this copy only; the saved circuit keeps its own.
+                        if (circuit != null && item.rounds != null) repository.setCircuitRounds(circuit, item.rounds)
+                    }
+                    is ResolvedItem.Module -> {
+                        val module = repository.scheduleModule(
+                            moduleIds[item.key] ?: error("unresolved module ${item.key}"), slot.weekStart, slot.date,
+                        )
+                        // This week's plans for some of its exercises, on this copy only.
+                        if (module != null) {
+                            item.plans.forEach { (exercise, plan) ->
+                                repository.overrideModulePlan(module, exerciseId(exercise), plan)
+                            }
+                        }
+                    }
                     is ResolvedItem.Activity -> repository.createOneOffActivity(
                         item.name, slot.weekStart, slot.date, item.minutes?.let { it * 60 },
                     )

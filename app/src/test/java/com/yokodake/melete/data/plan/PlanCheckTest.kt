@@ -210,4 +210,68 @@ class PlanCheckTest {
         assertEquals(2, resolution.preview.planned)
         assertEquals(1, resolution.preview.weeks)
     }
+
+    // ------------------------------------------------ per-placement overrides
+
+    private val overrideLibrary = """
+        "exercises": [
+          { "name": "Cossack", "mode": "reps", "unilateral": true, "plan": { "sets": 2, "reps": 6 } },
+          { "name": "Clamshell", "mode": "reps", "plan": { "sets": 2, "reps": 10 } },
+          { "name": "Attempt", "mode": "reps", "plan": { "reps": 1 } }
+        ],
+        "circuits": [ { "name": "Intervals", "rounds": 2, "stations": [ { "exercise": "Attempt" } ] } ],
+        "modules": [ { "name": "FA", "entries": [ { "exercise": "Cossack" }, { "exercise": "Clamshell" }, { "circuit": "Intervals" } ] } ],
+    """
+
+    @Test
+    fun `a placement can give a module's exercises and a circuit's rounds for that week only`() {
+        val resolution = resolve(
+            overrideLibrary + """
+            "weeks": [ { "weekStart": "2026-10-05",
+              "wednesday": [
+                { "module": "FA", "plans": { "cossack": { "sets": 4, "reps": 6 } } },
+                { "circuit": "Intervals", "rounds": 3 }
+              ] } ]
+            """
+        )
+        assertEquals(emptyList<String>(), resolution.problems)
+        val items = resolution.plan!!.slots.single().items
+        val module = items[0] as ResolvedItem.Module
+        assertEquals(4, module.plans.getValue("cossack").sets)
+        assertEquals(3, (items[1] as ResolvedItem.Circuit).rounds)
+        // The templates themselves are untouched.
+        assertEquals(2, resolution.plan!!.circuits.single().rounds)
+    }
+
+    @Test
+    fun `overrides must name what the placement holds, and only go on placements`() {
+        val wrongExercise = resolve(
+            overrideLibrary + """
+            "weeks": [ { "weekStart": "2026-10-05", "monday": [ { "module": "FA", "plans": { "Attempt": { "reps": 2 } } } ] } ]
+            """
+        )
+        // Attempt is only inside the module's circuit, not an entry of its own.
+        assertTrue(wrongExercise.hasProblem("has no exercise Attempt of its own"))
+
+        val misplaced = resolve(
+            overrideLibrary + """
+            "weeks": [ { "weekStart": "2026-10-05", "monday": [
+              { "exercise": "Cossack", "rounds": 2 },
+              { "circuit": "Intervals", "plans": { "Attempt": { "reps": 2 } } },
+              { "circuit": "Intervals", "rounds": 0 }
+            ] } ]
+            """
+        )
+        assertTrue(misplaced.hasProblem("\"rounds\" only goes with a circuit"))
+        assertTrue(misplaced.hasProblem("\"plans\" only goes with a module"))
+        assertTrue(misplaced.hasProblem("needs at least 1 round"))
+
+        val inTemplate = resolve(
+            """
+            "exercises": [ { "name": "Cossack", "mode": "reps" } ],
+            "modules": [ { "name": "FA", "entries": [ { "exercise": "Cossack", "rounds": 2 } ] } ]
+            """
+        )
+        assertTrue(inTemplate.hasProblem("go where it is placed in a week"))
+    }
 }

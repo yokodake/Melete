@@ -149,6 +149,19 @@ at least one.
   - `{ "activity": "…", "minutes": 90 }`: a one-off, with no library entry; `minutes` optional
 - Items go in the order written, after anything the day already holds.
 
+**Changing a module or a circuit for one week.** A placement can override what it copies, for that
+week only — the saved module or circuit keeps its own:
+
+```jsonc
+{ "module": "FA", "plans": { "Loaded Cossack": { "sets": 4, "reps": 6 } } },  // this week's plan for an entry
+{ "circuit": "Strength intervals", "rounds": 3 }                             // this week's rounds
+```
+
+- `plans` names exercises the module holds as entries of their own (not those inside its
+  circuits); each plan is read like any other for that exercise's mode.
+- `rounds` is at least 1.
+- Both go only where a module or circuit is placed in a week, never in the definitions.
+
 ## Benchmarks
 
 Reference tests and their results, recorded apart from training (no card, nothing counted). A file
