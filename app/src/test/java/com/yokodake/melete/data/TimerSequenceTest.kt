@@ -590,4 +590,96 @@ class TimerSequenceTest {
             assertEquals(name, workOf(walk(program)), workOf(skipped))
         }
     }
+
+    // ----------------------------------------------------------- attempts
+
+    /** Strength intervals: three attempts a minute apart, five minutes between sets. */
+    private val attempts = PrescriptionPayload(
+        sets = 2,
+        targetReps = 3,
+        restSeconds = 300,
+        restSecondsBetweenReps = 60,
+    )
+
+    @Test
+    fun `a set of attempts waits for each rep and counts the rest between them`() {
+        val program = PrescriptionProgram.of("Strength intervals", ExerciseMode.REPETITIONS, false, attempts)
+        assertEquals(
+            listOf(
+                "reps set1 rep1",
+                "rep_rest set1 rep1 60s",
+                "reps set1 rep2",
+                "rep_rest set1 rep2 60s",
+                "reps set1 rep3",
+                // After the last attempt the set rest takes over; no rep rest trails it.
+                "rest set1 300s",
+                "reps set2 rep1",
+                "rep_rest set2 rep1 60s",
+                "reps set2 rep2",
+                "rep_rest set2 rep2 60s",
+                "reps set2 rep3",
+                "finished 2",
+            ),
+            walk(program),
+        )
+    }
+
+    @Test
+    fun `without a rep count or a rep rest a set of reps stays one untimed block`() {
+        val noRest = PrescriptionProgram.of(null, ExerciseMode.REPETITIONS, false, attempts.copy(restSecondsBetweenReps = null))
+        val noCount = PrescriptionProgram.of(null, ExerciseMode.REPETITIONS, false, attempts.copy(targetReps = null))
+        val single = PrescriptionProgram.of(null, ExerciseMode.REPETITIONS, false, attempts.copy(targetReps = 1))
+        listOf(noRest, noCount, single).forEach {
+            assertEquals(listOf("reps set1", "rest set1 300s", "reps set2", "finished 2"), walk(it))
+        }
+    }
+
+    @Test
+    fun `a rep rest means nothing outside a reps exercise`() {
+        val timed = PrescriptionProgram.entryOf(
+            null, ExerciseMode.DURATION, false,
+            PrescriptionPayload(sets = 1, targetDurationSeconds = 10, restSecondsBetweenReps = 60),
+        )
+        assertEquals(0, timed.repRestSeconds)
+    }
+
+    @Test
+    fun `a station of attempts keeps its shape inside a circuit`() {
+        val program = PrescriptionProgram.circuit(
+            label = null,
+            rounds = 1,
+            transitionSeconds = 30,
+            roundRestSeconds = 0,
+            stations = listOf(
+                StationPlan("Attempts", ExerciseMode.REPETITIONS, false, attempts.copy(targetReps = 2)),
+                StationPlan("Push-up", ExerciseMode.REPETITIONS, false, PrescriptionPayload(sets = 1, targetReps = 10)),
+            ),
+        )
+        assertEquals(
+            listOf(
+                "reps round1 e1 rep1",
+                "rep_rest round1 e1 rep1 60s",
+                "reps round1 e1 rep2",
+                "transition round1 e1 30s",
+                "reps round1 e2",
+                "finished 1",
+            ),
+            walk(program),
+        )
+    }
+
+    @Test
+    fun `an estimate counts one rep per attempt and every rest between them`() {
+        // Per set: 3 attempts x 3 s + 2 x 60 s between; one 300 s rest between the two sets.
+        val expected = 2 * (3 * TimerProgram.ASSUMED_SECONDS_PER_REP + 2 * 60) + 300
+        assertEquals(expected, DurationEstimate.forPrescription(ExerciseMode.REPETITIONS, false, attempts))
+    }
+
+    @Test
+    fun `a rep rest needs a set of reps`() {
+        val refused = runCatching {
+            TimerEntry(work = WorkKind.TIMED, workSeconds = 10, repRestSeconds = 60)
+        }
+        assertTrue(refused.isFailure)
+    }
 }

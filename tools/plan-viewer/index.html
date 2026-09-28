@@ -323,6 +323,7 @@ function planSummary(ex, plan, inCircuit) {
   if (inCircuit) { if (target) parts.push(target); }
   else parts.push(target ? `${sets} × ${target}` : `${sets} ${sets === 1 ? "set" : "sets"}`);
   if (ex.unilateral) parts[parts.length - 1] = (parts[parts.length - 1] ?? "") + " per side";
+  if (plan.repRestSeconds) parts.push(`${fmtSeconds(plan.repRestSeconds)} between reps`);
   if (!inCircuit && plan.restSeconds != null) parts.push(`rest ${fmtSeconds(plan.restSeconds)}`);
   if (plan.effort) parts.push(normEnum(plan.effort).toLowerCase().replace("_", " "));
   return parts.join(" · ");
@@ -364,6 +365,7 @@ function exerciseDetail(ex, plan, variation) {
     if (plan.reps != null) p.push(`${plan.reps} reps`);
     if (plan.seconds != null) p.push(`${fmtSeconds(plan.seconds)} per set`);
     if (plan.repeater) p.push(`repeater ${plan.repeater.reps} × ${plan.repeater.workSeconds} s on / ${plan.repeater.restSeconds ?? 0} s off`);
+    if (plan.repRestSeconds) p.push(`${fmtSeconds(plan.repRestSeconds)} between reps`);
     if (plan.restSeconds != null) p.push(`rest ${fmtSeconds(plan.restSeconds)}`);
     if (plan.sideSwitchSeconds != null) p.push(`side switch ${fmtSeconds(plan.sideSwitchSeconds)}`);
     if (plan.plannedMinutes != null) p.push(`planned ${plan.plannedMinutes} min`);

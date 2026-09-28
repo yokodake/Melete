@@ -55,6 +55,7 @@ object PrescriptionSummary {
         }
         val parts = mutableListOf<String>()
         target?.let { parts += if (unilateral && mode != ExerciseMode.ACTIVITY) "$it per side" else it }
+        repRest(prescription, mode)?.let { parts += it }
         prescription.measurement?.let { parts += measurement(it) }
         prescription.effort?.let { parts += it.label.lowercase() }
         return parts.joinToString(" · ").ifEmpty { "1 set" }
@@ -70,6 +71,7 @@ object PrescriptionSummary {
         if (prescription == null) return "No plan set"
         val parts = mutableListOf<String>()
         parts += volume(prescription, mode, unilateral)
+        repRest(prescription, mode)?.let { parts += it }
         prescription.measurement?.let { parts += measurement(it) }
         if (mode.hasSetStructure)
             prescription.restSeconds?.let { parts += "rest ${duration(it)}" }
@@ -107,6 +109,12 @@ object PrescriptionSummary {
         }
         return if (unilateral) "$base per side" else base
     }
+
+    /** "1 min between reps", for a set of attempts; null for an ordinary set. */
+    private fun repRest(prescription: PrescriptionPayload, mode: ExerciseMode): String? =
+        prescription.restSecondsBetweenReps
+            ?.takeIf { it > 0 && mode == ExerciseMode.REPETITIONS }
+            ?.let { "${duration(it)} between reps" }
 
     private fun measurement(measurement: Measurement): String = load(measurement)
 

@@ -63,6 +63,8 @@ data class PlanSpec(
     /** The length of one timed set. */
     val seconds: Int? = null,
     val restSeconds: Int? = null,
+    /** Rest between the reps of a set, for reps that are attempts. Reps exercises only. */
+    val repRestSeconds: Int? = null,
     val sideSwitchSeconds: Int? = null,
     /** An activity's length. */
     val minutes: Int? = null,

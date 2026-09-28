@@ -71,6 +71,11 @@ data class TimerEntry(
     /** When set, the timed set is a series of pulses rather than one interval. */
     val repeater: RepeaterSpec? = null,
     /**
+     * Rest between the reps of one set, when the reps are attempts. Each rep is then its own
+     * untimed interval and the gap between two is counted; see [paced]. Zero is an ordinary set.
+     */
+    val repRestSeconds: Int = 0,
+    /**
      * The planned copy this entry came from, so the timer can *offer* the logger when it ends.
      * Navigation only: the timer has no write path into the training record.
      */
@@ -89,7 +94,23 @@ data class TimerEntry(
         require(repeater == null || work == WorkKind.TIMED) {
             "a repeater is a shape of timed work"
         }
+        require(repRestSeconds >= 0) { "rep rest must not be negative" }
+        require(repRestSeconds == 0 || work == WorkKind.REPS) {
+            "only a set of reps rests between its reps"
+        }
     }
+
+    /**
+     * True when one set is a series of attempts: untimed reps, each waited for, with a counted
+     * rest between them. It needs a rep count to know when the set is over; without one, or with
+     * a single rep, there is nothing between reps and the set is an ordinary one.
+     */
+    val paced: Boolean
+        get() = work == WorkKind.REPS && repRestSeconds > 0 && (workReps ?: 0) >= 2
+
+    /** How many reps one set is split into on the timer: the attempts, or one untimed block. */
+    val repsPerSetOnTimer: Int?
+        get() = repeater?.repsPerSet ?: workReps?.takeIf { paced }
 }
 
 /**
@@ -282,8 +303,9 @@ data class TimerProgram(
             val step = steps[index]
             val lead = if (ProgramSequencer.preparesInto(steps, index)) PREPARE_SECONDS else 0
             val body = if (step.untimed) {
-                entries.getOrNull(step.entryIndex)?.workReps?.let { it * secondsPerRep }
-                    ?: secondsPerUntimedSet
+                // One attempt of a paced set is one rep, not the whole set's worth.
+                val reps = if (step.repIndex != null) 1 else entries.getOrNull(step.entryIndex)?.workReps
+                reps?.let { it * secondsPerRep } ?: secondsPerUntimedSet
             } else {
                 step.seconds
             }
@@ -333,6 +355,7 @@ data class TimerProgram(
             unilateral: Boolean = false,
             sideSwitchSeconds: Int = DEFAULT_SIDE_SWITCH_SECONDS,
             repeater: RepeaterSpec? = null,
+            repRestSeconds: Int = 0,
             label: String? = null,
             occurrenceId: String? = null,
         ): TimerProgram = TimerProgram(
@@ -347,6 +370,7 @@ data class TimerProgram(
                     unilateral = unilateral,
                     sideSwitchSeconds = sideSwitchSeconds,
                     repeater = repeater,
+                    repRestSeconds = repRestSeconds,
                     occurrenceId = occurrenceId,
                 )
             ),
@@ -482,7 +506,10 @@ object ProgramSequencer {
         addAll(workBlock(entry, entryIndex, roundIndex, setIndex, BodySide.RIGHT))
     }
 
-    /** One side's work: a pulse sequence, one timed interval, or one untimed set of reps. */
+    /**
+     * One side's work: a pulse sequence, one timed interval, a series of attempts, or one untimed
+     * set of reps.
+     */
     private fun workBlock(
         entry: TimerEntry,
         entryIndex: Int,
@@ -512,6 +539,16 @@ object ProgramSequencer {
             }
 
             entry.work == WorkKind.TIMED -> add(step(TimerPhase.WORK, entry.workSeconds))
+
+            // Attempts: the timer waits for each, then counts the gap. Like pulses, the rest
+            // between them exists between reps only; after the last the set rest takes over.
+            entry.paced -> {
+                val reps = entry.workReps ?: 1
+                for (rep in 0 until reps) {
+                    add(step(TimerPhase.WORK, 0, untimed = true, rep = rep))
+                    if (rep < reps - 1) add(step(TimerPhase.REP_REST, entry.repRestSeconds, rep = rep))
+                }
+            }
 
             entry.work == WorkKind.REPS -> add(step(TimerPhase.WORK, 0, untimed = true))
 

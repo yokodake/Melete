@@ -61,6 +61,7 @@ object PrescriptionProgram {
                 label = label,
                 work = WorkKind.REPS,
                 workReps = prescription?.targetReps,
+                repRestSeconds = prescription?.restSecondsBetweenReps?.coerceAtLeast(0) ?: 0,
                 sets = sets,
                 restSeconds = rest,
                 unilateral = unilateral,

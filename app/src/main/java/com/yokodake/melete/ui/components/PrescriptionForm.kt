@@ -65,6 +65,8 @@ data class PrescriptionFormState(
     val repeaterReps: String = "",
     val repeaterWorkSeconds: String = "",
     val repeaterRestSeconds: String = "",
+    /** Rest between the reps of a set, when they are attempts. Empty is an ordinary set. */
+    val repRestSeconds: String = "",
 ) {
     /** The repeater the fields describe, or null when they do not describe one yet. */
     fun toRepeater(): RepeaterPrescription? {
@@ -115,6 +117,8 @@ data class PrescriptionFormState(
                 plannedDurationSeconds = plannedDurationMinutes.toIntOrNull()?.let { it * 60 },
                 sideSwitchSeconds = sideSwitchSeconds.toIntOrNull(),
                 repeater = toRepeater().takeIf { mode == ExerciseMode.REPEATERS },
+                restSecondsBetweenReps = repRestSeconds.toIntOrNull()
+                    ?.takeIf { it > 0 && mode == ExerciseMode.REPETITIONS },
             )
         }
 
@@ -139,6 +143,7 @@ data class PrescriptionFormState(
             repeaterReps = payload?.repeater?.repsPerSet?.toString().orEmpty(),
             repeaterWorkSeconds = payload?.repeater?.workSecondsPerRep?.toString().orEmpty(),
             repeaterRestSeconds = payload?.repeater?.restSecondsBetweenReps?.toString().orEmpty(),
+            repRestSeconds = payload?.restSecondsBetweenReps?.toString().orEmpty(),
         )
     }
 }
@@ -240,6 +245,16 @@ private fun SetStructureFields(
                 label = "Between sets (s)",
                 value = state.restSeconds,
                 onValueChange = { onStateChange(state.copy(restSeconds = it)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        // Kept in a circuit too: the gap between attempts is the shape of one set, which a
+        // station keeps, unlike the set count and set rest the circuit replaces.
+        if (mode == ExerciseMode.REPETITIONS) {
+            NumberField(
+                label = "Between reps (s)",
+                value = state.repRestSeconds,
+                onValueChange = { onStateChange(state.copy(repRestSeconds = it)) },
                 modifier = Modifier.weight(1f),
             )
         }

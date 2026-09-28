@@ -347,6 +347,11 @@ What it can express:
 - **Repeaters**: one timed set is a series of pulses — so many reps of so many seconds with so many
   between. Rep rest falls between pulses only; after the last pulse the set rest takes over. For a
   unilateral repeater, all pulses on the left, then the switch, then all on the right.
+- **Attempts**: a set of reps with a *rest between reps* (prescription v4,
+  `restSecondsBetweenReps`) is a series of untimed attempts. The timer waits for each (the screen
+  says *ALLEZ !*, the status line *rep 2 of 3*), then counts the rest between them; after the last
+  attempt the set rest takes over. It needs a target of at least 2 reps; otherwise the set is one
+  untimed block as before. A station keeps it in a circuit.
 - **Circuits**: one set of each exercise per round, so many rounds. A station's own set count and
   set rest are ignored in a circuit; the transition and round rests replace them, and rep rest and
   side-switch rest still apply. No trailing rest after the final round.
@@ -939,6 +944,9 @@ tests pass unchanged.
       days, log both. One definition, two occurrences, no set table on either.
 - [ ] **A repeater exercise.** Create one in *Repeaters* mode: the editor asks for reps, seconds on
       and seconds off, and never for a set length. Its card reads as its pulses.
+- [ ] **A set of attempts.** A reps exercise with 3 target reps and *Between reps* 60 s: its card
+      reads "2 × 3 · 1 min between reps · rest 5 min"; its timer waits for each attempt
+      (*ALLEZ !*, *rep 1 of 3*), counts a minute between them and five minutes after the third.
 - [ ] **An activity with no duration** still marks done and still counts.
 
 ### 3. Duration and its provenance
@@ -1545,20 +1553,40 @@ circuit stations, shares and ordering by metric, no-category rows, the inferred 
 formatting); `DashboardQueryTest` on the phone (completed only, in range, first completed date).
 Melete Debug updated; not checked by eye.
 
+## Attempt-based sets (2026-09-28)
+
+Strength intervals are a set of *attempts* on a hard problem (3 attempts, 1 min between, 5 min
+between sets). The winter plan had worked around it with a circuit of three one-attempt stations,
+so one session logged as three exercises and counted three times.
+
+An attempt is a **rep with a rest after it**, not a new mode: a reps prescription gains an optional
+`restSecondsBetweenReps` (payload **v4**; absent is an ordinary set, so every stored plan reads as
+before and nothing in the schema or the backup format changed). The editor asks *Between reps (s)*
+for a reps exercise only, beside *Between sets*, and in a circuit station too (it is the shape of
+one set, which a station keeps). The sequencer turns a set of N ≥ 2 target reps with that rest into
+N untimed steps with a `REP_REST` between each — the same step kinds as a repeater's pulses, so
+skipping, going back, the notification's *rep 2 of 3* and the estimate (one assumed rep per
+attempt, plus every rest) all follow without special cases. The logger is unchanged: one exercise,
+one row per set, reps = attempts made. Plan files take `repRestSeconds` (reps only; dropped with a
+warning elsewhere).
+
+The winter plan now has one exercise, **Strength intervals** (2 × 3, 1 min between reps, 5 min
+between sets, hard), with `sets` 1 on the deload weeks (7 Dec, 4 Jan) and 3 on 14–28 Dec; the
+*Strength interval* exercise and the *Strength intervals* circuit are gone. Nothing had been logged
+with the circuit (its first placement is 18 Nov), so the planned merge migration was not needed:
+importing the new file with **Replace plans** clears the unhappened circuit copies and removes both
+old library items.
+
+Checks: 252 unit tests pass (new: the attempt sequence with its rests and no trailing rep rest; no
+pacing without a rep count, a rest or a second rep; the rest ignored outside reps and refused on
+timed work; a station keeping it; the estimate; the plan field read for reps only, kept in a
+station, never negative). The plan checks with no problems or warnings, 320 planned items.
+
 ## Next step
 
-**Attempt-based sets — before 6B.** Strength intervals are a set of *attempts* on a hard problem
-(3 attempts, 1 min between, 5 min between sets): a repeater whose pulses are untimed reps rather
-than timed work. The app cannot express that, so the winter plan works around it with a circuit of
-three one-attempt stations per round. The cost is real: **one session logs as three exercises and
-counts three times** on the dashboard and on Home, and it needs a circuit where an exercise should
-do. The fix is an exercise mode (or a repeater shape) whose set is N untimed attempts with a rest
-between them — the timer waits for each attempt, then counts the rest — logged and counted as one
-exercise. Once it exists, move the plan to it and correct the sessions already logged with the
-circuit (merge each circuit's three station occurrences into one), with a migration and a test.
-This comes **before 6B**.
+**Phase 6B — history and basic graphs.**
 
-Small follow-ups recorded with it (2026-09-28):
+Small follow-ups, recorded 2026-09-28 (not scheduled):
 
 - An `"omit"` placement override for modules (`{"module": "Shoulder support", "omit": ["Bent-over
   fly"]}`): importer-only, no schema change.
