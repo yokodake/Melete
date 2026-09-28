@@ -319,6 +319,26 @@ interface LoggingDao {
     )
     fun observeRecentSets(exerciseId: String, excludeOccurrenceId: String): Flow<List<ActualSetEntity>>
 
+    /** Every set ever performed for one stable exercise: its whole history, for the graphs. */
+    @Query(
+        """
+        SELECT * FROM actual_sets
+        WHERE exerciseId = :exerciseId
+        ORDER BY trainingDateEpochDay, orderIndex, recordedAtEpochMs
+        """
+    )
+    fun observeSetsOfExercise(exerciseId: String): Flow<List<ActualSetEntity>>
+
+    /** Every set filed between two training dates, inclusive: the records behind a dashboard range. */
+    @Query(
+        """
+        SELECT * FROM actual_sets
+        WHERE trainingDateEpochDay BETWEEN :from AND :to
+        ORDER BY trainingDateEpochDay, orderIndex, recordedAtEpochMs
+        """
+    )
+    fun observeSetsBetween(from: Long, to: Long): Flow<List<ActualSetEntity>>
+
     @Insert
     suspend fun insertSet(set: ActualSetEntity)
 

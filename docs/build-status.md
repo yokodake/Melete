@@ -1,7 +1,7 @@
 # Build status
 
-Last updated: 2026-09-28, phase 7A: benchmarks (schema 11, backup format 2, plan format 1), after
-the UI pass. Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
+Last updated: 2026-09-28, phase 6B: history and basic graphs — the tentative 1.0 (schema 11,
+backup format 2, plan format 1). Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -30,7 +30,8 @@ the two ever disagree, the code and the first half win.
 | 7A — benchmarks (brought forward for baseline week) | ✅ built; unit tests and the schema/backup/benchmark device tests pass; screens still to be checked by hand |
 | 6A — dashboard | ✅ built; unit tests and its query test pass; screens still to be checked by hand |
 | Timer polish (follow-up, after phase 6) | not started — recorded in `ui-ux-handoff.md` |
-| 6B — history and basic graphs | not started |
+| Attempt-based sets | ✅ built; unit tests pass |
+| 6B — history and basic graphs (the tentative 1.0) | ✅ built; unit tests and all 105 device tests pass; screens still to be checked by hand |
 | 6C — month view | not started |
 | 7B — profile and settings (bodyweight tracking) | not started |
 | 8 — progression analysis | not started |
@@ -41,7 +42,7 @@ Schema version **11** (10 was the **baseline**; `MIGRATION_10_11` added the benc
 every schema change comes with a migration and a test, and neither build has a destructive
 fallback — see *Upgrades preserve the record* below. Backup format **2** (1 plus benchmarks);
 backup format **1** and plan format **1** stay readable in every later version.
-Prescription payload version **3**, actual-set payload version **2**, circuit
+Prescription payload version **4**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
 ## Dashboard (6A)
@@ -1583,9 +1584,67 @@ pacing without a rep count, a rest or a second rep; the rest ignored outside rep
 timed work; a station keeping it; the estimate; the plan field read for reps only, kept in a
 station, never negative). The plan checks with no problems or warnings, 320 planned items.
 
+## Phase 6B — history and basic graphs: the tentative 1.0 (2026-09-28)
+
+With 6B the app is called a **tentative 1.0** (version name 1.0 unchanged).
+
+**Records** (`ui/history/RecordsScreen.kt`): what a dashboard number is made of. The headline
+("12 h · 30 exercises ›") opens the range; the selected bar's line ("Week of 14 Sep … ›") opens
+that week or month, clipped to the range; a category row opens that category (or *No category*).
+The list is the completed occurrences the dashboard counted there (`observeCompletedRecords`),
+by day, newest first and in each day's own order: name, variation chip, what was recorded (the
+last-logged summary), duration (≈ when worked out). A tap opens the record's own page. The
+dashboard keeps its range, metric, page and selected bar when you come back (saved state).
+
+**Exercise history** (`ui/history/ExerciseHistoryScreen.kt`, logic in `ExerciseHistory`): one
+destination, reached from a dashboard exercise row (with the dashboard's range, shown as a chip
+whose ✕ widens it to all time) or from **History ›** on an exercise's page, planned copy or
+library entry (all time). It holds:
+
+- **Filters**, only when they would choose something: the plan (*All plans*, *Default*, each
+  variation seen) and the rep count (reps) or set length (timed sets). A filter that no longer
+  matches anything is dropped rather than showing nothing.
+- **Latest and Best** in one compact block (per side for unilateral work; Best keeps the first
+  date it was reached).
+- **The graph**, one point per workout: the heaviest set in the exercise's current unit and load
+  meaning (loads in another unit stay listed but off the graph); without loads, the most reps in
+  a set, the longest set, or an activity's duration. Unilateral work draws L (blue, circles) and
+  R (orange, squares) with a legend. The scale runs from the lowest recorded value to the highest,
+  with a dashed zero line when values cross it — zero and assistance are real loads. A tap
+  inspects the nearest date: the line above names it and every line's value on it.
+- **Results**, newest first: date, variation chip, what was recorded. A tap opens it.
+
+Records are a completed occurrence or one with sets, under the date its sets were filed — the
+same rule as *Last logged*. `observeExerciseRecords` reads every set of the exercise, unbounded.
+
+**Benchmarks** get the same graph on their detail page (7A deferred it to here): results in the
+current unit and meaning, L and R apart. Text benchmarks have none.
+
+**Summaries**: minutes read **m** everywhere, like **s** ("rest 2 m", "45 m", field labels
+"m"); a set of attempts reads set rest over rep rest: "3 × 3 · rest 5m/3m · hard" ("rest –/3m"
+with no set rest; "3m between reps" in a circuit station). The plan viewer matches.
+
+Not built (per the handoff, later): a load-against-reps graph, category filtering, the doughnut.
+
+Checks: 263 unit tests pass (new `ExerciseHistoryTest`: what counts as a record and its date;
+heaviest set per workout with zero and assistance; best keeps its first date; L/R lines; other
+units off the graph; reps and activity measures; plan and rep filters and stale choices; ranges;
+records by day and category; the attempt summary and the m unit). All 105 device tests pass on
+the Pixel 9, including a new `DashboardQueryTest` case for the two new queries.
+
+Hand checks to do:
+
+- [ ] Dashboard: the headline, a bar's line and a category row each open the matching records;
+      Back returns to the same range, page and bar.
+- [ ] An exercise row opens its history with the range chip; ✕ widens to all time.
+- [ ] History from an exercise's page (week and library); the filters appear only when useful.
+- [ ] The graph: tap points; L/R legend on a unilateral exercise; a negative or zero load.
+- [ ] A benchmark with a few results shows its graph.
+- [ ] Strength intervals read "3 × 3 · rest 5m/3m · hard".
+
 ## Next step
 
-**Phase 6B — history and basic graphs.**
+**6C — the month view**, or the timer polish recorded in `ui-ux-handoff.md`.
 
 Small follow-ups, recorded 2026-09-28 (not scheduled):
 

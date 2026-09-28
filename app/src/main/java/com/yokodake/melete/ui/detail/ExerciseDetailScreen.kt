@@ -76,6 +76,7 @@ fun ExerciseDetailRoute(
     onLog: (occurrenceId: String, discardIfUnlogged: Boolean) -> Unit,
     onOpenTimer: () -> Unit,
     onEditExercise: (String) -> Unit,
+    onOpenHistory: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: ExerciseDetailViewModel = viewModel(factory = ExerciseDetailViewModel.Factory),
 ) {
@@ -106,6 +107,7 @@ fun ExerciseDetailRoute(
         onSchedule = viewModel::schedule,
         onMessageShown = viewModel::consumeMessage,
         onEditExercise = onEditExercise,
+        onOpenHistory = onOpenHistory,
         onBack = onBack,
     )
 }
@@ -136,6 +138,7 @@ fun ExerciseDetailScreen(
     onSetupChange: (PrescriptionFormState) -> Unit = {},
     onStartFromSetup: () -> Unit = {},
     onDismissSetup: () -> Unit = {},
+    onOpenHistory: (String) -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var addingToPlan by remember { mutableStateOf(false) }
@@ -270,6 +273,11 @@ fun ExerciseDetailScreen(
                 onEdit = onEditPlan,
             )
             state.lastLogged?.let { LastLoggedBlock(it) }
+            // Every earlier result and the graph, from the planned copy and the library alike.
+            val historyId = state.exerciseId
+            if (historyId != null && !state.isOneOff) {
+                TextButton(onClick = { onOpenHistory(historyId) }) { Text("History ›") }
+            }
             if (browsingLibrary) {
                 // The alternatives, each edited where it is shown, exactly like the default.
                 state.variations.forEach { variation ->

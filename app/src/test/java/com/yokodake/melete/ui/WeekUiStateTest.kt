@@ -311,7 +311,7 @@ class WeekUiStateTest {
                 prescription = PrescriptionPayload(sets = 1, targetDurationSeconds = 600),
             )
         )
-        assertEquals("10 min", summary)
+        assertEquals("10 m", summary)
     }
 
     @Test

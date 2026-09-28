@@ -4,7 +4,10 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.model.ActualSetPayload
 import com.yokodake.melete.data.model.ExerciseMode
+import com.yokodake.melete.data.model.Measurement
+import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -90,5 +93,31 @@ class DashboardQueryTest {
         assertEquals(setOf(1800, null), read.map { it.durationSeconds }.toSet())
         assertEquals(monday, repository.observeFirstCompletedDate().first())
         assertEquals(done, repository.observeOccurrence(done).first()!!.occurrence.id)
+    }
+
+    @Test
+    fun recordsCarryTheirSetsAndAnExercisesHistoryHasEveryOccurrence() = runBlocking {
+        val exerciseId = repository.createExercise(
+            ExerciseDraft(
+                name = "Weighted pull-up", mode = ExerciseMode.REPETITIONS, unilateral = false,
+                measurementUnit = "kg", measurementMeaning = MeasurementMeaning.ADDED_LOAD, notes = null,
+                description = null, category = null, defaultPrescription = PrescriptionPayload(sets = 2, targetReps = 5),
+            )
+        )
+        val first = repository.scheduleExercise(exerciseId, monday, monday)
+        fun set(load: Double) = SetWrite(ActualSetPayload(reps = 5, measurement = Measurement(load, "kg", MeasurementMeaning.ADDED_LOAD)), null)
+        repository.saveLogs(monday, listOf(OccurrenceLogWrite(first, completed = true, sets = listOf(set(0.0), set(-5.0)))))
+        val later = monday.plusDays(10)
+        val second = repository.scheduleExercise(exerciseId, monday.plusWeeks(1), later)
+        repository.logSet(second, ActualSetPayload(reps = 5, measurement = Measurement(2.5, "kg", MeasurementMeaning.ADDED_LOAD)), null, later)
+        repository.scheduleExercise(exerciseId, monday.plusWeeks(2), monday.plusWeeks(2)) // planned only
+
+        val inWeek = repository.observeCompletedRecords(monday, monday.plusDays(6)).first()
+        assertEquals(listOf(first), inWeek.map { it.occurrence.id })
+        assertEquals(listOf(0.0, -5.0), inWeek.single().sets.map { it.payload.measurement?.value })
+
+        val all = repository.observeExerciseRecords(exerciseId).first()
+        assertEquals(3, all.size)
+        assertEquals(1, all.single { it.occurrence.id == second }.sets.size)
     }
 }

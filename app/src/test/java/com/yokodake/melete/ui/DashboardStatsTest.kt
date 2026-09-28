@@ -170,7 +170,7 @@ class DashboardStatsTest {
     @Test
     fun `hours read short`() {
         assertEquals("0 h", DashboardStats.hours(0))
-        assertEquals("45 min", DashboardStats.hours(45 * 60))
+        assertEquals("45 m", DashboardStats.hours(45 * 60))
         assertEquals("24 h", DashboardStats.hours(24 * 3600))
         assertEquals("24.5 h", DashboardStats.hours(24 * 3600 + 1800))
     }

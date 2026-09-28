@@ -173,9 +173,9 @@ UI pass (part of 1.0): Menu · Calendar · Timer · Dashboard tabs, week swipe, 
 Timer polish: the running screen's hierarchy — current exercise and phase, time or ALLEZ!,
     progress, what is next, transport — without changing timer semantics. After phase 6.
 Attempt-based sets: a set of N untimed attempts with a rest between them, logged and counted as
-    one exercise (strength intervals); then correct the circuit workaround's logs. Next, before 6B.
-6B. History and basic graphs: drill into totals, browse exercise logs, plot load over time and
-    load against reps.
+    one exercise (strength intervals). ✅ (No circuit-workaround logs existed to correct.)
+6B. History and basic graphs: drill into totals, browse exercise logs, plot load over time. ✅
+    The tentative 1.0. (Load against reps is left for later, per the handoff.)
 6C. Month view: a calendar above a daily list; selecting a date jumps to it. Toggle planned work;
     include diary entries.
 7A. Benchmarks: named reference tests with latest and best results, recorded apart from training.

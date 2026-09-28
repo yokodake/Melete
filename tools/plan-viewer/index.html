@@ -307,14 +307,14 @@ function resolve(file) {
 function fmtSeconds(s) {
   if (s == null) return "";
   if (s < 60) return `${s} s`;
-  if (s % 60 === 0 && s < 3600) return `${s / 60} min`;
+  if (s % 60 === 0 && s < 3600) return `${s / 60} m`;
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 function planSummary(ex, plan, inCircuit) {
   const mode = parseMode(ex.mode);
   if (!plan) return ex.external ? "from the library" : "no plan";
   const parts = [];
-  if (mode === "ACTIVITY") return plan.minutes ? `${plan.minutes} min` : "length not set";
+  if (mode === "ACTIVITY") return plan.minutes ? `${plan.minutes} m` : "length not set";
   const sets = plan.sets ?? 1;
   let target = null;
   if (plan.repeater) target = `${plan.repeater.reps} × ${plan.repeater.workSeconds}${plan.repeater.restSeconds ? "/" + plan.repeater.restSeconds : ""}s`;
@@ -323,8 +323,10 @@ function planSummary(ex, plan, inCircuit) {
   if (inCircuit) { if (target) parts.push(target); }
   else parts.push(target ? `${sets} × ${target}` : `${sets} ${sets === 1 ? "set" : "sets"}`);
   if (ex.unilateral) parts[parts.length - 1] = (parts[parts.length - 1] ?? "") + " per side";
-  if (plan.repRestSeconds) parts.push(`${fmtSeconds(plan.repRestSeconds)} between reps`);
-  if (!inCircuit && plan.restSeconds != null) parts.push(`rest ${fmtSeconds(plan.restSeconds)}`);
+  const tight = (x) => fmtSeconds(x).replace(" ", "");
+  if (plan.repRestSeconds && inCircuit) parts.push(`${tight(plan.repRestSeconds)} between reps`);
+  else if (plan.repRestSeconds) parts.push(`rest ${plan.restSeconds != null ? tight(plan.restSeconds) : "–"}/${tight(plan.repRestSeconds)}`);
+  else if (!inCircuit && plan.restSeconds != null) parts.push(`rest ${fmtSeconds(plan.restSeconds)}`);
   if (plan.effort) parts.push(normEnum(plan.effort).toLowerCase().replace("_", " "));
   return parts.join(" · ");
 }
@@ -360,7 +362,7 @@ function exerciseDetail(ex, plan, variation) {
   ].filter(Boolean).join(" · "));
   if (plan) {
     const p = [];
-    if (mode === "ACTIVITY") p.push(plan.minutes != null ? `length ${plan.minutes} min` : "no length");
+    if (mode === "ACTIVITY") p.push(plan.minutes != null ? `length ${plan.minutes} m` : "no length");
     else p.push(`${plan.sets ?? 1} ${(plan.sets ?? 1) === 1 ? "set" : "sets"}`);
     if (plan.reps != null) p.push(`${plan.reps} reps`);
     if (plan.seconds != null) p.push(`${fmtSeconds(plan.seconds)} per set`);
@@ -368,7 +370,7 @@ function exerciseDetail(ex, plan, variation) {
     if (plan.repRestSeconds) p.push(`${fmtSeconds(plan.repRestSeconds)} between reps`);
     if (plan.restSeconds != null) p.push(`rest ${fmtSeconds(plan.restSeconds)}`);
     if (plan.sideSwitchSeconds != null) p.push(`side switch ${fmtSeconds(plan.sideSwitchSeconds)}`);
-    if (plan.plannedMinutes != null) p.push(`planned ${plan.plannedMinutes} min`);
+    if (plan.plannedMinutes != null) p.push(`planned ${plan.plannedMinutes} m`);
     if (plan.effort) p.push(`effort ${normEnum(plan.effort).toLowerCase().replace("_", " ")}`);
     lines.push("Plan: " + p.join(", "));
   } else {
@@ -404,10 +406,10 @@ function itemNode(item) {
   if (item.kind === "circuit") return circuitCard(item);
   if (item.kind === "activity") return h("div", {
       class: "card",
-      title: `${item.name}\none-off activity, no library entry\n${item.minutes != null ? `Length: ${item.minutes} min` : "No length"}`,
+      title: `${item.name}\none-off activity, no library entry\n${item.minutes != null ? `Length: ${item.minutes} m` : "No length"}`,
     },
     h("div", { class: "top" }, dot(null), h("span", { class: "name" }, item.name), h("span", { class: "muted" }, "activity")),
-    h("div", { class: "sub" }, item.minutes ? `${item.minutes} min` : "no length"));
+    h("div", { class: "sub" }, item.minutes ? `${item.minutes} m` : "no length"));
   return h("div", { class: "module" }, h("div", { class: "mname", title: item.description ? `${item.name}\n${item.description}` : item.name }, item.name),
     item.description ? h("div", { class: "mdesc" }, item.description) : null,
     item.entries.length ? item.entries.map(itemNode) : h("div", { class: "empty" }, "No entries."));

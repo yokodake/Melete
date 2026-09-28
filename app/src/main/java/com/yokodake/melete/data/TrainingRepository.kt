@@ -505,6 +505,31 @@ class TrainingRepository(private val database: MeleteDatabase) {
     fun observeOccurrencesOf(exerciseId: String): Flow<List<PlannedOccurrence>> =
         dao.observeOccurrencesOf(exerciseId).map { rows -> rows.map { it.toPlanned() } }
 
+    /**
+     * Every occurrence of one exercise with the sets recorded against it: the raw material of its
+     * history. Plans that never happened come along too; deciding what counts as a record is the
+     * history's business, not the query's.
+     */
+    fun observeExerciseRecords(exerciseId: String): Flow<List<OccurrenceDetail>> = combine(
+        dao.observeOccurrencesOf(exerciseId),
+        logging.observeSetsOfExercise(exerciseId),
+    ) { rows, sets ->
+        val byOccurrence = sets.map(ActualSetEntity::toPerformed).groupBy { it.occurrenceId }
+        rows.map { OccurrenceDetail(it.toPlanned(), byOccurrence[it.id].orEmpty()) }
+    }
+
+    /**
+     * The completed exercises between two dates, inclusive, with their sets: what the dashboard
+     * counted there, as records to read rather than numbers.
+     */
+    fun observeCompletedRecords(from: LocalDate, to: LocalDate): Flow<List<OccurrenceDetail>> = combine(
+        dao.observeCompletedBetween(from.toEpochDay(), to.toEpochDay()),
+        logging.observeSetsBetween(from.toEpochDay(), to.toEpochDay()),
+    ) { rows, sets ->
+        val byOccurrence = sets.map(ActualSetEntity::toPerformed).groupBy { it.occurrenceId }
+        rows.map { OccurrenceDetail(it.toPlanned(), byOccurrence[it.id].orEmpty()) }
+    }
+
     fun observeOccurrence(occurrenceId: String): Flow<OccurrenceDetail?> =
         combine(
             dao.observeOccurrence(occurrenceId),
