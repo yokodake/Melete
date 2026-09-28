@@ -250,6 +250,40 @@ class DiaryRepository(private val database: MeleteDatabase) {
         }
     }
 
+    /**
+     * Whether bodyweight is tracked: the diary's own "Bodyweight" tracker, active. One history —
+     * the diary's values — for the diary and, later, the profile alike.
+     */
+    fun observeBodyweightTracked(): Flow<Boolean> =
+        observeTrackers().map { trackers -> trackers.any { it.id == BODYWEIGHT_TRACKER_ID } }
+
+    /**
+     * Starts or stops tracking bodyweight. On adds the tracker (a number in kg, at the end of the
+     * list) or brings a retired one back; off retires it, and every value recorded stays.
+     */
+    suspend fun setBodyweightTracked(tracked: Boolean) {
+        database.withTransaction {
+            val existing = diary.getTracker(BODYWEIGHT_TRACKER_ID)
+            when {
+                !tracked -> if (existing != null && existing.deletedAtEpochMs == null) {
+                    diary.updateTracker(existing.copy(deletedAtEpochMs = System.currentTimeMillis()))
+                }
+                existing == null -> diary.insertTracker(
+                    TrackerEntity(
+                        id = BODYWEIGHT_TRACKER_ID,
+                        label = "Bodyweight",
+                        type = TrackerType.NUMBER,
+                        unit = "kg",
+                        orderIndex = diary.nextTrackerOrder(),
+                        createdAtEpochMs = System.currentTimeMillis(),
+                    )
+                )
+                existing.deletedAtEpochMs != null ->
+                    diary.updateTracker(existing.copy(deletedAtEpochMs = null, orderIndex = diary.nextTrackerOrder()))
+            }
+        }
+    }
+
     /** Moves a tracker one place up or down the list the diary shows them in. */
     suspend fun moveTracker(id: String, delta: Int) {
         database.withTransaction {
@@ -281,3 +315,6 @@ class DiaryRepository(private val database: MeleteDatabase) {
 }
 
 private fun TrackerEntity.toTracker() = Tracker(id, label, type, scaleMin, scaleMax, unit)
+
+/** The bodyweight tracker's stable id, so turning tracking off and on again finds the same history. */
+const val BODYWEIGHT_TRACKER_ID = "bodyweight"

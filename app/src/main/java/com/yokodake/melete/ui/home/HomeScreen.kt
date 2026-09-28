@@ -61,8 +61,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yokodake.melete.MeleteApplication
 import com.yokodake.melete.R
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.AppSettings
 import com.yokodake.melete.data.BenchmarkRepository
 import com.yokodake.melete.data.DiaryRepository
+import com.yokodake.melete.ui.week.DiarySummary
+import com.yokodake.melete.ui.week.DiarySummaryText
 import com.yokodake.melete.ui.week.diarySummary
 import com.yokodake.melete.data.TrainingRepository
 import com.yokodake.melete.ui.dashboard.DashboardStats
@@ -80,8 +83,8 @@ data class HomeUiState(
     val reminder: BenchmarkReminder? = null,
     /** Anything still planned, today on or undated this week on. Unknown until read. */
     val hasUpcomingPlan: Boolean = true,
-    /** Today's diary in one line, when there is an entry: opening it updates, not starts. */
-    val dailyNote: String? = null,
+    /** Today's diary, when there is an entry: opening it updates, not starts. */
+    val dailyNote: DiarySummary? = null,
 )
 
 /**
@@ -94,6 +97,7 @@ class HomeViewModel(
     benchmarks: BenchmarkRepository,
     diary: DiaryRepository,
     private val preferences: SharedPreferences,
+    settings: AppSettings,
 ) : ViewModel() {
 
     private val today = LocalDate.now()
@@ -101,14 +105,17 @@ class HomeViewModel(
         preferences.getLong(DISMISSED_KEY, Long.MIN_VALUE).takeIf { it != Long.MIN_VALUE }?.let(LocalDate::ofEpochDay)
     )
 
-    private val reminder = combine(benchmarks.observeStandings(), dismissedUntil) { standings, dismissed ->
-        BenchmarkReminder.pick(standings, today, dismissed)
+    private val reminder = combine(
+        benchmarks.observeStandings(),
+        dismissedUntil,
+        settings.benchmarkReminderMonths,
+    ) { standings, dismissed, months ->
+        BenchmarkReminder.pick(standings, today, dismissed, months)
     }
 
     private val dailyNote = combine(diary.observeDays(today, today), diary.observeTrackers()) { days, trackers ->
-        // The note on its own line, the tracked values on the next.
-        days[today]?.takeIf { !it.isEmpty }?.let { diarySummary(it, trackers, separator = "\n") }
-            ?.takeIf { it.isNotBlank() }
+        days[today]?.takeIf { !it.isEmpty }?.let { diarySummary(it, trackers) }
+            ?.takeIf { !it.isEmpty }
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -146,6 +153,7 @@ class HomeViewModel(
                     application.container.benchmarkRepository,
                     application.container.diaryRepository,
                     application.getSharedPreferences("home", Context.MODE_PRIVATE),
+                    application.container.settings,
                 )
             }
         }
@@ -227,7 +235,16 @@ fun HomeScreen(
             if (!state.hasUpcomingPlan) {
                 item { HomeRow("Import plan", R.drawable.ic_menu_import_export, onImportPlan) }
             }
-            item { HomeRow("Daily note", R.drawable.ic_home_note, onOpenDailyNote, detail = state.dailyNote) }
+            item {
+                HomeRow(
+                    label = "Daily note",
+                    icon = R.drawable.ic_home_note,
+                    onClick = onOpenDailyNote,
+                    detail = state.dailyNote?.let { summary ->
+                        { DiarySummaryText(summary) }
+                    },
+                )
+            }
             item {
                 Row(
                     modifier = Modifier.padding(top = 32.dp),
@@ -351,7 +368,12 @@ private fun Chevron() {
 
 /** A compact row that goes somewhere: icon, label, chevron, and optionally one quiet line. */
 @Composable
-private fun HomeRow(label: String, @DrawableRes icon: Int, onClick: () -> Unit, detail: String? = null) {
+private fun HomeRow(
+    label: String,
+    @DrawableRes icon: Int,
+    onClick: () -> Unit,
+    detail: (@Composable () -> Unit)? = null,
+) {
     Surface(
         onClick = onClick,
         color = MaterialTheme.colorScheme.surface,
@@ -371,15 +393,7 @@ private fun HomeRow(label: String, @DrawableRes icon: Int, onClick: () -> Unit, 
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.bodyLarge)
-                detail?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                detail?.invoke()
             }
             Chevron()
         }

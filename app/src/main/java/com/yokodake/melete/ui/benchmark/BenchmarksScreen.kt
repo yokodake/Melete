@@ -24,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -65,8 +66,10 @@ import kotlinx.coroutines.launch
 
 data class BenchmarksUiState(
     val loading: Boolean = true,
+    /** The benchmarks in use. */
     val standings: List<BenchmarkStanding> = emptyList(),
-    val hiddenCount: Int = 0,
+    /** Hidden ones: their results kept, listed apart when asked for. */
+    val hidden: List<BenchmarkStanding> = emptyList(),
     val showHidden: Boolean = false,
     /** The benchmark a result is being recorded for, while the dialog is up. */
     val recording: BenchmarkStanding? = null,
@@ -86,8 +89,8 @@ class BenchmarksViewModel(private val repository: BenchmarkRepository) : ViewMod
     val uiState: StateFlow<BenchmarksUiState> = combine(repository.observeStandings(), local) { all, current ->
         BenchmarksUiState(
             loading = false,
-            standings = if (current.showHidden) all else all.filter { !it.benchmark.hidden },
-            hiddenCount = all.count { it.benchmark.hidden },
+            standings = all.filter { !it.benchmark.hidden },
+            hidden = all.filter { it.benchmark.hidden },
             showHidden = current.showHidden,
             recording = all.firstOrNull { it.benchmark.id == current.recordingId },
             message = current.message,
@@ -192,27 +195,6 @@ fun BenchmarksScreen(
                 ),
                 title = { Text("Benchmarks", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = { BackButton(onBack) },
-                actions = {
-                    if (state.hiddenCount > 0 || state.showHidden) {
-                        var open by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(
-                                onClick = { open = true },
-                                modifier = Modifier.semantics { contentDescription = "More" },
-                            ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
-                            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            if (state.showHidden) "Hide hidden" else "Show hidden (${state.hiddenCount})"
-                                        )
-                                    },
-                                    onClick = { open = false; onToggleHidden() },
-                                )
-                            }
-                        }
-                    }
-                },
             )
         },
         floatingActionButton = {
@@ -233,7 +215,7 @@ fun BenchmarksScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (!state.loading && state.standings.isEmpty()) {
+            if (!state.loading && state.standings.isEmpty() && state.hidden.isEmpty()) {
                 item {
                     Text(
                         text = "No benchmarks yet.",
@@ -251,6 +233,28 @@ fun BenchmarksScreen(
                     onEdit = { onEdit(standing.benchmark.id) },
                     onSetHidden = { onSetHidden(standing.benchmark.id, it) },
                 )
+            }
+            // Hidden benchmarks, with every result kept: a row at the foot that opens them here.
+            if (state.hidden.isNotEmpty()) {
+                item(key = "hidden-toggle") {
+                    TextButton(onClick = onToggleHidden, modifier = Modifier.padding(top = 8.dp)) {
+                        Text(
+                            if (state.showHidden) "Hidden (${state.hidden.size}) ▴" else "Hidden (${state.hidden.size}) ▾"
+                        )
+                    }
+                }
+                if (state.showHidden) {
+                    items(items = state.hidden, key = { it.benchmark.id }) { standing ->
+                        BenchmarkRow(
+                            standing = standing,
+                            showProtocol = false,
+                            onOpen = { onOpen(standing.benchmark.id) },
+                            onRecord = { onRecord(standing.benchmark.id) },
+                            onEdit = { onEdit(standing.benchmark.id) },
+                            onSetHidden = { onSetHidden(standing.benchmark.id, it) },
+                        )
+                    }
+                }
             }
         }
     }

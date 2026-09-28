@@ -1,6 +1,8 @@
 package com.yokodake.melete.ui.week
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -9,12 +11,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.yokodake.melete.data.BenchmarkDayResult
 import com.yokodake.melete.data.DiaryDay
 import com.yokodake.melete.data.Tracker
+import com.yokodake.melete.data.TrackerReading
+import com.yokodake.melete.data.entity.TrackerType
+
+data class DiarySummary(
+    val note: String? = null,
+    val values: List<DiarySummaryValue> = emptyList(),
+) {
+    val isEmpty: Boolean get() = note.isNullOrBlank() && values.isEmpty()
+}
+
+data class DiarySummaryValue(val label: String, val value: String)
 
 /**
  * A day's diary under its heading: the text, then each recorded value as it was recorded, in
@@ -23,12 +37,8 @@ import com.yokodake.melete.data.Tracker
  */
 @Composable
 fun DiaryLine(day: DiaryDay, trackers: List<Tracker>, onClick: () -> Unit) {
-    Text(
-        text = diarySummary(day, trackers),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 5,
-        overflow = TextOverflow.Ellipsis,
+    DiarySummaryText(
+        summary = diarySummary(day, trackers),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -37,13 +47,61 @@ fun DiaryLine(day: DiaryDay, trackers: List<Tracker>, onClick: () -> Unit) {
 }
 
 /**
- * A day's diary in short: the text, then each recorded value in today's tracker order on the next
- * line, in the week and on Home alike.
+ * A day's diary in short, kept structured so its labels do not compete with what was recorded.
  */
-fun diarySummary(day: DiaryDay, trackers: List<Tracker>, separator: String = "\n"): String {
-    val recorded = day.orderedBy(trackers).mapNotNull { it.tracker.format(it.reading) }
-    return listOfNotNull(day.text?.takeIf { it.isNotBlank() }, recorded.joinToString(" · ").ifEmpty { null })
-        .joinToString(separator)
+fun diarySummary(day: DiaryDay, trackers: List<Tracker>): DiarySummary = DiarySummary(
+    note = day.text?.takeIf { it.isNotBlank() },
+    values = day.orderedBy(trackers).mapNotNull { tracked ->
+        tracked.tracker.summaryValue(tracked.reading)?.let {
+            DiarySummaryValue(tracked.tracker.label, it)
+        }
+    },
+)
+
+@Composable
+fun DiarySummaryText(summary: DiarySummary, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        summary.note?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (summary.values.isNotEmpty()) {
+            val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+            val valueColor = MaterialTheme.colorScheme.onSurface
+            Text(
+                text = buildAnnotatedString {
+                    summary.values.forEachIndexed { index, item ->
+                        if (index > 0) withStyle(SpanStyle(color = labelColor)) { append(" · ") }
+                        withStyle(SpanStyle(color = labelColor)) {
+                            append(item.label.replace(' ', '\u00a0'))
+                            append('\u00a0')
+                        }
+                        withStyle(SpanStyle(color = valueColor, fontWeight = FontWeight.SemiBold)) {
+                            append(item.value)
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun Tracker.summaryValue(reading: TrackerReading): String? = when (type) {
+    TrackerType.SCALE -> reading.number?.toInt()?.toString()
+    TrackerType.NUMBER -> reading.number?.let { number ->
+        val text = if (number == number.toLong().toDouble()) number.toLong().toString() else number.toString()
+        text + unit?.let { " $it" }.orEmpty()
+    }
+    TrackerType.CHECK -> "✓".takeIf { reading.number == 1.0 }
+    TrackerType.TEXT -> reading.text?.takeIf { it.isNotBlank() }
 }
 
 /**

@@ -125,6 +125,14 @@ class HomeStatsTest {
     }
 
     @Test
+    fun `the reminder interval is a setting, and off means none`() {
+        val old = listOf(standing("Max hang", today.minusMonths(4)))
+        assertNull(BenchmarkReminder.pick(old, today, null, months = 6))
+        assertEquals("Max hang", BenchmarkReminder.pick(old, today, null, months = 3)?.name)
+        assertNull(BenchmarkReminder.pick(old, today, null, months = 0))
+    }
+
+    @Test
     fun `no reminder when none qualifies or while dismissed`() {
         assertNull(BenchmarkReminder.pick(listOf(standing("Recent", today.minusMonths(5))), today, null))
         val old = listOf(standing("Max hang", today.minusMonths(8)))

@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Melete plan viewer</title>
+<style>
+  :root {
+    --bg: #fbf8fb; --surface: #ffffff; --surface-2: #f3eef3; --line: #ddd5dd;
+    --ink: #1d1b1e; --muted: #6a636b; --accent: #4a78b5; --warn: #b3261e; --warn-bg: #fdeceb;
+    --chip: #e8def8; --chip-ink: #3a2e55;
+    --c-open: #9875D6; --c-board: #D32F2F; --c-struc: #528DDD; --c-finger: #DD77AD;
+    --c-sc: #E2701A; --c-flex: #EAC521; --c-other: #5CA37C; --c-none: #b9b1b9;
+    --heat: 74, 120, 181;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141215; --surface: #1d1b1e; --surface-2: #262327; --line: #3a353b;
+      --ink: #e8e0e8; --muted: #a59ea6; --accent: #7fa7d9; --warn: #f2b8b5; --warn-bg: #3a1d1b;
+      --chip: #4a4063; --chip-ink: #e8def8;
+      --c-open: #B79BE8; --c-board: #F2776A; --c-struc: #8CB8F0; --c-finger: #EE7BA4;
+      --c-sc: #FF9D4D; --c-flex: #FFE066; --c-other: #8ED0A6; --c-none: #6b646c;
+      --heat: 127, 167, 217;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--surface-2);
+    border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 12px;
+    align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; }
+  button, select, label.file { font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  label.file input { display: none; }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; }
+  .seg button:first-child { border-radius: 8px 0 0 8px; }
+  .seg button:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
+  .fname { color: var(--muted); font-size: 13px; }
+  main { padding: 16px; }
+  .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 48px 16px; text-align: center;
+    color: var(--muted); }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .problems { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 14px;
+    margin-bottom: 14px; }
+  .problems summary { cursor: pointer; font-weight: 600; }
+  .problems li { margin: 2px 0; }
+  .muted { color: var(--muted); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none;
+    background: var(--c-none); }
+  .dot.none { background: transparent; border: 1px solid var(--c-none); }
+  .chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px;
+    background: var(--chip); color: var(--chip-ink); }
+
+  /* weekly view: a grid, one column per week and one row per day, so every Monday lines up with
+     every other Monday; the grid scrolls sideways, the page down */
+  .weeks { overflow-x: auto; padding-bottom: 6px; }
+  .weekgrid { display: grid; grid-auto-flow: column; grid-auto-columns: 280px; column-gap: 12px;
+    width: max-content; }
+  .weekgrid > .cell { background: var(--surface-2); padding: 0 10px; min-width: 0; }
+  .weekgrid > .whead { border-radius: 12px 12px 0 0; padding: 10px 10px 6px; font-weight: 600; }
+  .weekgrid > .whead .wk { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .weekgrid > .last { border-radius: 0 0 12px 12px; padding-bottom: 10px; }
+  .day { padding-top: 10px; }
+  .day h2 { font-size: 13px; margin: 0 0 4px; padding-bottom: 4px; border-bottom: 1px solid var(--line);
+    font-weight: 600; }
+  .empty { color: var(--muted); font-size: 13px; margin: 4px 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px;
+    margin: 5px 0; }
+  .card .top { display: flex; align-items: center; gap: 8px; }
+  .card .name { font-weight: 600; }
+  .card .sub { color: var(--muted); font-size: 13px; }
+  .module { border: 1px solid var(--line); border-radius: 12px; padding: 4px 8px 6px; margin: 8px 0; }
+  .module > .mname { font-weight: 600; padding: 4px 4px 2px; }
+  .module > .mdesc { color: var(--muted); font-size: 12px; padding: 0 4px 2px; }
+  .stations { margin: 4px 0 0 18px; padding: 0; color: var(--muted); font-size: 13px; }
+
+  /* global view */
+  .tablewrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; max-height: calc(100vh - 150px);
+    background: var(--surface); }
+  table { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  th, td { padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  thead th { position: sticky; top: 0; background: var(--surface-2); z-index: 2; font-weight: 600;
+    text-align: center; }
+  thead th .wk { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+  th.rowname, td.rowname { position: sticky; left: 0; background: var(--surface); z-index: 1; text-align: left; }
+  thead th.rowname { z-index: 3; background: var(--surface-2); }
+  td.rowname .in { display: flex; align-items: center; gap: 8px; }
+  tr.group td { background: var(--surface-2); font-weight: 600; position: sticky; left: 0; }
+  tr.group td .kind { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  td.v { text-align: center; min-width: 46px; font-variant-numeric: tabular-nums; }
+  td.v.zero { color: var(--line); }
+  td.total { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .legend { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Plan viewer</h1>
+  <label class="file">Open plan… <input id="file" type="file" accept=".json,application/json,text/plain"></label>
+  <span class="fname" id="fname"></span>
+  <span style="flex:1"></span>
+  <div class="seg" role="group" aria-label="View">
+    <button id="v-week" aria-pressed="true">Weekly</button>
+    <button id="v-global" aria-pressed="false">Global</button>
+  </div>
+</header>
+<main id="main">
+  <div class="drop" id="drop">Drop a <code>melete-plan</code> .json here, or use <b>Open plan…</b><br>
+    <span class="muted">Nothing leaves this page: the file is read in the browser.</span></div>
+</main>
+<script>
+"use strict";
+
+// ------------------------------------------------------------------ reading the file
+
+/**
+ * Plan files are JSON with two allowances for writing by hand, as the importer takes them:
+ * // and /* *\/ comments, and trailing commas. Strip both outside strings, then parse.
+ */
+function parseLenient(text) {
+  let out = "", i = 0, inString = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === "\\") { out += text[i + 1] ?? ""; i += 2; continue; }
+      if (c === '"') inString = false;
+      i++; continue;
+    }
+    if (c === '"') { inString = true; out += c; i++; continue; }
+    if (c === "/" && text[i + 1] === "/") { while (i < text.length && text[i] !== "\n") i++; continue; }
+    if (c === "/" && text[i + 1] === "*") { i += 2; while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++; i += 2; continue; }
+    out += c; i++;
+  }
+  // Trailing commas: a comma followed only by whitespace before } or ].
+  let cleaned = "", inStr = false;
+  for (let j = 0; j < out.length; j++) {
+    const c = out[j];
+    if (inStr) { cleaned += c; if (c === "\\") { cleaned += out[++j]; } else if (c === '"') inStr = false; continue; }
+    if (c === '"') { inStr = true; cleaned += c; continue; }
+    if (c === ",") {
+      let k = j + 1; while (k < out.length && /\s/.test(out[k])) k++;
+      if (out[k] === "}" || out[k] === "]") continue;
+    }
+    cleaned += c;
+  }
+  return JSON.parse(cleaned);
+}
+
+const nameKey = s => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const DAY_LABEL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const CATEGORY_VAR = {
+  OPEN_CLIMBING: "--c-open", BOARD_CLIMBING: "--c-board", STRUCTURED_CLIMBING: "--c-struc",
+  FINGER_TRAINING: "--c-finger", STRENGTH_CONDITIONING: "--c-sc", FLEXIBILITY: "--c-flex",
+  OTHER_ACTIVITY: "--c-other",
+};
+const normEnum = s => String(s ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+function parseMode(raw) {
+  const m = normEnum(raw);
+  if (m === "REPS") return "REPETITIONS";
+  if (m === "TIMED" || m === "TIMED_SETS") return "DURATION";
+  return ["REPETITIONS", "DURATION", "REPEATERS", "ACTIVITY"].includes(m) ? m : null;
+}
+
+function parseDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s ?? "").trim());
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return isNaN(d) ? null : d;
+}
+const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayMonth = d => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+const iso = d => d.toISOString().slice(0, 10);
+function isoWeek(d) {
+  const t = new Date(d); const day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day + 3);
+  const first = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((t - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
+}
+
+/**
+ * Resolves the file the way the app's check does, as far as a viewer needs: names to definitions,
+ * each placement to what it holds, and every mistake in words.
+ */
+function resolve(file) {
+  const problems = [];
+  if (file.format !== "melete-plan") problems.push(`"format" is ${JSON.stringify(file.format)}; the importer wants "melete-plan".`);
+  if (file.version !== 1) problems.push(`"version" is ${JSON.stringify(file.version)}; the importer reads version 1.`);
+
+  const known = new Set(["format", "version", "exercises", "circuits", "modules", "weeks", "benchmarks"]);
+  Object.keys(file).filter(k => !known.has(k)).forEach(k => problems.push(`Unknown top-level key "${k}".`));
+
+  function index(list, kind) {
+    const map = new Map();
+    (list ?? []).forEach((item, i) => {
+      if (!item?.name || !String(item.name).trim()) { problems.push(`${kind} ${i + 1} has no name.`); return; }
+      const key = nameKey(item.name);
+      if (map.has(key)) problems.push(`Two ${kind.toLowerCase()}s are called "${item.name}".`);
+      map.set(key, item);
+    });
+    return map;
+  }
+  const exercises = index(file.exercises, "Exercise");
+  const circuits = index(file.circuits, "Circuit");
+  const modules = index(file.modules, "Module");
+
+  exercises.forEach(ex => {
+    if (!parseMode(ex.mode)) problems.push(`${ex.name}: ${ex.mode ? `unknown mode "${ex.mode}"` : "no mode"}.`);
+    if (ex.category && !CATEGORY_VAR[normEnum(ex.category)]) problems.push(`${ex.name}: unknown category "${ex.category}".`);
+    if (ex.unit && !ex.meaning) problems.push(`${ex.name}: "unit" needs a "meaning".`);
+  });
+
+  // References resolve against the file; anything else would have to be in the phone's library.
+  const missing = new Set();
+  function exerciseOf(name, where) {
+    const ex = exercises.get(nameKey(name));
+    if (!ex) missing.add(`"${name}" (${where}) is not defined in this file — it must already be in the library, or the import fails.`);
+    return ex ?? { name, mode: null, category: null, plan: null, variations: [], external: true };
+  }
+  function planOf(ex, variation, own, where) {
+    if (own) return own;
+    if (variation) {
+      const v = (ex.variations ?? []).find(v => String(v.tag ?? "").toUpperCase() === String(variation).toUpperCase());
+      if (!v && !ex.external) problems.push(`${ex.name} has no variation "${variation}" (${where}).`);
+      if (v?.plan) return v.plan;
+    }
+    return ex.plan ?? null;
+  }
+
+  const weeks = [];
+  const seen = new Set();
+  (file.weeks ?? []).forEach((week, i) => {
+    const start = parseDate(week.weekStart);
+    if (!start) { problems.push(`Week ${i + 1}: unreadable "weekStart" ${JSON.stringify(week.weekStart)}.`); return; }
+    if (start.getUTCDay() !== 1) problems.push(`Week ${week.weekStart} does not start on a Monday.`);
+    if (seen.has(iso(start))) problems.push(`Week ${week.weekStart} is written twice.`);
+    seen.add(iso(start));
+    const weekKeys = new Set(["weekStart", "unscheduled", ...DAYS]);
+    Object.keys(week).filter(k => !weekKeys.has(k)).forEach(k => problems.push(`Week ${week.weekStart}: unknown key "${k}".`));
+
+    const slots = [{ label: "Unscheduled", date: null, raw: week.unscheduled ?? [] },
+      ...DAYS.map((d, n) => ({ label: `${DAY_LABEL[n]} ${dayMonth(addDays(start, n))}`, date: addDays(start, n), raw: week[d] ?? [] }))];
+    const where = s => `${week.weekStart}, ${s.label}`;
+    slots.forEach(slot => {
+      slot.items = slot.raw.map(item => {
+        const kinds = ["exercise", "circuit", "module", "activity"].filter(k => item[k] != null);
+        if (kinds.length !== 1) { problems.push(`${where(slot)}: an item must be exactly one of exercise, circuit, module, activity.`); return null; }
+        if (item.exercise) {
+          const ex = exerciseOf(item.exercise, where(slot));
+          return { kind: "exercise", ex, variation: item.variation ?? null, plan: planOf(ex, item.variation, item.plan, where(slot)) };
+        }
+        if (item.circuit) return circuitItem(item.circuit, where(slot));
+        if (item.module) {
+          const mod = modules.get(nameKey(item.module));
+          if (!mod) { missing.add(`Module "${item.module}" (${where(slot)}) is not defined in this file.`); return { kind: "module", name: item.module, entries: [] }; }
+          return {
+            kind: "module", name: mod.name, description: mod.description,
+            entries: (mod.entries ?? []).map(e => e.circuit ? circuitItem(e.circuit, `module ${mod.name}`)
+              : (() => { const ex = exerciseOf(e.exercise, `module ${mod.name}`);
+                return { kind: "exercise", ex, variation: e.variation ?? null, plan: planOf(ex, e.variation, e.plan, `module ${mod.name}`) }; })()),
+          };
+        }
+        return { kind: "activity", name: item.activity, minutes: item.minutes ?? null };
+      }).filter(Boolean);
+    });
+    weeks.push({ start, slots });
+  });
+
+  function circuitItem(name, where) {
+    const c = circuits.get(nameKey(name));
+    if (!c) { missing.add(`Circuit "${name}" (${where}) is not defined in this file.`); return { kind: "circuit", name, rounds: 1, stations: [] }; }
+    return {
+      kind: "circuit", name: c.name, category: c.category, rounds: c.rounds ?? 1,
+      transitionSeconds: c.transitionSeconds ?? 0, roundRestSeconds: c.roundRestSeconds ?? 0,
+      stations: (c.stations ?? []).map(s => {
+        const ex = exerciseOf(s.exercise, `circuit ${c.name}`);
+        return { ex, variation: s.variation ?? null, plan: planOf(ex, s.variation, s.plan, `circuit ${c.name}`) };
+      }),
+    };
+  }
+
+  weeks.sort((a, b) => a.start - b.start);
+  return { weeks, problems: [...problems, ...missing], counts: {
+    exercises: exercises.size, circuits: circuits.size, modules: modules.size, weeks: weeks.length,
+  } };
+}
+
+// ------------------------------------------------------------------ plan summaries
+
+function fmtSeconds(s) {
+  if (s == null) return "";
+  if (s < 60) return `${s} s`;
+  if (s % 60 === 0 && s < 3600) return `${s / 60} min`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+function planSummary(ex, plan, inCircuit) {
+  const mode = parseMode(ex.mode);
+  if (!plan) return ex.external ? "from the library" : "no plan";
+  const parts = [];
+  if (mode === "ACTIVITY") return plan.minutes ? `${plan.minutes} min` : "length not set";
+  const sets = plan.sets ?? 1;
+  let target = null;
+  if (plan.repeater) target = `${plan.repeater.reps} × ${plan.repeater.workSeconds}${plan.repeater.restSeconds ? "/" + plan.repeater.restSeconds : ""}s`;
+  else if (plan.reps != null) target = inCircuit ? `${plan.reps} reps` : `${plan.reps}`;
+  else if (plan.seconds != null) target = fmtSeconds(plan.seconds);
+  if (inCircuit) { if (target) parts.push(target); }
+  else parts.push(target ? `${sets} × ${target}` : `${sets} ${sets === 1 ? "set" : "sets"}`);
+  if (ex.unilateral) parts[parts.length - 1] = (parts[parts.length - 1] ?? "") + " per side";
+  if (!inCircuit && plan.restSeconds != null) parts.push(`rest ${fmtSeconds(plan.restSeconds)}`);
+  if (plan.effort) parts.push(normEnum(plan.effort).toLowerCase().replace("_", " "));
+  return parts.join(" · ");
+}
+
+function dot(category) {
+  const v = category ? CATEGORY_VAR[normEnum(category)] : null;
+  const el = document.createElement("span");
+  el.className = "dot" + (v ? "" : " none");
+  if (v) el.style.background = `var(${v})`;
+  el.title = category ? normEnum(category).toLowerCase().replace(/_/g, " ") : "no category";
+  return el;
+}
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  Object.entries(attrs).forEach(([k, v]) => k === "class" ? el.className = v : el.setAttribute(k, v));
+  children.flat().forEach(c => c != null && el.append(c.nodeType ? c : document.createTextNode(c)));
+  return el;
+}
+
+// ------------------------------------------------------------------ weekly view
+
+/**
+ * Everything the file says about one exercise as it is placed, for the hover tooltip: its kind,
+ * the whole plan field by field, how it is measured, and its description and notes.
+ */
+function exerciseDetail(ex, plan, variation) {
+  const lines = [ex.name + (variation ? ` [${String(variation).toUpperCase()}]` : "")];
+  const mode = parseMode(ex.mode);
+  lines.push([mode ? mode.toLowerCase() : (ex.external ? "from the library" : "no mode"),
+    ex.category ? normEnum(ex.category).toLowerCase().replace(/_/g, " ") : null,
+    ex.unilateral ? "unilateral" : null,
+    ex.unit ? `${ex.unit}${ex.meaning ? " " + normEnum(ex.meaning).toLowerCase().replace(/_/g, " ") : ""}` : null,
+  ].filter(Boolean).join(" · "));
+  if (plan) {
+    const p = [];
+    if (mode === "ACTIVITY") p.push(plan.minutes != null ? `length ${plan.minutes} min` : "no length");
+    else p.push(`${plan.sets ?? 1} ${(plan.sets ?? 1) === 1 ? "set" : "sets"}`);
+    if (plan.reps != null) p.push(`${plan.reps} reps`);
+    if (plan.seconds != null) p.push(`${fmtSeconds(plan.seconds)} per set`);
+    if (plan.repeater) p.push(`repeater ${plan.repeater.reps} × ${plan.repeater.workSeconds} s on / ${plan.repeater.restSeconds ?? 0} s off`);
+    if (plan.restSeconds != null) p.push(`rest ${fmtSeconds(plan.restSeconds)}`);
+    if (plan.sideSwitchSeconds != null) p.push(`side switch ${fmtSeconds(plan.sideSwitchSeconds)}`);
+    if (plan.plannedMinutes != null) p.push(`planned ${plan.plannedMinutes} min`);
+    if (plan.effort) p.push(`effort ${normEnum(plan.effort).toLowerCase().replace("_", " ")}`);
+    lines.push("Plan: " + p.join(", "));
+  } else {
+    lines.push("Plan: none");
+  }
+  if (variation) {
+    const v = (ex.variations ?? []).find(v => String(v.tag ?? "").toUpperCase() === String(variation).toUpperCase());
+    if (v?.notes) lines.push(`Variation notes: ${v.notes}`);
+  }
+  if (ex.description) lines.push(`Description: ${ex.description}`);
+  if (ex.notes) lines.push(`Notes: ${ex.notes}`);
+  return lines.join("\n");
+}
+
+function exerciseCard(item) {
+  return h("div", { class: "card", title: exerciseDetail(item.ex, item.plan, item.variation) },
+    h("div", { class: "top" }, dot(item.ex.category), h("span", { class: "name" }, item.ex.name),
+      item.variation ? h("span", { class: "chip" }, String(item.variation).toUpperCase()) : null),
+    h("div", { class: "sub" }, planSummary(item.ex, item.plan, false)));
+}
+function circuitCard(item) {
+  const shape = [`${item.rounds} ${item.rounds === 1 ? "round" : "rounds"}`,
+    item.transitionSeconds ? `switch ${fmtSeconds(item.transitionSeconds)}` : null,
+    item.roundRestSeconds ? `rest ${fmtSeconds(item.roundRestSeconds)}` : null].filter(Boolean).join(" · ");
+  return h("div", { class: "card" },
+    h("div", { class: "top" }, dot(item.category), h("span", { class: "name" }, item.name), h("span", { class: "muted" }, "circuit")),
+    h("div", { class: "sub" }, shape),
+    h("ol", { class: "stations" }, item.stations.map(s => h("li", { title: exerciseDetail(s.ex, s.plan, s.variation) },
+      `${s.ex.name}${s.variation ? " [" + s.variation + "]" : ""} — ${planSummary(s.ex, s.plan, true)}`))));
+}
+function itemNode(item) {
+  if (item.kind === "exercise") return exerciseCard(item);
+  if (item.kind === "circuit") return circuitCard(item);
+  if (item.kind === "activity") return h("div", {
+      class: "card",
+      title: `${item.name}\none-off activity, no library entry\n${item.minutes != null ? `Length: ${item.minutes} min` : "No length"}`,
+    },
+    h("div", { class: "top" }, dot(null), h("span", { class: "name" }, item.name), h("span", { class: "muted" }, "activity")),
+    h("div", { class: "sub" }, item.minutes ? `${item.minutes} min` : "no length"));
+  return h("div", { class: "module" }, h("div", { class: "mname", title: item.description ? `${item.name}\n${item.description}` : item.name }, item.name),
+    item.description ? h("div", { class: "mdesc" }, item.description) : null,
+    item.entries.length ? item.entries.map(itemNode) : h("div", { class: "empty" }, "No entries."));
+}
+
+let state = { plan: null, view: "week", fileName: "" };
+
+function renderWeek(main) {
+  const { weeks } = state.plan;
+  if (!weeks.length) { main.append(h("p", { class: "muted" }, "This file plans no weeks.")); return; }
+  // One grid row per slot, shared by every week, so a row is as tall as its busiest week and the
+  // days line up across columns. Unscheduled gets a row only if some week uses it.
+  const withUnscheduled = weeks.some(w => w.slots[0].items.length);
+  const rows = 1 + (withUnscheduled ? 1 : 0) + 7;
+  const grid = h("div", { class: "weekgrid" });
+  grid.style.gridTemplateRows = `repeat(${rows}, auto)`;
+  weeks.forEach(week => {
+    const end = addDays(week.start, 6);
+    grid.append(h("div", { class: "cell whead" }, `${dayMonth(week.start)} – ${dayMonth(end)}`,
+      h("span", { class: "wk" }, `W${isoWeek(week.start)} · ${end.getUTCFullYear()}`)));
+    const slots = withUnscheduled ? week.slots : week.slots.slice(1);
+    slots.forEach((slot, n) => {
+      grid.append(h("div", { class: "cell day" + (n === slots.length - 1 ? " last" : "") },
+        h("h2", {}, slot.label),
+        slot.items.length ? slot.items.map(itemNode) : h("div", { class: "empty" }, "—")));
+    });
+  });
+  main.append(h("div", { class: "weeks" }, grid));
+}
+
+// ------------------------------------------------------------------ global view
+
+/**
+ * One row per exercise within the group it was placed through: a module, a circuit placed on its
+ * own, standalone exercises, or one-off activities. A cell is that week's occurrences weighted by
+ * sets against the row's heaviest: the most sets it ever has counts 1, so 4 sets = 1 and a 2-set
+ * deload week = ½. Circuit stations count their circuit's rounds as sets.
+ */
+function buildTable() {
+  const { weeks } = state.plan;
+  const groups = new Map(); // key -> { title, kind, rows: Map(rowKey -> row) }
+  function row(groupKey, title, kind, rowKey, label, category, ex = null) {
+    if (!groups.has(groupKey)) groups.set(groupKey, { title, kind, rows: new Map() });
+    const g = groups.get(groupKey);
+    if (!g.rows.has(rowKey)) g.rows.set(rowKey, { label, category, ex, perWeek: new Map(), maxSets: 0, tags: new Set() });
+    return g.rows.get(rowKey);
+  }
+  function count(r, weekIndex, sets, tag) {
+    const list = r.perWeek.get(weekIndex) ?? [];
+    list.push(sets); r.perWeek.set(weekIndex, list);
+    r.maxSets = Math.max(r.maxSets, sets);
+    if (tag) r.tags.add(String(tag).toUpperCase());
+  }
+  const setsOf = (ex, plan) => parseMode(ex.mode) === "ACTIVITY" ? 1 : Math.max(1, plan?.sets ?? 1);
+  function place(item, weekIndex, groupKey, title, kind) {
+    if (item.kind === "exercise") {
+      count(row(groupKey, title, kind, nameKey(item.ex.name), item.ex.name, item.ex.category, item.ex), weekIndex, setsOf(item.ex, item.plan), item.variation);
+    } else if (item.kind === "circuit") {
+      const g = groupKey ?? `circuit:${nameKey(item.name)}`;
+      const t = title ?? item.name;
+      item.stations.forEach(s => count(
+        row(g, t, kind ?? "circuit", nameKey(s.ex.name), s.ex.name, s.ex.category, s.ex), weekIndex, Math.max(1, item.rounds), s.variation));
+    } else if (item.kind === "activity") {
+      count(row("activities", "One-off activities", "", nameKey(item.name), item.name, null), weekIndex, 1, null);
+    } else {
+      item.entries.forEach(e => place(e, weekIndex, `module:${nameKey(item.name)}`, item.name, "module"));
+    }
+  }
+  weeks.forEach((w, wi) => w.slots.forEach(slot => slot.items.forEach(item => {
+    if (item.kind === "exercise") place(item, wi, "standalone", "Standalone exercises", "");
+    else place(item, wi, null, null, null);
+  })));
+  // Standalone exercises by category, in the app's order, uncategorised last; file order within.
+  const standalone = groups.get("standalone");
+  if (standalone) {
+    const order = Object.keys(CATEGORY_VAR);
+    const rankOf = r => { const i = order.indexOf(normEnum(r.category)); return i < 0 ? order.length : i; };
+    standalone.rows = new Map([...standalone.rows.entries()].sort((a, b) => rankOf(a[1]) - rankOf(b[1])));
+  }
+  // Modules first, then circuits, then standalone, then activities; each in first-seen order.
+  const rank = k => k.startsWith("module:") ? 0 : k.startsWith("circuit:") ? 1 : k === "standalone" ? 2 : 3;
+  return [...groups.entries()].sort((a, b) => rank(a[0]) - rank(b[0])).map(([, g]) => g);
+}
+
+/** a/b reduced, shown as a whole number, a mixed fraction with a unicode glyph when one fits, or a/b. */
+const GLYPH = { "1/2": "½", "1/3": "⅓", "2/3": "⅔", "1/4": "¼", "3/4": "¾", "1/5": "⅕", "2/5": "⅖", "3/5": "⅗", "4/5": "⅘", "1/6": "⅙", "5/6": "⅚", "1/8": "⅛", "3/8": "⅜", "5/8": "⅝", "7/8": "⅞" };
+const gcd = (a, b) => b ? gcd(b, a % b) : a;
+function fraction(num, den) {
+  if (num === 0) return "·";
+  const g = gcd(num, den); num /= g; den /= g;
+  if (den === 1) return String(num);
+  const whole = Math.floor(num / den), rest = num % den;
+  const part = GLYPH[`${rest}/${den}`] ?? `${rest}/${den}`;
+  return whole ? `${whole}${GLYPH[`${rest}/${den}`] ? "" : " "}${part}` : part;
+}
+
+function renderGlobal(main) {
+  const { weeks } = state.plan;
+  if (!weeks.length) { main.append(h("p", { class: "muted" }, "This file plans no weeks.")); return; }
+  main.append(h("p", { class: "legend" },
+    "Each cell: occurrences that week, weighted by sets against the row's most (1 = its fullest week's sets). " +
+    "Circuit stations count rounds as sets. Hover a cell for the sets."));
+  const groups = buildTable();
+  const thead = h("thead", {}, h("tr", {}, h("th", { class: "rowname" }, "Exercise"),
+    weeks.map(w => h("th", {}, dayMonth(w.start), h("span", { class: "wk" }, `W${isoWeek(w.start)}`))),
+    h("th", {}, "Total")));
+  const tbody = h("tbody");
+  groups.forEach(g => {
+    tbody.append(h("tr", { class: "group" }, h("td", { colspan: weeks.length + 2 }, g.title, g.kind ? h("span", { class: "kind" }, g.kind) : null)));
+    g.rows.forEach(r => {
+      let totalNum = 0;
+      const cells = weeks.map((_, wi) => {
+        const sets = r.perWeek.get(wi) ?? [];
+        const num = sets.reduce((a, b) => a + b, 0);
+        totalNum += num;
+        const td = h("td", { class: "v" + (num ? "" : " zero") }, fraction(num, r.maxSets));
+        if (num) {
+          const value = num / r.maxSets;
+          td.style.background = `rgba(var(--heat), ${Math.min(0.12 + 0.28 * value, 0.7)})`;
+          td.title = `${sets.length} × (${sets.join(", ")} sets)`;
+        }
+        return td;
+      });
+      tbody.append(h("tr", {},
+        h("td", { class: "rowname", title: r.ex ? exerciseDetail(r.ex, r.ex.plan ?? null, null) : r.label }, h("span", { class: "in" }, dot(r.category), r.label,
+          r.tags.size ? h("span", { class: "chip" }, [...r.tags].join(" ")) : null)),
+        cells, h("td", { class: "total" }, fraction(totalNum, r.maxSets))));
+    });
+  });
+  main.append(h("div", { class: "tablewrap" }, h("table", {}, thead, tbody)));
+}
+
+// ------------------------------------------------------------------ shell
+
+function render() {
+  const main = document.getElementById("main");
+  main.replaceChildren();
+  if (!state.plan) { main.append(dropZone); return; }
+  const { problems, counts } = state.plan;
+  main.append(h("p", { class: "muted", style: "margin-top:0" },
+    `${counts.exercises} exercises · ${counts.circuits} circuits · ${counts.modules} modules · ${counts.weeks} weeks`));
+  if (problems.length) {
+    const d = h("details", { class: "problems" }, h("summary", {}, `${problems.length} problem${problems.length === 1 ? "" : "s"} the importer would report`),
+      h("ul", {}, problems.map(p => h("li", {}, p))));
+    d.open = problems.length <= 6;
+    main.append(d);
+  }
+  state.view === "week" ? renderWeek(main) : renderGlobal(main);
+  document.getElementById("v-week").setAttribute("aria-pressed", state.view === "week");
+  document.getElementById("v-global").setAttribute("aria-pressed", state.view === "global");
+}
+
+function load(name, text) {
+  state.fileName = name;
+  document.getElementById("fname").textContent = name;
+  try {
+    const file = parseLenient(text);
+    state.plan = resolve(file);
+  } catch (e) {
+    state.plan = { weeks: [], problems: [`Not readable JSON: ${e.message}`], counts: { exercises: 0, circuits: 0, modules: 0, weeks: 0 } };
+  }
+  render();
+}
+
+const dropZone = document.getElementById("drop");
+document.getElementById("file").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => load(f.name, t));
+  e.target.value = "";
+};
+document.getElementById("v-week").onclick = () => { state.view = "week"; render(); };
+document.getElementById("v-global").onclick = () => { state.view = "global"; render(); };
+document.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("over"); });
+document.addEventListener("dragleave", () => dropZone.classList.remove("over"));
+document.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("over");
+  const f = e.dataTransfer.files[0]; if (f) f.text().then(t => load(f.name, t));
+});
+</script>
+</body>
+</html>

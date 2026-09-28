@@ -98,4 +98,24 @@ class DiaryTrackersTest {
         assertTrue(day(monday).values.isEmpty())
         assertEquals("Kept", day(monday).text)
     }
+
+    /** One history: switching bodyweight off keeps what was weighed, and on again finds it. */
+    @Test
+    fun bodyweightTrackingIsOneTrackerThatComesBackWithItsHistory() = runBlocking {
+        assertEquals(false, diary.observeBodyweightTracked().first())
+        diary.setBodyweightTracked(true)
+        assertEquals(true, diary.observeBodyweightTracked().first())
+        val tracker = diary.observeTrackers().first().single { it.id == BODYWEIGHT_TRACKER_ID }
+        assertEquals(TrackerType.NUMBER, tracker.type)
+        assertEquals("kg", tracker.unit)
+
+        val date = LocalDate.of(2026, 9, 28)
+        diary.save(date, null, listOf(TrackedValue(tracker, TrackerReading(71.5, null))))
+        diary.setBodyweightTracked(false)
+        assertEquals(false, diary.observeBodyweightTracked().first())
+        assertEquals(71.5, diary.observeDays(date, date).first().getValue(date).values.getValue(BODYWEIGHT_TRACKER_ID).reading.number!!, 0.0)
+
+        diary.setBodyweightTracked(true)
+        assertEquals(1, diary.observeTrackers().first().count { it.id == BODYWEIGHT_TRACKER_ID })
+    }
 }

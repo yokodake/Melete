@@ -79,8 +79,8 @@ category and a doughnut are deferred, as agreed.
 reads "Latest **+30 kg** · 24 Sep" over "Best +35 kg", with a **+** to record a result; a tap
 opens its history, a long press edits or hides it. *New* creates one. A name shared by two
 benchmarks shows its protocol to tell them apart; otherwise the protocol is on the detail and the
-entry dialog only. **⋮ → Show hidden** lists hidden ones, which keep every result and can be shown
-again.
+entry dialog only. A **Hidden (N) ▾** row at the foot of the list opens the hidden ones below it;
+they keep every result and can be shown again.
 
 A definition is a name, a measurement (load, duration, distance, other) with a unit, for a load
 whether it is total or **added to bodyweight** (signed: assistance below zero), one value or
@@ -117,8 +117,21 @@ The bottom bar is **Home · Calendar · Timer · Dashboard**, four ordinary tabs
 their state. The app opens on **Home**; Back from another tab returns there.
 
 **Home** (`ui/home`): Profile and Settings are unlabelled icons in its top bar (described for
-accessibility). Profile is inert until 7B; **Settings** opens a screen that is the permanent home
-of **Import / export** (7B's preferences join it). Below:
+accessibility). Profile is inert until 7B. **Settings** (`ui/settings`):
+
+- **Track bodyweight** — a switch for the diary's own *Bodyweight* tracker (number, kg, stable id
+  `bodyweight`): on adds it or brings it back, off retires it and keeps every value. One history,
+  the diary's, which 7B's Profile will read.
+- **Benchmark reminders** — Off, or after 3, 6 (default) or 12 months: when Home's Benchmarks tile
+  reminds.
+- **Appearance** — a greyed placeholder, *System*; not built.
+- **Keep screen awake** — *While timing* (default) or *Always*, while the app is in front.
+- **Import / export** — its permanent place.
+- **About** — *Melete Debug* in red, or *Melete*; version, build number, build type, package.
+
+Preferences are `AppSettings` (SharedPreferences): how the app behaves, never the record, so they
+are not in backups and a restore leaves them alone. Bodyweight is the exception by design — it is
+part of the record. Home, below its top bar:
 
 - A **Today** card — "Today · Mon 28 Sep ›", "2 / 5 completed" (or "Nothing planned"), one block
   per exercise (a plain bar past twelve), "1 skipped" when there is any, and "≈ 35 min remaining"
