@@ -650,13 +650,13 @@ private fun IdleControls(
 
             // The rest between attempts, inside a set; the rest below is still between sets.
             if (state.mode == TimerCreateMode.INTERVALS) {
-                FieldRow("Between reps") {
+                FieldRow("Rep rest") {
                     NumberField("m", state.intervalRest.minutes, onIntervalRestMinutes, FieldWidth)
                     NumberField("s", state.intervalRest.seconds, onIntervalRestSeconds, FieldWidth)
                 }
             }
 
-            FieldRow("Rest") {
+            FieldRow(if (state.mode == TimerCreateMode.INTERVALS) "Set Rest" else "Rest") {
                 NumberField("m", state.rest.minutes, onRestMinutes, FieldWidth)
                 NumberField("s", state.rest.seconds, onRestSeconds, FieldWidth)
             }
@@ -668,19 +668,9 @@ private fun IdleControls(
                 }
             }
 
-            // One set covers both sides, left then right, so the set count does not double. The
-            // label sits where the others do; the switch ends the row.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 64.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Unilateral",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f),
-                )
+            // One set covers both sides, left then right, so the set count does not double. A row
+            // like the others: the label in the gutter, the switch where the fields start.
+            FieldRow("Unilateral") {
                 Switch(checked = state.unilateral, onCheckedChange = onUnilateral)
             }
         }
@@ -716,7 +706,7 @@ private fun IdleControls(
 }
 
 /** The width of one number in the timer form: room for "999", not the whole screen. */
-private val FieldWidth = Modifier.width(88.dp)
+private val FieldWidth = Modifier.width(80.dp)
 
 /**
  * The kinds of timer as one compact row of tabs, each label on one line. Plain surfaces rather
@@ -783,7 +773,8 @@ private fun FieldRow(
         Text(
             text = label.orEmpty(),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.width(52.dp),
+            // Wide enough for the longest label, "Unilateral", so every field starts on one edge.
+            modifier = Modifier.width(88.dp),
         )
         content()
     }
