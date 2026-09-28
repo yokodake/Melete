@@ -22,7 +22,7 @@
     },
     {
       "name": "Band-assisted pull-up", "mode": "REPETITIONS", "category": "STRENGTH_CONDITIONING",
-      "unit": "kg", "meaning": "ASSISTANCE",
+      "unit": "kg", "meaning": "ADDED_LOAD",
       "plan": { "sets": 3, "reps": 8, "restSeconds": 120, "effort": "MODERATE" }
     },
     {
@@ -76,7 +76,7 @@
     },
     {
       "name": "One-arm hang", "mode": "DURATION", "category": "FINGER_TRAINING",
-      "unilateral": true, "unit": "kg", "meaning": "ASSISTANCE",
+      "unilateral": true, "unit": "kg", "meaning": "ADDED_LOAD",
       "plan": { "sets": 4, "seconds": 7, "restSeconds": 120, "sideSwitchSeconds": 30 }
     },
     {
@@ -107,7 +107,7 @@
     },
     {
       "name": "One-arm repeaters", "mode": "REPEATERS", "category": "FINGER_TRAINING",
-      "unilateral": true, "unit": "kg", "meaning": "ASSISTANCE",
+      "unilateral": true, "unit": "kg", "meaning": "ADDED_LOAD",
       "plan": { "sets": 3, "restSeconds": 120, "sideSwitchSeconds": 20, "repeater": { "reps": 5, "workSeconds": 10, "restSeconds": 5 } }
     },
     {

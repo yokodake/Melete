@@ -50,7 +50,7 @@ Names are matched ignoring case and repeated spaces, so `"pull-up"` finds `"Pull
 | --- | --- |
 | `mode` | `REPETITIONS` (or `reps`) · `DURATION` (or `timed`) · `REPEATERS` · `ACTIVITY` |
 | `category` | `OPEN_CLIMBING` · `BOARD_CLIMBING` · `STRUCTURED_CLIMBING` · `FINGER_TRAINING` · `STRENGTH_CONDITIONING` · `FLEXIBILITY` · `OTHER_ACTIVITY`; omit for none |
-| `meaning` | `TOTAL_LOAD` · `ADDED_LOAD` · `ASSISTANCE` |
+| `meaning` | `TOTAL_LOAD` (everything lifted) · `ADDED_LOAD` (on top of bodyweight; negative loads are assistance) |
 | `variations[].tag` | capitals or digits, at most 4 (`pwr` is read as `PWR`) |
 
 An activity has no sides and no load: `unilateral`, `unit` and `meaning` are dropped with a

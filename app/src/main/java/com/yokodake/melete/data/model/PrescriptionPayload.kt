@@ -35,14 +35,16 @@ enum class ExerciseMode(val label: String) {
 
 /** What a numeric measurement means. These are different quantities and must never be merged. */
 enum class MeasurementMeaning(val label: String) {
-    /** Everything on the bar / the whole implement. */
+    /** Everything on the bar / the whole implement. Never negative. */
     TOTAL_LOAD("Total load"),
 
-    /** Load added to bodyweight, e.g. a weight belt. */
+    /**
+     * Load relative to bodyweight: positive is added (a weight belt), negative is taken away (a
+     * band, a pulley counterweight). One signed scale rather than "added" and "assistance" apart,
+     * so moving from assisted to weighted reads as one line of progress, and the heaviest set is
+     * always simply the largest number.
+     */
     ADDED_LOAD("Added load"),
-
-    /** Load taken away, e.g. a band or a pulley counterweight. */
-    ASSISTANCE("Assistance"),
 }
 
 @Serializable

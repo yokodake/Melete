@@ -86,8 +86,8 @@ app structure, not a generic framework.
    diary. Full event sourcing is unnecessary.
 5. Relationships use stable exercise IDs, never names. Exports and snapshots keep human-readable
    names. Variations may be separate exercises in v1.
-6. Named fields have canonical meanings and units. Added load and assistance must never silently
-   become the same quantity. Payload/export versions and metric definitions are kept. No arbitrary
+6. Named fields have canonical meanings and units. Total load and load relative to bodyweight must
+   never silently become the same quantity; assistance is relative load below zero. Payload/export versions and metric definitions are kept. No arbitrary
    schema designer.
 7. Effort is optional in prescriptions and actuals, on the five-point verbal scale; there is
    no RIR. Absence is stored as absence, never as zero.
