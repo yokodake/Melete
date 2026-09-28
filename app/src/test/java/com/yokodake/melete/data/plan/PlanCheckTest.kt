@@ -34,10 +34,10 @@ class PlanCheckTest {
         val text = File("src/androidTest/assets/test-library.json").readText()
         val resolution = PlanCheck.resolve(PlanJson.decodeFromString(PlanFile.serializer(), text), LibraryIndex.EMPTY)
         assertEquals(emptyList<String>(), resolution.problems)
-        assertEquals(24, resolution.preview.exercisesAdded.size)
-        assertEquals(4, resolution.preview.circuitsAdded.size)
+        assertEquals(26, resolution.preview.exercisesAdded.size)
+        assertEquals(5, resolution.preview.circuitsAdded.size)
         assertEquals(5, resolution.preview.modulesAdded.size)
-        assertEquals(6, resolution.preview.variations)
+        assertEquals(7, resolution.preview.variations)
         // The deliberately contradictory hike is cleaned, and says so.
         assertTrue(resolution.warnings.any { it.startsWith("Hike") && "unilateral" in it })
         val hike = resolution.plan!!.exercises.single { it.draft.name.startsWith("Hike") }.draft

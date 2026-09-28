@@ -57,6 +57,20 @@
       "notes": "Four problems back to back, three grades below max.",
       "plan": { "sets": 4, "reps": 4, "restSeconds": 240, "effort": "HARD" }
     },
+    {
+      // Attempts: the timer waits for each rep and counts the rest between reps.
+      "name": "Limit attempts", "mode": "REPETITIONS", "category": "STRUCTURED_CLIMBING",
+      "description": "Repeat laps on a hard problem; each better than the last.",
+      "plan": { "sets": 3, "reps": 3, "restSeconds": 300, "repRestSeconds": 180, "effort": "HARD" },
+      "variations": [
+        { "tag": "PE", "notes": "Power endurance: shorter gaps.", "plan": { "sets": 3, "reps": 3, "restSeconds": 300, "repRestSeconds": 60 } }
+      ]
+    },
+    {
+      // A rest between reps with one rep: nothing to pace, an ordinary untimed set.
+      "name": "Single attempt", "mode": "REPETITIONS", "category": "STRUCTURED_CLIMBING",
+      "plan": { "sets": 2, "reps": 1, "restSeconds": 120, "repRestSeconds": 60 }
+    },
 
     // --- timed sets ----------------------------------------------------------------------------
     {
@@ -195,6 +209,15 @@
         { "exercise": "Weighted pull-up", "plan": { "reps": 3 } },
         { "exercise": "Push-up", "plan": { "reps": 10 } }
       ]
+    },
+    {
+      // A station of attempts keeps its rest between reps inside the round.
+      "name": "Attempts + core", "category": "STRUCTURED_CLIMBING",
+      "rounds": 2, "transitionSeconds": 60, "roundRestSeconds": 240,
+      "stations": [
+        { "exercise": "Limit attempts", "plan": { "reps": 2, "repRestSeconds": 90 } },
+        { "exercise": "Plank", "plan": { "seconds": 30 } }
+      ]
     }
   ],
 
@@ -265,6 +288,7 @@
       "weekStart": "2026-09-28",
       "unscheduled": [ { "exercise": "Yoga" } ],
       "monday": [ { "module": "Hangboard block" } ],
+      "tuesday": [ { "exercise": "Limit attempts" }, { "exercise": "Limit attempts", "variation": "PE" }, { "circuit": "Attempts + core" } ],
       "wednesday": [
         // A placement's own plan, over the variation's.
         { "exercise": "Back squat", "variation": "PWR", "plan": { "sets": 6, "reps": 2, "restSeconds": 180 } },
