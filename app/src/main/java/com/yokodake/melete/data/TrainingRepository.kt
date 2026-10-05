@@ -896,6 +896,35 @@ class TrainingRepository(private val database: MeleteDatabase) {
             members.size
         }
 
+    /**
+     * Skips planned exercises, or puts skipped ones back to planned. Only untouched work is
+     * skipped: anything logged or done stays as it is.
+     */
+    suspend fun setSkipped(occurrences: List<PlannedOccurrence>, skipped: Boolean) {
+        occurrences.forEach { occurrence ->
+            when {
+                skipped && occurrence.state == OccurrenceState.PLANNED && occurrence.loggedSets == 0 ->
+                    setOccurrenceState(occurrence.id, OccurrenceState.SKIPPED)
+                !skipped && occurrence.state == OccurrenceState.SKIPPED ->
+                    setOccurrenceState(occurrence.id, OccurrenceState.PLANNED)
+            }
+        }
+    }
+
+    /**
+     * Takes the logs off: sets, notes, effort and duration are deleted and each goes back to
+     * planned, on the same day.
+     */
+    suspend fun unlog(occurrences: List<PlannedOccurrence>) {
+        occurrences
+            .filter { it.state == OccurrenceState.COMPLETED || it.loggedSets > 0 }
+            .groupBy { it.trainingDate }
+            .forEach { (date, list) ->
+                if (date == null) return@forEach
+                saveLogs(date, list.map { OccurrenceLogWrite(it.id, completed = false) })
+            }
+    }
+
     /** Marks one scheduled exercise optional, or not. Its plan and log are untouched. */
     suspend fun setOccurrenceOptional(occurrenceId: String, optional: Boolean) {
         database.withTransaction {

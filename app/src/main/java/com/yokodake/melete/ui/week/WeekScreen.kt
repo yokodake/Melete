@@ -126,6 +126,8 @@ fun WeekRoute(
             onOpenDiary = onOpenDiary,
             onOpenBenchmark = onOpenBenchmark,
             bottomBar = bottomBar,
+            onLog = onLog,
+            onReviewCircuit = onReviewCircuit,
         )
         return
     }

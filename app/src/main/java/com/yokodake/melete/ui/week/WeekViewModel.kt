@@ -1,7 +1,5 @@
 package com.yokodake.melete.ui.week
 
-import com.yokodake.melete.data.OccurrenceLogWrite
-import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.PlannedOccurrence
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -147,14 +145,7 @@ class WeekViewModel(
      * skipped: anything logged or done stays as it is.
      */
     fun setSkipped(occurrence: PlannedOccurrence, skipped: Boolean) {
-        viewModelScope.launch {
-            when {
-                skipped && occurrence.state == OccurrenceState.PLANNED && occurrence.loggedSets == 0 ->
-                    repository.setOccurrenceState(occurrence.id, OccurrenceState.SKIPPED)
-                !skipped && occurrence.state == OccurrenceState.SKIPPED ->
-                    repository.setOccurrenceState(occurrence.id, OccurrenceState.PLANNED)
-            }
-        }
+        viewModelScope.launch { repository.setSkipped(listOf(occurrence), skipped) }
     }
 
     /**
@@ -163,20 +154,14 @@ class WeekViewModel(
      */
     fun unlog(occurrences: List<PlannedOccurrence>) {
         viewModelScope.launch {
-            occurrences
-                .filter { it.state == OccurrenceState.COMPLETED || it.loggedSets > 0 }
-                .groupBy { it.trainingDate }
-                .forEach { (date, list) ->
-                    if (date == null) return@forEach
-                    repository.saveLogs(date, list.map { OccurrenceLogWrite(it.id, completed = false) })
-                }
+            repository.unlog(occurrences)
             _message.value = "Log removed"
         }
     }
 
     /** Skips every untouched station of a circuit, or puts its skipped stations back to planned. */
     fun setCircuitSkipped(stations: List<PlannedOccurrence>, skipped: Boolean) {
-        stations.forEach { setSkipped(it, skipped) }
+        viewModelScope.launch { repository.setSkipped(stations, skipped) }
     }
 
     /** Marks a scheduled exercise optional, or required again. */
