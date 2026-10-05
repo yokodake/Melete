@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface BenchmarkDao {
 
-    /** Every benchmark, hidden ones included, in the order they are listed. */
-    @Query("SELECT * FROM benchmarks ORDER BY orderIndex, createdAtEpochMs")
+    /** Every benchmark, hidden ones included, alphabetically: the order they are listed in. */
+    @Query("SELECT * FROM benchmarks ORDER BY name COLLATE NOCASE, createdAtEpochMs")
     fun observeBenchmarks(): Flow<List<BenchmarkEntity>>
 
     @Query("SELECT * FROM benchmarks WHERE id = :id")
