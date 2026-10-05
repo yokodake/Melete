@@ -205,8 +205,10 @@ class BenchmarkRepository(private val database: MeleteDatabase) {
             dao.observeResultsBetween(from.toEpochDay(), to.toEpochDay()),
         ) { benchmarks, results ->
             val byId = benchmarks.associateBy { it.id }
+            // The list's own order (alphabetical), by position rather than by any stored index.
+            val position = benchmarks.withIndex().associate { (index, row) -> row.id to index }
             results
-                .sortedWith(compareBy({ byId[it.benchmarkId]?.orderIndex ?: Int.MAX_VALUE }, { it.recordedAtEpochMs }))
+                .sortedWith(compareBy({ position[it.benchmarkId] ?: Int.MAX_VALUE }, { it.recordedAtEpochMs }))
                 .map { row ->
                     val result = row.toModel()
                     BenchmarkDayResult(

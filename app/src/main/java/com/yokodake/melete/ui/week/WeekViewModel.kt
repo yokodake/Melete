@@ -1,5 +1,8 @@
 package com.yokodake.melete.ui.week
 
+import com.yokodake.melete.data.OccurrenceLogWrite
+import com.yokodake.melete.data.entity.OccurrenceState
+import com.yokodake.melete.data.PlannedOccurrence
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -132,6 +135,43 @@ class WeekViewModel(
                 "Removed, along with $sets logged set${if (sets == 1) "" else "s"}"
             }
         }
+    }
+
+    /**
+     * Skips a planned exercise, or puts a skipped one back to planned. Only untouched work is
+     * skipped: anything logged or done stays as it is.
+     */
+    fun setSkipped(occurrence: PlannedOccurrence, skipped: Boolean) {
+        viewModelScope.launch {
+            when {
+                skipped && occurrence.state == OccurrenceState.PLANNED && occurrence.loggedSets == 0 ->
+                    repository.setOccurrenceState(occurrence.id, OccurrenceState.SKIPPED)
+                !skipped && occurrence.state == OccurrenceState.SKIPPED ->
+                    repository.setOccurrenceState(occurrence.id, OccurrenceState.PLANNED)
+            }
+        }
+    }
+
+    /**
+     * Takes the log off: its sets, notes, effort and duration are deleted and it goes back to
+     * planned, in the same day. For a circuit, every station that was logged.
+     */
+    fun unlog(occurrences: List<PlannedOccurrence>) {
+        viewModelScope.launch {
+            occurrences
+                .filter { it.state == OccurrenceState.COMPLETED || it.loggedSets > 0 }
+                .groupBy { it.trainingDate }
+                .forEach { (date, list) ->
+                    if (date == null) return@forEach
+                    repository.saveLogs(date, list.map { OccurrenceLogWrite(it.id, completed = false) })
+                }
+            _message.value = "Log removed"
+        }
+    }
+
+    /** Skips every untouched station of a circuit, or puts its skipped stations back to planned. */
+    fun setCircuitSkipped(stations: List<PlannedOccurrence>, skipped: Boolean) {
+        stations.forEach { setSkipped(it, skipped) }
     }
 
     /** Makes another copy of a placement, waiting in this week's unscheduled area. */

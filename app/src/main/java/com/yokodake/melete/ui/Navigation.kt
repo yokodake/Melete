@@ -333,6 +333,8 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
                 onOpenCircuit = { navController.navigate(CircuitDetailDestination(it)) },
                 onOpenDiary = { navController.navigate(DiaryDestination(it.toEpochDay())) },
                 onOpenBenchmark = { navController.navigate(BenchmarkDetailDestination(it)) },
+                onLog = { navController.navigate(LoggerDestination(it)) },
+                onReviewCircuit = { navController.navigate(CircuitReviewDestination(it)) },
                 bottomBar = bottomBar,
             )
         }

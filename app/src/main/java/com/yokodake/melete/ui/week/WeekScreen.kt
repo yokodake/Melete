@@ -92,6 +92,8 @@ fun WeekRoute(
     onOpenCircuit: (String) -> Unit = {},
     onOpenDiary: (LocalDate) -> Unit = {},
     onOpenBenchmark: (String) -> Unit = {},
+    onLog: (occurrenceId: String) -> Unit = {},
+    onReviewCircuit: (circuitInstanceId: String) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
     /** Changes whenever something asks for today: the current week, scrolled to the day. */
@@ -114,6 +116,11 @@ fun WeekRoute(
         onDeleteWithLog = viewModel::deleteOccurrenceAndLog,
         onLoggedSetCount = viewModel::loggedSetCount,
         onDuplicateOccurrence = viewModel::duplicateOccurrence,
+        onLog = onLog,
+        onReviewCircuit = onReviewCircuit,
+        onSetSkipped = viewModel::setSkipped,
+        onSetCircuitSkipped = viewModel::setCircuitSkipped,
+        onUnlog = viewModel::unlog,
         onNudge = viewModel::nudge,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
@@ -152,6 +159,11 @@ fun WeekScreen(
     onDeleteWithLog: (String, Int) -> Unit = { _, _ -> },
     onLoggedSetCount: suspend (String) -> Int = { 0 },
     onDuplicateOccurrence: (String) -> Unit = {},
+    onLog: (String) -> Unit = {},
+    onReviewCircuit: (String) -> Unit = {},
+    onSetSkipped: (PlannedOccurrence, Boolean) -> Unit = { _, _ -> },
+    onSetCircuitSkipped: (List<PlannedOccurrence>, Boolean) -> Unit = { _, _ -> },
+    onUnlog: (List<PlannedOccurrence>) -> Unit = {},
     /** Moves a card one place, crossing into the next day at an edge. Offered in edit mode. */
     onNudge: (PlanItemRef, Int) -> Unit = { _, _ -> },
     onOpenDiary: (LocalDate) -> Unit = {},
@@ -190,6 +202,8 @@ fun WeekScreen(
     var editing by rememberSaveable { mutableStateOf(false) }
     var removingModule by remember { mutableStateOf<WeekItem.Module?>(null) }
     var removingModuleRecorded by remember { mutableIntStateOf(0) }
+    // What "Unlog" would take the log off, and what to call it, while that is being confirmed.
+    var unlogging by remember { mutableStateOf<Pair<String, List<PlannedOccurrence>>?>(null) }
 
     /**
      * One card for one item, wherever it sits. A module draws its members with exactly this, so a
@@ -203,6 +217,9 @@ fun WeekScreen(
                 onClick = { onOpenOccurrence(item.occurrence.id) },
                 // A duplicate is a fresh plan and never inherits what was logged.
                 onDuplicate = { onDuplicateOccurrence(item.occurrence.id) },
+                onLog = { onLog(item.occurrence.id) },
+                onUnlog = { unlogging = item.occurrence.name to listOf(item.occurrence) },
+                onSkip = { skipped -> onSetSkipped(item.occurrence, skipped) },
                 onRemove = {
                     // Ask the record what a deletion would cost before offering one.
                     scope.launch {
@@ -216,6 +233,9 @@ fun WeekScreen(
             is WeekItem.Circuit -> CircuitCard(
                 item = item,
                 onClick = { onOpenCircuit(item.circuit.id) },
+                onLog = { onReviewCircuit(item.circuit.id) },
+                onUnlog = { unlogging = item.circuit.name to item.stations },
+                onSkip = { skipped -> onSetCircuitSkipped(item.stations, skipped) },
                 onRemove = {
                     scope.launch {
                         removingCircuitStations = onCircuitRecordedStations(item.circuit.id)
@@ -457,6 +477,21 @@ fun WeekScreen(
         )
     }
 
+    unlogging?.let { (name, occurrences) ->
+        AlertDialog(
+            onDismissRequest = { unlogging = null },
+            title = { Text("Unlog $name?") },
+            text = { Text("Its logged sets, notes, effort and duration are deleted. It stays in the week as planned.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    unlogging = null
+                    onUnlog(occurrences)
+                }) { Text("Unlog", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { unlogging = null }) { Text("Cancel") } },
+        )
+    }
+
     removingCircuit?.let { item ->
         CircuitRemoveDialog(
             item = item,
@@ -683,8 +718,14 @@ private fun OccurrenceCard(
     onRemove: () -> Unit,
     /** Set only for a module member: leaves the group and stays where it is. */
     onTakeOut: (() -> Unit)? = null,
+    onLog: () -> Unit = {},
+    /** Takes the log off; asked to confirm by the caller. Updating a log is the exercise page's job. */
+    onUnlog: () -> Unit = {},
+    /** True skips it, false puts a skipped one back to planned. */
+    onSkip: (Boolean) -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val logged = occurrence.state == OccurrenceState.COMPLETED || occurrence.loggedSets > 0
     val haptics = LocalHapticFeedback.current
     Box {
         Card(
@@ -768,6 +809,24 @@ private fun OccurrenceCard(
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
             DropdownMenuItem(
+                text = { Text(if (logged) "Unlog" else "Log workout") },
+                onClick = { menuExpanded = false; if (logged) onUnlog() else onLog() },
+            )
+            // Skipping is for untouched, dated work: anything logged is a record already, and
+            // an undated skip would be a record with no day to file it under.
+            when {
+                occurrence.state == OccurrenceState.SKIPPED -> DropdownMenuItem(
+                    text = { Text("Unskip") },
+                    onClick = { menuExpanded = false; onSkip(false) },
+                )
+                occurrence.state == OccurrenceState.PLANNED && occurrence.loggedSets == 0 &&
+                    occurrence.trainingDate != null -> DropdownMenuItem(
+                    text = { Text("Skip") },
+                    onClick = { menuExpanded = false; onSkip(true) },
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
                 text = { Text("Duplicate") },
                 onClick = { menuExpanded = false; onDuplicate() },
             )
@@ -814,8 +873,17 @@ private fun CircuitCard(
     onRemove: () -> Unit,
     /** Set only for a module member: leaves the group and stays where it is. */
     onTakeOut: (() -> Unit)? = null,
+    onLog: () -> Unit = {},
+    /** Takes every station's log off; asked to confirm by the caller. */
+    onUnlog: () -> Unit = {},
+    /** True skips its untouched stations, false puts skipped ones back to planned. */
+    onSkip: (Boolean) -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val logged = item.stations.any { it.state == OccurrenceState.COMPLETED || it.loggedSets > 0 }
+    val skipped = item.stations.isNotEmpty() && item.stations.all { it.state == OccurrenceState.SKIPPED }
+    val skippable = item.circuit.trainingDate != null &&
+        item.stations.any { it.state == OccurrenceState.PLANNED && it.loggedSets == 0 }
     val haptics = LocalHapticFeedback.current
     Box {
         Card(
@@ -847,6 +915,12 @@ private fun CircuitCard(
                     if (item.completed) {
                         val colors = doneColors()
                         Chip("Done", colors.first, colors.second)
+                    } else if (skipped) {
+                        Chip(
+                            text = "Skipped",
+                            container = MaterialTheme.colorScheme.surfaceVariant,
+                            content = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 Text(
@@ -857,6 +931,21 @@ private fun CircuitCard(
             }
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(if (logged) "Unlog" else "Log workout") },
+                onClick = { menuOpen = false; if (logged) onUnlog() else onLog() },
+            )
+            when {
+                skipped -> DropdownMenuItem(
+                    text = { Text("Unskip") },
+                    onClick = { menuOpen = false; onSkip(false) },
+                )
+                skippable -> DropdownMenuItem(
+                    text = { Text("Skip") },
+                    onClick = { menuOpen = false; onSkip(true) },
+                )
+            }
+            HorizontalDivider()
             onTakeOut?.let { takeOut ->
                 DropdownMenuItem(
                     text = { Text("Take out of module") },
