@@ -1,5 +1,7 @@
 package com.yokodake.melete.ui.week
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -199,6 +201,14 @@ class MonthViewModel(
         savedStateHandle[MONTH_KEY] = value.toString()
     }
 
+    fun setSkipped(occurrences: List<PlannedOccurrence>, skipped: Boolean) {
+        viewModelScope.launch { repository.setSkipped(occurrences, skipped) }
+    }
+
+    fun unlog(occurrences: List<PlannedOccurrence>) {
+        viewModelScope.launch { repository.unlog(occurrences) }
+    }
+
     fun addActivity(name: String, trainingDate: LocalDate, minutes: Int?) {
         viewModelScope.launch {
             repository.createOneOffActivity(
@@ -239,6 +249,8 @@ fun MonthRoute(
     onOpenDiary: (LocalDate) -> Unit,
     onOpenBenchmark: (String) -> Unit,
     bottomBar: @Composable () -> Unit,
+    onLog: (occurrenceId: String) -> Unit = {},
+    onReviewCircuit: (circuitInstanceId: String) -> Unit = {},
     viewModel: MonthViewModel = viewModel(factory = MonthViewModel.Factory),
 ) {
     var opened by rememberSaveable { mutableStateOf(false) }
@@ -261,8 +273,26 @@ fun MonthRoute(
         onOpenDiary = onOpenDiary,
         onOpenBenchmark = onOpenBenchmark,
         bottomBar = bottomBar,
+        actions = MonthItemActions(
+            onOpenOccurrence = onOpenOccurrence,
+            onOpenCircuit = onOpenCircuit,
+            onLog = onLog,
+            onReviewCircuit = onReviewCircuit,
+            onSkip = viewModel::setSkipped,
+            onUnlog = viewModel::unlog,
+        ),
     )
 }
+
+/** What a line of the month can be asked: open it, log or unlog it, skip or unskip it. */
+data class MonthItemActions(
+    val onOpenOccurrence: (String) -> Unit = {},
+    val onOpenCircuit: (String) -> Unit = {},
+    val onLog: (String) -> Unit = {},
+    val onReviewCircuit: (String) -> Unit = {},
+    val onSkip: (List<PlannedOccurrence>, Boolean) -> Unit = { _, _ -> },
+    val onUnlog: (List<PlannedOccurrence>) -> Unit = {},
+)
 
 /**
  * The month: a grid of days with a mark per category, above the month's days in order. Tapping a
@@ -283,11 +313,18 @@ fun MonthScreen(
     onOpenDiary: (LocalDate) -> Unit,
     onOpenBenchmark: (String) -> Unit,
     bottomBar: @Composable () -> Unit,
+    actions: MonthItemActions = MonthItemActions(onOpenOccurrence = onOpenOccurrence, onOpenCircuit = onOpenCircuit),
 ) {
     var selectedDay by rememberSaveable { mutableStateOf(initialDate.toEpochDay()) }
     var collapsed by rememberSaveable { mutableStateOf(false) }
     var loggedOnly by rememberSaveable { mutableStateOf(false) }
     var addingActivityOn by remember { mutableStateOf<LocalDate?>(null) }
+    // What "Unlog" would take the log off, and its name, while that is being confirmed.
+    var unlogging by remember { mutableStateOf<Pair<String, List<PlannedOccurrence>>?>(null) }
+    val itemActions = actions.copy(onUnlog = { list ->
+        val name = list.singleOrNull()?.name ?: "this circuit"
+        unlogging = name to list
+    })
     val selected = LocalDate.ofEpochDay(selectedDay)
     val listState = rememberLazyListState()
 
@@ -401,12 +438,27 @@ fun MonthScreen(
                     }
                     day.items.forEach { item ->
                         item(key = item.key) {
-                            MonthItem(item, onOpenOccurrence, onOpenCircuit)
+                            MonthItem(item, itemActions)
                         }
                     }
                 }
             }
         }
+    }
+
+    unlogging?.let { (name, occurrences) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { unlogging = null },
+            title = { Text("Unlog $name?") },
+            text = { Text("Its logged sets, notes, effort and duration are deleted. It stays in the calendar as planned.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    unlogging = null
+                    actions.onUnlog(occurrences)
+                }) { Text("Unlog", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { unlogging = null }) { Text("Cancel") } },
+        )
     }
 
     addingActivityOn?.let { date ->
@@ -571,13 +623,13 @@ private fun DayCell(
 @Composable
 private fun MonthItem(
     item: WeekItem,
-    onOpenOccurrence: (String) -> Unit,
-    onOpenCircuit: (String) -> Unit,
+    actions: MonthItemActions,
     indent: Boolean = false,
 ) {
     when (item) {
         is WeekItem.Single -> {
             val o = item.occurrence
+            val logged = o.state == OccurrenceState.COMPLETED || o.loggedSets > 0
             MonthLine(
                 category = o.category,
                 name = o.name,
@@ -593,7 +645,15 @@ private fun MonthItem(
                     PrescriptionSummary.format(o)
                 },
                 indent = indent,
-                onClick = { onOpenOccurrence(o.id) },
+                onClick = { actions.onOpenOccurrence(o.id) },
+                logged = logged,
+                onLog = { if (logged) actions.onUnlog(listOf(o)) else actions.onLog(o.id) },
+                skip = when {
+                    o.state == OccurrenceState.SKIPPED -> false
+                    o.state == OccurrenceState.PLANNED && o.loggedSets == 0 && o.trainingDate != null -> true
+                    else -> null
+                },
+                onSkip = { actions.onSkip(listOf(o), it) },
             )
         }
 
@@ -609,7 +669,19 @@ private fun MonthItem(
             optional = false,
             summary = circuitSummary(item),
             indent = indent,
-            onClick = { onOpenCircuit(item.circuit.id) },
+            onClick = { actions.onOpenCircuit(item.circuit.id) },
+            logged = item.stations.any { it.state == OccurrenceState.COMPLETED || it.loggedSets > 0 },
+            onLog = {
+                val logged = item.stations.any { it.state == OccurrenceState.COMPLETED || it.loggedSets > 0 }
+                if (logged) actions.onUnlog(item.stations) else actions.onReviewCircuit(item.circuit.id)
+            },
+            skip = when {
+                item.stations.isNotEmpty() && item.stations.all { it.state == OccurrenceState.SKIPPED } -> false
+                item.circuit.trainingDate != null &&
+                    item.stations.any { it.state == OccurrenceState.PLANNED && it.loggedSets == 0 } -> true
+                else -> null
+            },
+            onSkip = { actions.onSkip(item.stations, it) },
         )
 
         is WeekItem.Module -> Column {
@@ -619,11 +691,12 @@ private fun MonthItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),
             )
-            item.members.forEach { MonthItem(it, onOpenOccurrence, onOpenCircuit, indent = true) }
+            item.members.forEach { MonthItem(it, actions, indent = true) }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MonthLine(
     category: ExerciseCategory?,
@@ -634,52 +707,74 @@ private fun MonthLine(
     summary: String?,
     indent: Boolean,
     onClick: () -> Unit,
+    /** Whether it holds a log: the menu offers Unlog rather than Log workout. */
+    logged: Boolean = false,
+    onLog: () -> Unit = {},
+    /** True offers Skip, false Unskip, null neither. */
+    skip: Boolean? = null,
+    onSkip: (Boolean) -> Unit = {},
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = if (indent) 12.dp else 0.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        CategoryDot(category)
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                tag?.let { VariationChip(it) }
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }, onLongClickLabel = "Workout actions")
+                .padding(start = if (indent) 12.dp else 0.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CategoryDot(category)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    tag?.let { VariationChip(it) }
+                }
+                summary?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            summary?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            when {
+                state == OccurrenceState.COMPLETED -> {
+                    val (container, content) = doneColors()
+                    Chip(text = "Done", container = container, content = content)
+                }
+                state == OccurrenceState.SKIPPED -> Chip(
+                    text = "Skipped",
+                    container = MaterialTheme.colorScheme.surfaceVariant,
+                    content = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                optional -> Chip(
+                    text = "Optional",
+                    container = MaterialTheme.colorScheme.surfaceVariant,
+                    content = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        when {
-            state == OccurrenceState.COMPLETED -> {
-                val (container, content) = doneColors()
-                Chip(text = "Done", container = container, content = content)
+        // The week card's first actions, the ones a look back over a month calls for.
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(if (logged) "Unlog" else "Log workout") },
+                onClick = { menuOpen = false; onLog() },
+            )
+            skip?.let { skipping ->
+                DropdownMenuItem(
+                    text = { Text(if (skipping) "Skip" else "Unskip") },
+                    onClick = { menuOpen = false; onSkip(skipping) },
+                )
             }
-            state == OccurrenceState.SKIPPED -> Chip(
-                text = "Skipped",
-                container = MaterialTheme.colorScheme.surfaceVariant,
-                content = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            optional -> Chip(
-                text = "Optional",
-                container = MaterialTheme.colorScheme.surfaceVariant,
-                content = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
