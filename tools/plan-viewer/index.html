@@ -268,9 +268,15 @@ function resolve(file) {
           const own = new Map(Object.entries(item.plans ?? {}).map(([k, v]) => [nameKey(k), v]));
           const held = new Set((mod.entries ?? []).filter(e => e.exercise).map(e => nameKey(e.exercise)));
           own.forEach((_, k) => { if (!held.has(k)) problems.push(`${where(slot)}: ${mod.name} has no exercise "${k}" of its own to plan.`); });
+          // And the ones it leaves out this week.
+          const omitted = new Set((item.omit ?? []).map(nameKey));
+          omitted.forEach(k => {
+            if (!held.has(k)) problems.push(`${where(slot)}: ${mod.name} has no exercise "${k}" of its own to leave out.`);
+            if (own.has(k)) problems.push(`${where(slot)}: "${k}" is both planned and left out.`);
+          });
           return {
             kind: "module", name: mod.name, description: mod.description,
-            entries: (mod.entries ?? []).map(e => e.circuit ? circuitItem(e.circuit, `module ${mod.name}`)
+            entries: (mod.entries ?? []).filter(e => !(e.exercise && omitted.has(nameKey(e.exercise)))).map(e => e.circuit ? circuitItem(e.circuit, `module ${mod.name}`)
               : (() => { const ex = exerciseOf(e.exercise, `module ${mod.name}`);
                 const override = own.get(nameKey(e.exercise));
                 return { kind: "exercise", ex, variation: e.variation ?? null, overridden: !!override,

@@ -296,4 +296,32 @@ class PlanCheckTest {
         )
         assertTrue(inTemplate.hasProblem("go where it is placed in a week"))
     }
+
+    @Test
+    fun `a module placement can leave its own exercises out for that week only`() {
+        val resolution = resolve(
+            overrideLibrary + """
+            "weeks": [ { "weekStart": "2026-10-05",
+              "sunday": [ { "module": "FA", "omit": [ "clamshell" ], "plans": { "Cossack": { "sets": 3, "reps": 6 } } } ] } ]
+            """
+        )
+        assertEquals(emptyList<String>(), resolution.problems)
+        val module = resolution.plan!!.slots.single().items.single() as ResolvedItem.Module
+        assertEquals(setOf("clamshell"), module.omit)
+        assertEquals(setOf("cossack"), module.plans.keys)
+        // The module itself still holds it.
+        assertEquals(3, resolution.plan!!.modules.single().entries.size)
+    }
+
+    @Test
+    fun `omit names the module's own exercises, never one it also plans, and only on placements`() {
+        fun weekWith(item: String) = resolve(overrideLibrary + """ "weeks": [ { "weekStart": "2026-10-05", "monday": [ $item ] } ] """)
+        assertTrue(weekWith("""{ "module": "FA", "omit": [ "Attempt" ] }""").hasProblem("has no exercise Attempt of its own to leave out"))
+        assertTrue(weekWith("""{ "module": "FA", "omit": [ "Nope" ] }""").hasProblem("no exercise called \"Nope\""))
+        assertTrue(
+            weekWith("""{ "module": "FA", "omit": [ "Cossack" ], "plans": { "cossack": { "reps": 5 } } }""")
+                .hasProblem("both planned and left out")
+        )
+        assertTrue(weekWith("""{ "exercise": "Cossack", "omit": [ "Cossack" ] }""").hasProblem("\"omit\" only goes with a module"))
+    }
 }
