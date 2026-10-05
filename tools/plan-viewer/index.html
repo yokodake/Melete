@@ -450,8 +450,9 @@ function renderWeek(main) {
 // ------------------------------------------------------------------ global view
 
 /**
- * One row per exercise within the group it was placed through: a module, a circuit placed on its
- * own, standalone exercises, or one-off activities. A cell is that week's occurrences weighted by
+ * One row per exercise and variation within the group it was placed through: a module, a circuit
+ * placed on its own, standalone exercises, or one-off activities. An exercise and its variation are
+ * different rows, since their sets are different work. A cell is that week's occurrences weighted by
  * sets against the row's heaviest: the most sets it ever has counts 1, so 4 sets = 1 and a 2-set
  * deload week = ½. Circuit stations count their circuit's rounds as sets.
  */
@@ -471,14 +472,15 @@ function buildTable() {
     if (tag) r.tags.add(String(tag).toUpperCase());
   }
   const setsOf = (ex, plan) => parseMode(ex.mode) === "ACTIVITY" ? 1 : Math.max(1, plan?.sets ?? 1);
+  const keyOf = (ex, variation) => nameKey(ex.name) + (variation ? "|" + String(variation).toUpperCase() : "");
   function place(item, weekIndex, groupKey, title, kind) {
     if (item.kind === "exercise") {
-      count(row(groupKey, title, kind, nameKey(item.ex.name), item.ex.name, item.ex.category, item.ex), weekIndex, setsOf(item.ex, item.plan), item.variation);
+      count(row(groupKey, title, kind, keyOf(item.ex, item.variation), item.ex.name, item.ex.category, item.ex), weekIndex, setsOf(item.ex, item.plan), item.variation);
     } else if (item.kind === "circuit") {
       const g = groupKey ?? `circuit:${nameKey(item.name)}`;
       const t = title ?? item.name;
       item.stations.forEach(s => count(
-        row(g, t, kind ?? "circuit", nameKey(s.ex.name), s.ex.name, s.ex.category, s.ex), weekIndex, Math.max(1, item.rounds), s.variation));
+        row(g, t, kind ?? "circuit", keyOf(s.ex, s.variation), s.ex.name, s.ex.category, s.ex), weekIndex, Math.max(1, item.rounds), s.variation));
     } else if (item.kind === "activity") {
       count(row("activities", "One-off activities", "", nameKey(item.name), item.name, null), weekIndex, 1, null);
     } else {
@@ -496,9 +498,24 @@ function buildTable() {
     const rankOf = r => { const i = order.indexOf(normEnum(r.category)); return i < 0 ? order.length : i; };
     standalone.rows = new Map([...standalone.rows.entries()].sort((a, b) => rankOf(a[1]) - rankOf(b[1])));
   }
-  // Modules first, then circuits, then standalone, then activities; each in first-seen order.
+  // Modules first, then circuits, then standalone, then activities. Modules and circuits go
+  // alphabetically, so a deload version ("FA · deload") sits right under its module ("FA").
+  // Within a standalone exercise, its base row comes before its variations.
   const rank = k => k.startsWith("module:") ? 0 : k.startsWith("circuit:") ? 1 : k === "standalone" ? 2 : 3;
-  return [...groups.entries()].sort((a, b) => rank(a[0]) - rank(b[0])).map(([, g]) => g);
+  groups.forEach(g => {
+    const entries = [...g.rows.entries()];
+    const first = new Map();
+    entries.forEach(([k], i) => { const base = k.split("|")[0]; if (!first.has(base)) first.set(base, i); });
+    entries.sort((a, b) => {
+      const [ab, av = ""] = a[0].split("|"), [bb, bv = ""] = b[0].split("|");
+      return ab === bb ? av.localeCompare(bv) : first.get(ab) - first.get(bb);
+    });
+    g.rows = new Map(entries);
+  });
+  return [...groups.entries()]
+    .sort((a, b) => rank(a[0]) - rank(b[0]) ||
+      (rank(a[0]) <= 1 ? a[1].title.localeCompare(b[1].title, undefined, { sensitivity: "base" }) : 0))
+    .map(([, g]) => g);
 }
 
 /** a/b reduced, shown as a whole number, a mixed fraction with a unicode glyph when one fits, or a/b. */
