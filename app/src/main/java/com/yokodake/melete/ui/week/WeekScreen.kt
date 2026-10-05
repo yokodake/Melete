@@ -100,13 +100,37 @@ fun WeekRoute(
     todayRequest: Long = 0L,
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
 ) {
+    // Week or month: the calendar's two views, switched from the title. Survives a trip into a
+    // workout and back, and a visit to another tab.
+    var showingMonth by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(todayRequest) {
-        if (todayRequest != 0L) viewModel.showCurrentWeek()
+        if (todayRequest != 0L) {
+            showingMonth = false
+            viewModel.showCurrentWeek()
+        }
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val moduleExpansion by viewModel.moduleExpansion.collectAsStateWithLifecycle()
+    if (showingMonth) {
+        MonthRoute(
+            // The month of the week on screen, on today when that week holds it.
+            initialDate = if (state.isCurrentWeek) state.today else state.weekStart,
+            onShowWeek = { date ->
+                viewModel.showWeekOf(date)
+                showingMonth = false
+            },
+            onOpenOccurrence = onOpenOccurrence,
+            onOpenCircuit = onOpenCircuit,
+            onAddExercise = { weekStart, date -> onAddExercise(weekStart, date) },
+            onOpenDiary = onOpenDiary,
+            onOpenBenchmark = onOpenBenchmark,
+            bottomBar = bottomBar,
+        )
+        return
+    }
     WeekScreen(
+        onShowMonth = { showingMonth = true },
         state = state,
         moduleExpansion = moduleExpansion,
         onModuleExpanded = viewModel::setModuleExpanded,
@@ -151,6 +175,7 @@ fun WeekRoute(
 @Composable
 fun WeekScreen(
     state: WeekUiState,
+    onShowMonth: () -> Unit = {},
     message: String? = null,
     /** Modules opened or closed by hand; the rest follow [moduleStartsExpanded]. */
     moduleExpansion: Map<String, Boolean> = emptyMap(),
@@ -310,16 +335,13 @@ fun WeekScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
                 title = {
-                    Column {
-                        Text(
-                            text = if (state.isCurrentWeek) "This week" else "Week",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            text = state.weekLabel,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                    CalendarTitle(
+                        title = if (state.isCurrentWeek) "This week" else "Week",
+                        subtitle = state.weekLabel,
+                        month = false,
+                        onWeek = {},
+                        onMonth = onShowMonth,
+                    )
                 },
                 navigationIcon = {
                     IconButton(
@@ -574,7 +596,7 @@ private fun RemoveDialog(
  * asks which rather than assuming the commonest and making the other hard to find.
  */
 @Composable
-private fun AddButton(
+internal fun AddButton(
     description: String,
     onAddExercise: () -> Unit,
     onAddActivity: () -> Unit,
@@ -655,7 +677,7 @@ private fun SectionHeading(
 }
 
 @Composable
-private fun DayHeading(
+internal fun DayHeading(
     row: WeekRow.DayHeading,
     trackers: List<Tracker>,
     onAddExercise: () -> Unit,
@@ -1128,7 +1150,7 @@ private fun WeekItem.ref(): PlanItemRef = when (this) {
  * The circuit in one line, as the library lists it: rounds and the stations in order, plus how
  * much of it has been logged when that is some but not all.
  */
-private fun circuitSummary(item: WeekItem.Circuit): String {
+internal fun circuitSummary(item: WeekItem.Circuit): String {
     val parts = mutableListOf<String>()
     parts += "${item.circuit.rounds} ${if (item.circuit.rounds == 1) "round" else "rounds"}"
     parts += item.stations.joinToString(" → ") { it.name }.ifEmpty { "no exercises" }
@@ -1146,7 +1168,7 @@ private fun circuitSummary(item: WeekItem.Circuit): String {
  * minutes are optional, because you often add it before you have done it.
  */
 @Composable
-private fun ActivityDialog(
+internal fun ActivityDialog(
     date: LocalDate?,
     onDismiss: () -> Unit,
     onConfirm: (String, Int?) -> Unit,

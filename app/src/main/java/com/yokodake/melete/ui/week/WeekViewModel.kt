@@ -94,6 +94,11 @@ class WeekViewModel(
         weekStart.value = weekStart.value.plusWeeks(1)
     }
 
+    /** The week holding [date]: where the month view hands over when switching back. */
+    fun showWeekOf(date: LocalDate) {
+        weekStart.value = WeekMath.weekStartOf(date)
+    }
+
     fun showCurrentWeek() {
         weekStart.value = WeekMath.weekStartOf(today)
     }
