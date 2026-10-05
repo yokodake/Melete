@@ -38,10 +38,11 @@ the two ever disagree, the code and the first half win.
 | 9 — remote and web | not started |
 | 10 — appearance | not started |
 
-Schema version **11** (10 was the **baseline**; `MIGRATION_10_11` added the benchmark tables):
-every schema change comes with a migration and a test, and neither build has a destructive
-fallback — see *Upgrades preserve the record* below. Backup format **2** (1 plus benchmarks);
-backup format **1** and plan format **1** stay readable in every later version.
+Schema version **12** (10 was the **baseline**; `MIGRATION_10_11` added the benchmark tables,
+`MIGRATION_11_12` the `optional` flag on scheduled exercises and module entries): every schema
+change comes with a migration and a test, and neither build has a destructive fallback — see
+*Upgrades preserve the record* below. Backup format **3** (2 plus `optional`); backup formats
+**1** and **2** and plan format **1** stay readable in every later version.
 Prescription payload version **4**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -1667,9 +1668,15 @@ Small follow-ups, recorded 2026-09-28 (not scheduled):
   week's copy only (untouched planned copies are removed); each must be an entry of the module's
   own, and one cannot be both planned and left out. Unit tests in `PlanCheckTest`; the viewer
   shows the module without them.
-- Optional exercises: a flag on the scheduled copy, overridable per placement, shown as a chip;
-  Home's Today target and remaining time leave an unfinished optional exercise out. Needs a schema
-  change and a backup format bump. Module variations were considered and set aside: `omit` covers
+- ✅ Optional exercises: a flag on the scheduled copy, overridable per placement, shown as a chip;
+  Home's Today target and remaining time leave an unfinished optional exercise out. Built
+  2026-10-05: schema 12 (`MIGRATION_11_12`, two `ALTER TABLE … ADD COLUMN optional … DEFAULT 0`),
+  backup format 3. Set in plan files with `"optional": true` on an exercise placed in a week or
+  entered in a module (never a circuit's station); in the module editor, a switch on an exercise
+  entry; in the week, *Make optional* / *Make required* on a card's long press. The card shows an
+  *Optional* chip while planned. Done optional work counts like any other. Unit tests:
+  `HomeStatsTest`, `PlanCheckTest`, `BackupFormatTest`, `SchemaBaselineTest` (12 pinned).
+  `MigrationTest` (device) not run. Module variations were considered and set aside: `omit` covers
   the case for far less.
 
 **Phase 6A — the overview** is built. Before the real plan goes into release: walk the hand

@@ -40,8 +40,11 @@ const val BACKUP_FORMAT = "melete-backup"
  *
  * 2 (phase 7A) adds [MeleteBackup.benchmarks]. A version 1 file simply has none; the number went
  * up so that an older app refuses a file holding benchmarks instead of restoring it without them.
+ *
+ * 3 (schema 12) adds `optional` to scheduled exercises and module entries. An older file reads as
+ * nothing optional; the number went up so an older app refuses a file it would quietly flatten.
  */
-const val BACKUP_FORMAT_VERSION = 2
+const val BACKUP_FORMAT_VERSION = 3
 
 /**
  * The whole training record, as one human-readable file.
@@ -182,6 +185,7 @@ data class ModuleEntryRecord(
     val plan: JsonElement? = null,
     val routineId: String? = null,
     val routineNameSnapshot: String? = null,
+    val optional: Boolean = false,
 )
 
 @Serializable
@@ -242,6 +246,7 @@ data class OccurrenceRecord(
     val variationTagSnapshot: String? = null,
     val moduleInstanceId: String? = null,
     val modulePosition: Int? = null,
+    val optional: Boolean = false,
 )
 
 @Serializable
@@ -340,6 +345,7 @@ internal fun ModuleEntity.toRecord(entries: List<ModuleEntryEntity>) = ModuleRec
         ModuleEntryRecord(
             it.id, it.orderIndex, it.exerciseId, it.exerciseNameSnapshot, it.variationId,
             it.variationTagSnapshot, it.prescriptionJson.element(), it.routineId, it.routineNameSnapshot,
+            it.optional,
         )
     },
 )
@@ -382,6 +388,7 @@ internal fun ExerciseOccurrenceEntity.toRecord() = OccurrenceRecord(
     variationTagSnapshot = variationTagSnapshot,
     moduleInstanceId = moduleInstanceId,
     modulePosition = modulePosition,
+    optional = optional,
 )
 
 internal fun TrainingSessionEntity.toRecord() =
@@ -455,7 +462,7 @@ internal fun ModuleRecord.toEntity() = ModuleEntity(id, name, description, creat
 internal fun ModuleRecord.entryEntities() = entries.map {
     ModuleEntryEntity(
         it.id, id, it.orderIndex, it.exerciseId, it.exerciseNameSnapshot, it.variationId,
-        it.variationTagSnapshot, it.plan.text(), it.routineId, it.routineNameSnapshot,
+        it.variationTagSnapshot, it.plan.text(), it.routineId, it.routineNameSnapshot, it.optional,
     )
 }
 
@@ -500,6 +507,7 @@ internal fun OccurrenceRecord.toEntity() = ExerciseOccurrenceEntity(
     variationTagSnapshot = variationTagSnapshot,
     moduleInstanceId = moduleInstanceId,
     modulePosition = modulePosition,
+    optional = optional,
 )
 
 internal fun SessionRecord.toEntity() =

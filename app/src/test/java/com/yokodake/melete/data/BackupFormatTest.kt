@@ -76,6 +76,7 @@ class BackupFormatTest {
         loggedDurationManual = true, loggedEffort = EffortLevel.VERY_HARD, isOneOff = false,
         circuitInstanceId = "circ-1", circuitPosition = 1, variationId = "var-1",
         variationTagSnapshot = "PWR", moduleInstanceId = "mod-i-1", modulePosition = 0,
+        optional = true,
     )
 
     private val set = ActualSetEntity(
@@ -108,7 +109,7 @@ class BackupFormatTest {
 
         val module = ModuleEntity("m-1", "Fingers", "Base block", 1_000, null)
         val moduleEntries = listOf(
-            ModuleEntryEntity("me-1", "m-1", 0, exerciseId = "ex-1", exerciseNameSnapshot = "Back squat", prescriptionJson = plan),
+            ModuleEntryEntity("me-1", "m-1", 0, exerciseId = "ex-1", exerciseNameSnapshot = "Back squat", prescriptionJson = plan, optional = true),
             ModuleEntryEntity("me-2", "m-1", 1, routineId = "r-1", routineNameSnapshot = "Pull"),
         )
         val moduleRecord = module.toRecord(moduleEntries)

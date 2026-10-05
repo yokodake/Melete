@@ -95,6 +95,8 @@ data class PlannedOccurrence(
     /** The scheduled module this belongs to, when it was placed as part of one. */
     val moduleInstanceId: String? = null,
     val modulePosition: Int? = null,
+    /** Nice to do: left out of Home's target and remaining time until it is done. */
+    val optional: Boolean = false,
 ) {
     /**
      * How long the plan says this should take, worked out from its shape. Null when there is
@@ -329,6 +331,8 @@ data class ModuleEntryDraft(
     val variationId: String? = null,
     val prescription: PrescriptionPayload? = null,
     val routineId: String? = null,
+    /** An exercise entry only: its copies in the week are optional. */
+    val optional: Boolean = false,
 )
 
 /** Everything the module editor writes. */
@@ -355,6 +359,7 @@ data class ModuleEntryView(
     val routine: Routine?,
     /** The exercise or circuit it came from is gone, so only the snapshotted name is left. */
     val definitionMissing: Boolean,
+    val optional: Boolean = false,
 ) {
     val isCircuit: Boolean get() = routineId != null
 }
@@ -822,6 +827,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
         orderIndex: Int,
         moduleInstanceId: String? = null,
         modulePosition: Int? = null,
+        optional: Boolean = false,
     ): String {
         val now = System.currentTimeMillis()
         val occurrence = ExerciseOccurrenceEntity(
@@ -845,6 +851,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
             variationTagSnapshot = variationTag,
             moduleInstanceId = moduleInstanceId,
             modulePosition = modulePosition,
+            optional = optional,
         )
         dao.insertOccurrences(listOf(occurrence))
         return occurrence.id
@@ -888,6 +895,14 @@ class TrainingRepository(private val database: MeleteDatabase) {
             members.forEach { dao.deleteOccurrence(it.id) }
             members.size
         }
+
+    /** Marks one scheduled exercise optional, or not. Its plan and log are untouched. */
+    suspend fun setOccurrenceOptional(occurrenceId: String, optional: Boolean) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            dao.updateOccurrence(occurrence.copy(optional = optional))
+        }
+    }
 
     /** Edits this week's copy only; nothing else holds it, so nothing else is touched. */
     suspend fun updateOccurrencePrescription(occurrenceId: String, payload: PrescriptionPayload) {
@@ -1872,6 +1887,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                         variationId = row.variationId,
                         prescription = row.prescriptionJson.toPlan(),
                         routineId = row.routineId,
+                        optional = row.optional,
                     )
                 },
             )
@@ -1927,6 +1943,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                         variationId = variation?.id,
                         variationTagSnapshot = variation?.tag,
                         prescriptionJson = draft.prescription?.toJson(),
+                        optional = draft.optional,
                     )
                 }
 
@@ -1961,6 +1978,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                 routineId = entry.routineId,
                 routine = routine,
                 definitionMissing = if (entry.routineId != null) routine == null else definition == null,
+                optional = entry.optional,
             )
         },
     )
@@ -2042,6 +2060,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                         orderIndex = base + position,
                         moduleInstanceId = instanceId,
                         modulePosition = position,
+                        optional = row.optional,
                     )
                 }
             }
@@ -2208,6 +2227,7 @@ private fun ExerciseOccurrenceEntity.toPlanned(
         variationTag = occurrence.variationTagSnapshot,
         moduleInstanceId = occurrence.moduleInstanceId,
         modulePosition = occurrence.modulePosition,
+        optional = occurrence.optional,
     )
 }
 

@@ -17,6 +17,7 @@ import java.time.temporal.ChronoUnit
  * circuit stations and module members included; the circuit and module containers are not
  * occurrences and add nothing. Skipped work leaves the target. Undated work in the week's
  * unscheduled area is not today's until it is given the date; logging it files it under today.
+ * Optional work is left out until it is done, and counts like the rest once it is.
  */
 data class TodaySummary(
     val completed: Int,
@@ -33,7 +34,9 @@ data class TodaySummary(
         fun build(today: LocalDate, occurrences: List<PlannedOccurrence>, circuits: List<WeekCircuit>): TodaySummary {
             val todays = occurrences.filter { it.trainingDate == today }
             val skipped = todays.count { it.state == OccurrenceState.SKIPPED }
-            val counted = todays.filter { it.state != OccurrenceState.SKIPPED }
+            val counted = todays.filter {
+                it.state != OccurrenceState.SKIPPED && (!it.optional || it.state == OccurrenceState.COMPLETED)
+            }
             val completed = counted.count { it.state == OccurrenceState.COMPLETED }
             val remaining = counted.filter { it.state == OccurrenceState.PLANNED }
 

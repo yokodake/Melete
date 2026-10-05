@@ -87,6 +87,10 @@ has the same fields, in the units you type them in:
 | `minutes` | the activity's length | `ACTIVITY` |
 | `effort` | `VERY_EASY` · `EASY` · `MODERATE` · `HARD` · `VERY_HARD` | all |
 
+An exercise placed in a week or entered in a module can also say `"optional": true` (beside
+`exercise`, not inside `plan`): nice to do, left out of Home's target and time left until it is
+done. Not on a circuit's station, a circuit or a module.
+
 A field the mode does not read is dropped, and the preview lists it under *left out*, so a file
 cannot hold a plan the editor could not have made. There is deliberately no load: a plan fixes the
 shape, the day decides the weight. An omitted value is stored as absent, never as 0.

@@ -174,6 +174,11 @@ class WeekViewModel(
         stations.forEach { setSkipped(it, skipped) }
     }
 
+    /** Marks a scheduled exercise optional, or required again. */
+    fun setOptional(occurrenceId: String, optional: Boolean) {
+        viewModelScope.launch { repository.setOccurrenceOptional(occurrenceId, optional) }
+    }
+
     /** Makes another copy of a placement, waiting in this week's unscheduled area. */
     fun duplicateOccurrence(occurrenceId: String) {
         viewModelScope.launch {

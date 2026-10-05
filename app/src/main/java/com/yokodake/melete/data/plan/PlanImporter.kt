@@ -303,6 +303,7 @@ class PlanImporter(
                             exerciseId = exerciseId(entry.pick.exerciseKey),
                             variationId = variationId(entry.pick),
                             prescription = planOf(entry.pick),
+                            optional = entry.pick.optional,
                         )
                     }
                 },
@@ -320,6 +321,7 @@ class PlanImporter(
                             exerciseId(item.pick.exerciseKey), slot.weekStart, slot.date, variationId(item.pick),
                         )
                         item.pick.plan?.let { repository.updateOccurrencePrescription(occurrence, it) }
+                        if (item.pick.optional) repository.setOccurrenceOptional(occurrence, true)
                     }
                     is ResolvedItem.Circuit -> {
                         val circuit = repository.scheduleRoutine(

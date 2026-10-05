@@ -252,7 +252,7 @@ function resolve(file) {
         if (kinds.length !== 1) { problems.push(`${where(slot)}: an item must be exactly one of exercise, circuit, module, activity.`); return null; }
         if (item.exercise) {
           const ex = exerciseOf(item.exercise, where(slot));
-          return { kind: "exercise", ex, variation: item.variation ?? null, plan: planOf(ex, item.variation, item.plan, where(slot)) };
+          return { kind: "exercise", ex, variation: item.variation ?? null, optional: !!item.optional, plan: planOf(ex, item.variation, item.plan, where(slot)) };
         }
         if (item.circuit) {
           if (item.rounds != null && item.rounds < 1) problems.push(`${where(slot)}: ${item.circuit} needs at least 1 round.`);
@@ -279,7 +279,7 @@ function resolve(file) {
             entries: (mod.entries ?? []).filter(e => !(e.exercise && omitted.has(nameKey(e.exercise)))).map(e => e.circuit ? circuitItem(e.circuit, `module ${mod.name}`)
               : (() => { const ex = exerciseOf(e.exercise, `module ${mod.name}`);
                 const override = own.get(nameKey(e.exercise));
-                return { kind: "exercise", ex, variation: e.variation ?? null, overridden: !!override,
+                return { kind: "exercise", ex, variation: e.variation ?? null, overridden: !!override, optional: !!e.optional,
                   plan: override ?? planOf(ex, e.variation, e.plan, `module ${mod.name}`) }; })()),
           };
         }
@@ -394,7 +394,8 @@ function exerciseDetail(ex, plan, variation) {
 function exerciseCard(item) {
   return h("div", { class: "card", title: exerciseDetail(item.ex, item.plan, item.variation) },
     h("div", { class: "top" }, dot(item.ex.category), h("span", { class: "name" }, item.ex.name),
-      item.variation ? h("span", { class: "chip" }, String(item.variation).toUpperCase()) : null),
+      item.variation ? h("span", { class: "chip" }, String(item.variation).toUpperCase()) : null,
+      item.optional ? h("span", { class: "chip" }, "optional") : null),
     h("div", { class: "sub" }, planSummary(item.ex, item.plan, false) + (item.overridden ? " · this week" : "")));
 }
 function circuitCard(item) {

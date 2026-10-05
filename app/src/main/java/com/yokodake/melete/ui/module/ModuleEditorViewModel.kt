@@ -55,6 +55,8 @@ data class ModuleEntryUi(
      * editor says so and offers to replace it.
      */
     val unavailable: Boolean = false,
+    /** Its copies in the week are optional. Exercises only. */
+    val optional: Boolean = false,
 ) {
     val isCircuit: Boolean get() = routineId != null
 }
@@ -89,6 +91,7 @@ data class ModuleEditorUiState(
                     exerciseId = entry.exerciseId,
                     variationId = entry.variationId,
                     prescription = entry.form.toPayload(entry.mode),
+                    optional = entry.optional,
                 )
             }
         },
@@ -165,6 +168,7 @@ class ModuleEditorViewModel(
                                 form = PrescriptionFormState.from(entry.prescription),
                                 circuitSummary = entry.routine?.let(::circuitLine),
                                 unavailable = entry.definitionMissing,
+                                optional = entry.optional,
                             )
                         },
                     )
@@ -286,6 +290,16 @@ class ModuleEditorViewModel(
             current.copy(
                 entries = current.entries.mapIndexed { i, entry ->
                     if (i == index) entry.copy(expanded = !entry.expanded) else entry
+                }
+            )
+        }
+    }
+
+    fun setEntryOptional(index: Int, value: Boolean) {
+        form.update { current ->
+            current.copy(
+                entries = current.entries.mapIndexed { i, entry ->
+                    if (i == index) entry.copy(optional = value) else entry
                 }
             )
         }

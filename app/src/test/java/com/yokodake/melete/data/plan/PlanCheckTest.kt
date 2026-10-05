@@ -324,4 +324,29 @@ class PlanCheckTest {
         )
         assertTrue(weekWith("""{ "exercise": "Cossack", "omit": [ "Cossack" ] }""").hasProblem("\"omit\" only goes with a module"))
     }
+
+    @Test
+    fun `an exercise can be optional where it is placed or in a module, never as a station`() {
+        val resolution = resolve(
+            overrideLibrary.replace(
+                """{ "exercise": "Clamshell" }, { "circuit": "Intervals" } ]""",
+                """{ "exercise": "Clamshell", "optional": true }, { "circuit": "Intervals" } ]""",
+            ) + """
+            "weeks": [ { "weekStart": "2026-10-05", "monday": [ { "exercise": "Cossack", "optional": true } ] } ]
+            """
+        )
+        assertEquals(emptyList<String>(), resolution.problems)
+        assertTrue((resolution.plan!!.slots.single().items.single() as ResolvedItem.Exercise).pick.optional)
+        val entries = resolution.plan!!.modules.single().entries.filterIsInstance<ResolvedEntry.Exercise>()
+        assertEquals(listOf(false, true), entries.map { it.pick.optional })
+
+        val station = resolve(
+            overrideLibrary.replace("""{ "exercise": "Attempt" } ] } ]""", """{ "exercise": "Attempt", "optional": true } ] } ]""")
+        )
+        assertTrue(station.hasProblem("a circuit's station cannot be optional"))
+        val onModule = resolve(
+            overrideLibrary + """ "weeks": [ { "weekStart": "2026-10-05", "monday": [ { "module": "FA", "optional": true } ] } ] """
+        )
+        assertTrue(onModule.hasProblem("\"optional\" only goes with an exercise"))
+    }
 }

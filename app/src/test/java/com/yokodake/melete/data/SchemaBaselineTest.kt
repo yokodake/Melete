@@ -19,6 +19,7 @@ class SchemaBaselineTest {
     private val released = mapOf(
         10 to "668aea72f58ec32158d5f564e4c1390c",
         11 to "52918ff1c14aa854f8cf79b686f3c4c6",
+        12 to "cef608ff081aaa06dcca0eb847c80e0d",
     )
 
     private fun identityOf(version: Int): String? =

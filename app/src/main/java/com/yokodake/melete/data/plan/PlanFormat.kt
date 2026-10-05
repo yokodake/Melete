@@ -121,6 +121,11 @@ data class PlanItem(
      * exercise name. The module itself is untouched.
      */
     val omit: List<String>? = null,
+    /**
+     * An exercise placed in a week or entered in a module: nice to do, left out of the day's
+     * target until done. Not for a circuit's stations.
+     */
+    val optional: Boolean? = null,
     /** Where a circuit is placed in a week: its rounds this time only. */
     val rounds: Int? = null,
 )
