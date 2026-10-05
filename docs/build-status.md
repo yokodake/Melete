@@ -32,7 +32,7 @@ the two ever disagree, the code and the first half win.
 | Timer polish (follow-up, after phase 6) | not started — recorded in `ui-ux-handoff.md` |
 | Attempt-based sets | ✅ built; unit tests pass |
 | 6B — history and basic graphs (the tentative 1.0) | ✅ built; unit tests and all 105 device tests pass; screens still to be checked by hand |
-| 6C — month view | not started |
+| 6C — month view | built 2026-10-05 on debug; unit tests pass; not checked by eye |
 | 7B — profile and settings (bodyweight tracking) | not started |
 | 8 — progression analysis | not started |
 | 9 — remote and web | not started |
