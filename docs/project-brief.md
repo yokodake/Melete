@@ -171,21 +171,28 @@ UI pass (part of 1.0): Menu · Calendar · Timer · Dashboard tabs, week swipe, 
     timing/logging from the library, last logged result, anchored save bars. ✅
 6A. Overview: motivating totals, category breakdown, weekly and monthly bars. ✅
 Timer polish: the running screen's hierarchy — current exercise and phase, time or ALLEZ!,
-    progress, what is next, transport — without changing timer semantics. After phase 6.
+    progress, what is next, transport — without changing timer semantics. After phase 6;
+    **needs more thought from the user first** (2026-10-05).
 Attempt-based sets: a set of N untimed attempts with a rest between them, logged and counted as
     one exercise (strength intervals). ✅ (No circuit-workaround logs existed to correct.)
 6B. History and basic graphs: drill into totals, browse exercise logs, plot load over time. ✅
     The tentative 1.0. (Load against reps is left for later, per the handoff.)
 6C. Month view: a calendar above a daily list; selecting a date jumps to it. Toggle planned work;
-    include diary entries.
+    include diary entries. ✅ Compact lines, not full cards (the user's choice); a line's long
+    press logs or unlogs, skips or unskips.
+Follow-ups after 6C (2026-10-05): optional exercises and the `omit` plan override ✅; the week's
+    long-press menu works but its UX is **to be rethought** — the user wants to think it through
+    before anything changes.
+Next, the user's choice between: the full-screen **import preview**, or a **web page to write and
+    update a plan** rather than only view it (the plan viewer's week table needs fixing either way).
 7A. Benchmarks: named reference tests with latest and best results, recorded apart from training.
     Brought forward for the baseline week. ✅
-7B. Profile and settings: optional bodyweight history, Track bodyweight.
+7B. Profile and settings: optional bodyweight history, Track bodyweight. Lower priority.
 8. Progression analysis: refined comparisons — fixed reps or duration, variations, standalone
-   against circuit, selected time windows.
+   against circuit, selected time windows. Waits for more logged data to be useful.
 9. Remote and web: remote backups first; a dashboard and web-authored plan imports as separate
-   increments.
-10. Appearance: a coherent visual polish pass across the app.
+   increments. Needs a web server first.
+10. Appearance: a coherent visual polish pass across the app. Large; later.
 
 Later, only when useful: strength progression charts; a work-time-only filter; module filters and
 explainable scheduling warnings; draft preservation; promoting a one-off activity to a library
