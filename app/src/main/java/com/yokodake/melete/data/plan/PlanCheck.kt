@@ -55,7 +55,12 @@ data class ResolvedExercise(
 )
 
 /** An exercise placed somewhere, by the name it resolves to, with the plan it takes there. */
-data class ResolvedPick(val exerciseKey: String, val variationTag: String?, val plan: PrescriptionPayload?)
+data class ResolvedPick(
+    val exerciseKey: String,
+    val variationTag: String?,
+    val plan: PrescriptionPayload?,
+    val optional: Boolean = false,
+)
 
 data class ResolvedCircuit(
     val key: String,
@@ -316,7 +321,9 @@ object PlanCheck {
                 payloadFor(it, found.mode, found.unilateral, "${found.name} in $where", station, problems, warnings)
             }
             if (!overridable && plan != null) warnings += "$where: a plan here is not used."
-            return ResolvedPick(nameKey(name), tag, plan)
+            // A station is one part of one circuit's clock: it cannot be left for later.
+            if (station && item.optional != null) problems += "$where: a circuit's station cannot be optional."
+            return ResolvedPick(nameKey(name), tag, plan, optional = !station && item.optional == true)
         }
 
         /** Exactly one kind per item, and only the kinds [allowed] where it stands. */
@@ -341,6 +348,9 @@ object PlanCheck {
                     }
                     if (kind != "module" && item.plans != null) {
                         problems += "$where: \"plans\" only goes with a module placed in a week."
+                    }
+                    if (kind != "exercise" && item.optional != null) {
+                        problems += "$where: \"optional\" only goes with an exercise."
                     }
                     if (kind != "module" && item.omit != null) {
                         problems += "$where: \"omit\" only goes with a module placed in a week."

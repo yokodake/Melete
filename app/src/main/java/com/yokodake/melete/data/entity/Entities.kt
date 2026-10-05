@@ -1,5 +1,6 @@
 package com.yokodake.melete.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -155,6 +156,12 @@ data class ExerciseOccurrenceEntity(
     val moduleInstanceId: String? = null,
     /** Position within that module, among its exercises and circuits alike. */
     val modulePosition: Int? = null,
+    /**
+     * Schema 12. Nice to do, not part of the day's target: Home leaves it out of what is left
+     * until it is done. Counted like any other exercise once it is.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val optional: Boolean = false,
 )
 
 /**
@@ -350,6 +357,9 @@ data class ModuleEntryEntity(
     val prescriptionJson: String? = null,
     val routineId: String? = null,
     val routineNameSnapshot: String? = null,
+    /** Schema 12. Copied onto the occurrence when the module is scheduled. */
+    @ColumnInfo(defaultValue = "0")
+    val optional: Boolean = false,
 )
 
 /**

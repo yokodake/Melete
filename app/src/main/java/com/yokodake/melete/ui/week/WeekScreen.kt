@@ -121,6 +121,7 @@ fun WeekRoute(
         onSetSkipped = viewModel::setSkipped,
         onSetCircuitSkipped = viewModel::setCircuitSkipped,
         onUnlog = viewModel::unlog,
+        onSetOptional = viewModel::setOptional,
         onNudge = viewModel::nudge,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
@@ -164,6 +165,7 @@ fun WeekScreen(
     onSetSkipped: (PlannedOccurrence, Boolean) -> Unit = { _, _ -> },
     onSetCircuitSkipped: (List<PlannedOccurrence>, Boolean) -> Unit = { _, _ -> },
     onUnlog: (List<PlannedOccurrence>) -> Unit = {},
+    onSetOptional: (String, Boolean) -> Unit = { _, _ -> },
     /** Moves a card one place, crossing into the next day at an edge. Offered in edit mode. */
     onNudge: (PlanItemRef, Int) -> Unit = { _, _ -> },
     onOpenDiary: (LocalDate) -> Unit = {},
@@ -220,6 +222,7 @@ fun WeekScreen(
                 onLog = { onLog(item.occurrence.id) },
                 onUnlog = { unlogging = item.occurrence.name to listOf(item.occurrence) },
                 onSkip = { skipped -> onSetSkipped(item.occurrence, skipped) },
+                onOptional = { optional -> onSetOptional(item.occurrence.id, optional) },
                 onRemove = {
                     // Ask the record what a deletion would cost before offering one.
                     scope.launch {
@@ -723,6 +726,7 @@ private fun OccurrenceCard(
     onUnlog: () -> Unit = {},
     /** True skips it, false puts a skipped one back to planned. */
     onSkip: (Boolean) -> Unit = {},
+    onOptional: (Boolean) -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val logged = occurrence.state == OccurrenceState.COMPLETED || occurrence.loggedSets > 0
@@ -758,6 +762,13 @@ private fun OccurrenceCard(
                         modifier = Modifier.weight(1f),
                     )
                     occurrence.variationTag?.let { VariationChip(it) }
+                    if (occurrence.optional && occurrence.state == OccurrenceState.PLANNED) {
+                        Chip(
+                            text = "Optional",
+                            container = MaterialTheme.colorScheme.surfaceVariant,
+                            content = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     when (occurrence.state) {
                         OccurrenceState.PLANNED -> Unit
                         OccurrenceState.COMPLETED -> {
@@ -825,6 +836,10 @@ private fun OccurrenceCard(
                     onClick = { menuExpanded = false; onSkip(true) },
                 )
             }
+            DropdownMenuItem(
+                text = { Text(if (occurrence.optional) "Make required" else "Make optional") },
+                onClick = { menuExpanded = false; onOptional(!occurrence.optional) },
+            )
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Duplicate") },

@@ -1,5 +1,6 @@
 package com.yokodake.melete.ui.module
 
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -71,6 +72,7 @@ fun ModuleEditorRoute(
             onMove = viewModel::moveEntry,
             onRemove = viewModel::removeEntry,
             onForm = viewModel::updateEntryForm,
+            onOptional = viewModel::setEntryOptional,
             onSave = { viewModel.save(onDone) },
             onBack = onBack,
         ),
@@ -93,6 +95,7 @@ data class ModuleEditorActions(
     val onMove: (Int, Int) -> Unit = { _, _ -> },
     val onRemove: (Int) -> Unit = {},
     val onForm: (Int, PrescriptionFormState) -> Unit = { _, _ -> },
+    val onOptional: (Int, Boolean) -> Unit = { _, _ -> },
     val onSave: () -> Unit = {},
     val onBack: () -> Unit = {},
 )
@@ -157,6 +160,7 @@ fun ModuleEditorScreen(state: ModuleEditorUiState, actions: ModuleEditorActions)
                     onMove = { actions.onMove(index, it) },
                     onRemove = { actions.onRemove(index) },
                     onForm = { actions.onForm(index, it) },
+                    onOptional = { actions.onOptional(index, it) },
                     onReplace = { actions.onReplace(index) },
                 )
             }
@@ -277,6 +281,7 @@ private fun EntryCard(
     onRemove: () -> Unit,
     onForm: (PrescriptionFormState) -> Unit,
     onReplace: () -> Unit,
+    onOptional: (Boolean) -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -359,6 +364,14 @@ private fun EntryCard(
                     unilateral = entry.unilateral,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Optional",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = entry.optional, onCheckedChange = onOptional)
+                }
             }
             if (entry.isCircuit && !entry.unavailable) {
                 Text(

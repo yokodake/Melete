@@ -30,11 +30,12 @@ class HomeStatsTest {
         mode: ExerciseMode = ExerciseMode.DURATION,
         circuit: String? = null,
         position: Int? = null,
+        optional: Boolean = false,
     ) = PlannedOccurrence(
         id = id, exerciseId = id, name = id, mode = mode, unilateral = false, measurementUnit = null,
         measurementMeaning = null, category = null, trainingDate = date, weekStart = today,
         prescription = plan, prescriptionUnreadable = false, state = state, comment = null, orderIndex = 0,
-        circuitInstanceId = circuit, circuitPosition = position,
+        circuitInstanceId = circuit, circuitPosition = position, optional = optional,
     )
 
     @Test
@@ -138,5 +139,22 @@ class HomeStatsTest {
         val old = listOf(standing("Max hang", today.minusMonths(8)))
         assertNull(BenchmarkReminder.pick(old, today, dismissedUntil = today.plusDays(10)))
         assertEquals("Max hang", BenchmarkReminder.pick(old, today, dismissedUntil = today.minusDays(1))?.name)
+    }
+
+    @Test
+    fun `optional work leaves the target and the time left until it is done`() {
+        val summary = TodaySummary.build(
+            today,
+            listOf(
+                occurrence("required"),
+                occurrence("stretch", optional = true),
+                occurrence("done extra", optional = true, state = OccurrenceState.COMPLETED),
+            ),
+            emptyList(),
+        )
+        // The one done counts like any other; the one left is not owed.
+        assertEquals(1, summary.completed)
+        assertEquals(2, summary.target)
+        assertEquals(occurrence("required").estimatedDurationSeconds, summary.remainingSeconds)
     }
 }
