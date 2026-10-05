@@ -34,8 +34,9 @@ import java.time.LocalDate
  *         com.yokodake.melete.debug.test/androidx.test.runner.AndroidJUnitRunner
  *
  * Pass `-e planning false` for the exercises alone, without circuits, modules, weeks or logs.
- * Re-running updates what the file names and adds what is missing; the weeks and logs are only
- * written when the first week is still empty, so they are never doubled. The same file can be
+ * Re-running updates what the file names and adds what is missing: each week is planned only
+ * while it is still empty, and the logs only with the first week, so nothing is ever doubled and
+ * weeks added to the file later arrive on the next run. The same file can be
  * imported by hand from Backup & restore → Import a plan (where *Add* does plan the weeks again).
  */
 @RunWith(AndroidJUnit4::class)
@@ -57,16 +58,20 @@ class LibrarySeed {
             val repository = TrainingRepository(database)
             val importer = PlanImporter(database, repository, BackupService(database))
             val planning = arguments.getString("planning") != "false"
-            val weeksAlreadyThere = repository.observeWeek(firstWeek).first().isNotEmpty()
-            val file = importer.decode(text).let {
-                when {
-                    !planning -> it.copy(circuits = emptyList(), modules = emptyList(), weeks = emptyList())
-                    weeksAlreadyThere -> it.copy(weeks = emptyList())
-                    else -> it
+            val firstWeekEmpty = repository.observeWeek(firstWeek).first().isEmpty()
+            val file = importer.decode(text).let { plan ->
+                if (!planning) {
+                    plan.copy(circuits = emptyList(), modules = emptyList(), weeks = emptyList())
+                } else {
+                    // Only the weeks that hold nothing yet, so a re-run never plans a week twice.
+                    plan.copy(weeks = plan.weeks.filter { week ->
+                        val start = week.weekStart?.let(LocalDate::parse) ?: return@filter true
+                        repository.observeWeek(start).first().isEmpty()
+                    })
                 }
             }
             importer.import(file, ImportMode.ADD, ImportScope.INCLUDE_PAST, File(instrumentation.targetContext.filesDir, "backups"))
-            if (planning && !weeksAlreadyThere) logFirstWeek(repository)
+            if (planning && firstWeekEmpty) logFirstWeek(repository)
         } finally {
             database.close()
         }

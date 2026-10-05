@@ -228,7 +228,8 @@
       "entries": [
         { "exercise": "Max hangs 20 mm", "variation": "END" },
         { "circuit": "Pull + core" },
-        { "exercise": "Couch stretch" }
+        // Optional inside a module: copied onto every week's copy.
+        { "exercise": "Couch stretch", "optional": true }
       ]
     },
     {
@@ -271,7 +272,7 @@
     }
   ],
 
-  // Two weeks: the one of 21 September (LibrarySeed logs a few of its days) and the next.
+  // The week of 21 September (LibrarySeed logs a few of its days), the next, then a year of plans.
   "weeks": [
     {
       "weekStart": "2026-09-21",
@@ -296,6 +297,581 @@
       ],
       "friday": [ { "exercise": "Bouldering session" } ],
       "saturday": [ { "activity": "Hike", "minutes": 240 } ]
+    },
+    // A year of plans from 5 October 2026: three load weeks then a deload, every exercise,
+    // variation, circuit and module placed somewhere, and every per-week override used:
+    // plans and omit on modules, rounds on circuits, optional exercises, one-offs, unscheduled.
+    {
+      "weekStart": "2026-10-05",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2026-10-12",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2026-10-19",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2026-10-26",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}, {"exercise": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill"}]
+    },
+    {
+      "weekStart": "2026-11-02",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"activity": "Sauna"}]
+    },
+    {
+      "weekStart": "2026-11-09",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2026-11-16",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2026-11-23",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2026-11-30",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2026-12-07",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2026-12-14",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill"}]
+    },
+    {
+      "weekStart": "2026-12-21",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2026-12-28",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-01-04",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-01-11",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"activity": "Sauna"}]
+    },
+    {
+      "weekStart": "2027-01-18",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-01-25",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-02-01",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill"}]
+    },
+    {
+      "weekStart": "2027-02-08",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-02-15",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-02-22",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-03-01",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-03-08",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-03-15",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-03-22",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}, {"exercise": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill"}, {"activity": "Sauna"}]
+    },
+    {
+      "weekStart": "2027-03-29",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-04-05",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-04-12",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-04-19",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-04-26",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-05-03",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-05-10",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill"}]
+    },
+    {
+      "weekStart": "2027-05-17",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-05-24",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-05-31",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"activity": "Sauna"}]
+    },
+    {
+      "weekStart": "2027-06-07",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-06-14",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-06-21",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-06-28",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill"}]
+    },
+    {
+      "weekStart": "2027-07-05",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-07-12",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-07-19",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-07-26",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-08-02",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-08-09",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"activity": "Sauna"}]
+    },
+    {
+      "weekStart": "2027-08-16",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}, {"exercise": "Single-arm offset kettlebell bottoms-up Turkish get-up to windmill"}]
+    },
+    {
+      "weekStart": "2027-08-23",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-08-30",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}, {"exercise": "Hike (bad: sides, sets, rest, kg)"}, {"exercise": "4×4 boulders"}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-09-06",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Pull-up", "variation": "A"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Pistol squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "One-arm repeaters"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Climbing session"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
+    },
+    {
+      "weekStart": "2027-09-13",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR"}, {"exercise": "Weighted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core"}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core"}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Bulgarian split squat"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "7/3 repeaters 20 mm"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session"}, {"activity": "Outdoor bouldering", "minutes": 240}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"circuit": "Leg circuit", "rounds": 2}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-09-20",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "MAX"}, {"exercise": "Back squat", "variation": "PWR"}, {"exercise": "Band-assisted pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts"}, {"circuit": "Attempts + core", "rounds": 3}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "plans": {"Max hangs 20 mm": {"sets": 6, "seconds": 10, "restSeconds": 150, "effort": "HARD"}}}, {"exercise": "Plank"}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Push-up"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Continuous pulses"}, {"exercise": "Single attempt"}, {"exercise": "One-arm hang"}],
+      "saturday": [{"exercise": "Board session"}],
+      "sunday": [{"module": "Strength day"}, {"module": "Recovery"}, {"module": "Hangboard block"}, {"circuit": "Hangboard density"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}]
+    },
+    {
+      "weekStart": "2027-09-27",
+      "monday": [{"exercise": "Max hangs 20 mm", "variation": "END"}, {"exercise": "Back squat", "variation": "STR", "plan": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}, {"exercise": "Pull-up"}],
+      "tuesday": [{"exercise": "Limit attempts", "variation": "PE"}, {"circuit": "Attempts + core", "rounds": 1}, {"exercise": "Bouldering session"}],
+      "wednesday": [{"module": "Fingers + core", "omit": ["Couch stretch"]}, {"exercise": "Plank", "plan": {"sets": 2, "seconds": 45}}],
+      "thursday": [{"exercise": "Run", "optional": true}, {"exercise": "Yoga"}, {"exercise": "Front lever hold"}],
+      "friday": [{"circuit": "Pull/push superset"}, {"exercise": "Repeaters, not set up"}, {"exercise": "Single attempt"}, {"exercise": "Dead hang"}],
+      "saturday": [{"exercise": "Board session", "plan": {"minutes": 60}}],
+      "sunday": [{"module": "Strength day", "omit": ["Weighted pull-up"], "plans": {"Back squat": {"sets": 2, "reps": 5, "restSeconds": 180, "effort": "EASY"}}}, {"module": "Recovery"}],
+      "unscheduled": [{"exercise": "Couch stretch", "optional": true}, {"exercise": "Pull-up", "variation": "B", "plan": {"sets": 2, "reps": 6, "restSeconds": 90}}]
     }
   ]
 }
