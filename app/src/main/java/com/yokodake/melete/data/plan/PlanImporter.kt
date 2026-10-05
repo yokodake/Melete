@@ -332,10 +332,14 @@ class PlanImporter(
                         val module = repository.scheduleModule(
                             moduleIds[item.key] ?: error("unresolved module ${item.key}"), slot.weekStart, slot.date,
                         )
-                        // This week's plans for some of its exercises, on this copy only.
+                        // This week's plans for some of its exercises, and the ones it leaves
+                        // out, on this copy only.
                         if (module != null) {
                             item.plans.forEach { (exercise, plan) ->
                                 repository.overrideModulePlan(module, exerciseId(exercise), plan)
+                            }
+                            item.omit.forEach { exercise ->
+                                repository.omitFromModule(module, exerciseId(exercise))
                             }
                         }
                     }

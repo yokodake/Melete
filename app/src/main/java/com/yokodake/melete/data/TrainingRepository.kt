@@ -876,6 +876,19 @@ class TrainingRepository(private val database: MeleteDatabase) {
             members.size
         }
 
+    /**
+     * Leaves one exercise of its own out of a scheduled module: its planned copies there are
+     * removed. Only untouched ones; the saved module and other weeks are not affected.
+     */
+    suspend fun omitFromModule(moduleInstanceId: String, exerciseId: String): Int =
+        database.withTransaction {
+            val members = modules.occurrencesIn(moduleInstanceId).filter {
+                it.exerciseId == exerciseId && it.circuitInstanceId == null && it.state == OccurrenceState.PLANNED
+            }
+            members.forEach { dao.deleteOccurrence(it.id) }
+            members.size
+        }
+
     /** Edits this week's copy only; nothing else holds it, so nothing else is touched. */
     suspend fun updateOccurrencePrescription(occurrenceId: String, payload: PrescriptionPayload) {
         database.withTransaction {

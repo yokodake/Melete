@@ -87,8 +87,15 @@ sealed interface ResolvedItem {
     /** A circuit placed in a week, with its own rounds there when the file gives them. */
     data class Circuit(val key: String, val rounds: Int? = null) : ResolvedItem
 
-    /** A module placed in a week, with plans for some of its exercises there, by exercise key. */
-    data class Module(val key: String, val plans: Map<String, PrescriptionPayload> = emptyMap()) : ResolvedItem
+    /**
+     * A module placed in a week, with plans for some of its exercises there and some left out,
+     * both by exercise key.
+     */
+    data class Module(
+        val key: String,
+        val plans: Map<String, PrescriptionPayload> = emptyMap(),
+        val omit: Set<String> = emptySet(),
+    ) : ResolvedItem
     data class Activity(val name: String, val minutes: Int?) : ResolvedItem
 }
 
@@ -335,6 +342,9 @@ object PlanCheck {
                     if (kind != "module" && item.plans != null) {
                         problems += "$where: \"plans\" only goes with a module placed in a week."
                     }
+                    if (kind != "module" && item.omit != null) {
+                        problems += "$where: \"omit\" only goes with a module placed in a week."
+                    }
                     if (kind != "circuit" && item.rounds != null) {
                         problems += "$where: \"rounds\" only goes with a circuit placed in a week."
                     }
@@ -368,7 +378,9 @@ object PlanCheck {
             if (source.stations.isEmpty()) problems += "$name has no stations."
             val stations = source.stations.mapNotNull { item ->
                 kindOf(item, name, setOf("exercise")) ?: return@mapNotNull null
-                if (item.plans != null || item.rounds != null) problems += "$name: \"plans\" and \"rounds\" go where it is placed in a week."
+                if (item.plans != null || item.rounds != null || item.omit != null) {
+                    problems += "$name: \"plans\", \"omit\" and \"rounds\" go where it is placed in a week."
+                }
                 pick(item, name, station = true, overridable = true)
             }
             ResolvedCircuit(
@@ -398,7 +410,9 @@ object PlanCheck {
             if (ambiguous(name)) return@mapIndexedNotNull null
             if (source.entries.isEmpty()) problems += "$name has no entries."
             val entries = source.entries.mapNotNull { item ->
-                if (item.plans != null || item.rounds != null) problems += "$name: \"plans\" and \"rounds\" go where it is placed in a week."
+                if (item.plans != null || item.rounds != null || item.omit != null) {
+                    problems += "$name: \"plans\", \"omit\" and \"rounds\" go where it is placed in a week."
+                }
                 when (kindOf(item, name, setOf("exercise", "circuit"))) {
                     "exercise" -> pick(item, name, station = false, overridable = true)?.let(ResolvedEntry::Exercise)
                     "circuit" -> {
@@ -450,6 +464,36 @@ object PlanCheck {
                     )
                 }
             }.toMap()
+        }
+
+        /**
+         * The exercises a module placement leaves out, by exercise key. Like [modulePlans], each
+         * must be an exercise the module holds on its own; one left out and planned at once is a
+         * contradiction.
+         */
+        fun moduleOmits(module: String, omit: List<String>?, plans: Map<String, PlanSpec>?, where: String): Set<String> {
+            if (omit.isNullOrEmpty()) return emptySet()
+            val defined = modules.firstOrNull { it.key == nameKey(module) }
+            val holds = defined?.entries?.filterIsInstance<ResolvedEntry.Exercise>()?.map { it.pick.exerciseKey }?.toSet()
+            val planned = plans.orEmpty().keys.map(::nameKey).toSet()
+            return omit.mapNotNull { exercise ->
+                val found = target(exercise)
+                when {
+                    found == null -> {
+                        problems += "$where: no exercise called \"$exercise\" in the file or the library."
+                        null
+                    }
+                    holds != null && nameKey(exercise) !in holds -> {
+                        problems += "$where: ${defined.name} has no exercise ${found.name} of its own to leave out."
+                        null
+                    }
+                    nameKey(exercise) in planned -> {
+                        problems += "$where: ${found.name} is both planned and left out."
+                        null
+                    }
+                    else -> nameKey(exercise)
+                }
+            }.toSet()
         }
 
         // ---------------------------------------------------------- weeks
@@ -504,7 +548,11 @@ object PlanCheck {
                             }
                             "module" -> item.module!!.trim().let { module ->
                                 if (moduleKnown(module)) {
-                                    ResolvedItem.Module(nameKey(module), modulePlans(module, item.plans, where))
+                                    ResolvedItem.Module(
+                                        nameKey(module),
+                                        modulePlans(module, item.plans, where),
+                                        moduleOmits(module, item.omit, item.plans, where),
+                                    )
                                 } else {
                                     problems += "$where: no module called \"$module\" in the file or the library."
                                     null

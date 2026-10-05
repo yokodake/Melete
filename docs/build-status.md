@@ -1662,8 +1662,11 @@ Hand checks to do:
 
 Small follow-ups, recorded 2026-09-28 (not scheduled):
 
-- An `"omit"` placement override for modules (`{"module": "Shoulder support", "omit": ["Bent-over
-  fly"]}`): importer-only, no schema change.
+- ✅ An `"omit"` placement override for modules (`{"module": "Shoulder support", "omit": ["Bent-over
+  fly"]}`): importer-only, no schema change. Built 2026-10-05: the exercises named leave that
+  week's copy only (untouched planned copies are removed); each must be an entry of the module's
+  own, and one cannot be both planned and left out. Unit tests in `PlanCheckTest`; the viewer
+  shows the module without them.
 - Optional exercises: a flag on the scheduled copy, overridable per placement, shown as a chip;
   Home's Today target and remaining time leave an unfinished optional exercise out. Needs a schema
   change and a backup format bump. Module variations were considered and set aside: `omit` covers

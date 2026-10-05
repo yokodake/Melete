@@ -155,13 +155,16 @@ week only — the saved module or circuit keeps its own:
 
 ```jsonc
 { "module": "FA", "plans": { "Loaded Cossack": { "sets": 4, "reps": 6 } } },  // this week's plan for an entry
+{ "module": "Shoulder support", "omit": [ "Lateral raise" ] },              // left out this week
 { "circuit": "Strength intervals", "rounds": 3 }                             // this week's rounds
 ```
 
 - `plans` names exercises the module holds as entries of their own (not those inside its
   circuits); each plan is read like any other for that exercise's mode.
+- `omit` lists exercises of the module's own to leave out of that week's copy. The same rule as
+  `plans` applies, and an exercise cannot be both planned and left out.
 - `rounds` is at least 1.
-- Both go only where a module or circuit is placed in a week, never in the definitions.
+- All three go only where a module or circuit is placed in a week, never in the definitions.
 
 ## Benchmarks
 

@@ -116,6 +116,11 @@ data class PlanItem(
      * exercise name. The module itself is untouched.
      */
     val plans: Map<String, PlanSpec>? = null,
+    /**
+     * Where a module is placed in a week: exercises of its own left out this time only, by
+     * exercise name. The module itself is untouched.
+     */
+    val omit: List<String>? = null,
     /** Where a circuit is placed in a week: its rounds this time only. */
     val rounds: Int? = null,
 )
