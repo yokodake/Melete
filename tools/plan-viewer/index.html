@@ -150,6 +150,56 @@
   dialog details { margin-top: 10px; }
   dialog summary { cursor: pointer; color: var(--muted); }
 
+  /* the library: list on the left, the chosen item's editor on the right */
+  .libwrap { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 16px; align-items: start; }
+  .libside { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 90px); }
+  .libcats { display: flex; } .libcats button { flex: 1; }
+  .libtools { display: flex; gap: 6px; }
+  .libtools input { flex: 1; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 8px; }
+  .liblist { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 4px; }
+  .liblist:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .librow { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  .librow:hover { background: var(--surface-2); }
+  .librow.on { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+  .librow .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .libpanel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+  .panelform { display: flex; flex-direction: column; gap: 8px; }
+  .panelform h3 { margin: 0 0 4px; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .panelform .sub { font-weight: 600; margin-top: 8px; }
+  .line { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .pair { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .pair.grow { flex: 1; min-width: 240px; }
+  .pair.block { flex-direction: column; align-items: stretch; gap: 4px; }
+  .pair input, .pair select, .pair textarea, .rowmain input, .rowmain select {
+    font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+  .pair.grow input { width: 100%; }
+  .pair input[type=number] { width: 90px; }
+  .pair input[type=checkbox] { width: auto; }
+  textarea.prose { min-height: 70px; font: inherit; width: 100%; }
+  .rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+  .rowedit { display: flex; gap: 8px; align-items: flex-start; padding: 4px 6px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--surface-2); }
+  .rowmain { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+  .rowmain > input:not(.tag) { flex: 1; min-width: 200px; }
+  .rowmain input.tag { width: 80px; text-transform: uppercase; }
+  .rowmain .inline { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 4px; }
+  .rowplan { flex-basis: 100%; }
+  .rowplan > summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+  .rowplan .form { margin-top: 6px; }
+  .rowtools { display: flex; gap: 2px; }
+  .rowtools button { font-size: 12px; padding: 1px 6px; }
+  .form.g3 { grid-template-columns: repeat(3, max-content minmax(70px, 1fr)); }
+  .form.g2 { grid-template-columns: repeat(2, max-content minmax(90px, 1fr)); }
+  .json > summary { color: var(--muted); cursor: pointer; margin-top: 8px; }
+  .json textarea { width: 100%; min-height: 320px; margin-top: 6px; font: 12px ui-monospace, Consolas, monospace;
+    color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+  .panelbar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .globalwrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 40%); gap: 14px; align-items: start; }
+  .globalwrap .libpanel { position: sticky; top: 64px; max-height: calc(100vh - 90px); overflow: auto; }
+  td.rowname, tr.group td { cursor: pointer; }
+
   /* editing */
   .edittools { display: inline-flex; gap: 6px; }
   .tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
@@ -157,7 +207,7 @@
   .day h2 { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
   .card.bad { border-color: var(--warn); }
   dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
-    padding: 16px; max-width: min(680px, 94vw); width: 100%; }
+    padding: 16px; max-width: min(900px, 94vw); width: 100%; }
   dialog::backdrop { background: rgba(0,0,0,.35); }
   dialog h3 { margin: 0 0 10px; font-size: 16px; }
   .form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; align-items: center; }
@@ -683,7 +733,12 @@ function renderGlobal(main) {
     h("th", {}, "Total")));
   const tbody = h("tbody");
   groups.forEach(g => {
-    tbody.append(h("tr", { class: "group" }, h("td", { colspan: weeks.length + 2 }, g.title, g.kind ? h("span", { class: "kind" }, g.kind) : null)));
+    const groupRow = h("tr", { class: "group" }, h("td", { colspan: weeks.length + 2 }, g.title, g.kind ? h("span", { class: "kind" }, g.kind) : null));
+    if (g.kind === "module" || g.kind === "circuit") {
+      const listKey = g.kind === "module" ? "modules" : "circuits";
+      groupRow.onclick = () => Editor.pickInGlobal(g.kind, (state.file?.[listKey] ?? []).findIndex(x => nameKey(x.name) === nameKey(g.title)));
+    }
+    tbody.append(groupRow);
     g.rows.forEach(r => {
       let totalNum = 0;
       const cells = weeks.map((_, wi) => {
@@ -698,13 +753,15 @@ function renderGlobal(main) {
         }
         return td;
       });
-      tbody.append(h("tr", {},
-        h("td", { class: "rowname", title: r.ex ? exerciseDetail(r.ex, r.ex.plan ?? null, null) : r.label }, h("span", { class: "in" }, dot(r.category), r.label,
-          r.tags.size ? h("span", { class: "chip" }, [...r.tags].join(" ")) : null)),
-        cells, h("td", { class: "total" }, fraction(totalNum, r.maxSets))));
+      const nameCell = h("td", { class: "rowname", title: r.ex ? exerciseDetail(r.ex, r.ex.plan ?? null, null) : r.label }, h("span", { class: "in" }, dot(r.category), r.label,
+          r.tags.size ? h("span", { class: "chip" }, [...r.tags].join(" ")) : null));
+      if (r.ex && state.file) nameCell.onclick = () => Editor.pickInGlobal("exercise", (state.file.exercises ?? []).indexOf(r.ex));
+      tbody.append(h("tr", {}, nameCell, cells, h("td", { class: "total" }, fraction(totalNum, r.maxSets))));
     });
   });
-  main.append(h("div", { class: "tablewrap" }, h("table", {}, thead, tbody)));
+  const table = h("div", { class: "tablewrap" }, h("table", {}, thead, tbody));
+  const panel = Editor.globalPanel();
+  main.append(panel ? h("div", { class: "globalwrap" }, table, panel) : table);
 }
 
 // ------------------------------------------------------------------ shell
@@ -1173,34 +1230,6 @@ const Editor = (() => {
     (f.modules ?? []).forEach(m => (m.entries ?? []).forEach(fix));
   }
 
-  function renderLibrary(main) {
-    if (!state.file) { main.append(h("p", { class: "muted" }, "Open a plan, or start a new one.")); return; }
-    const f = state.file;
-    const editing = state.editing;
-    const section = (title, kind, items, describe, edit, make) => h("section", {},
-      h("h2", {}, `${title} (${items.length})`, editing ? button("+ Add", () => edit(null)) : null),
-      [...items].map((it, i) => [it, i]).sort((a, b) => String(a[0].name).localeCompare(String(b[0].name)))
-        .map(([it, i]) => h("div", { class: "row", title: describe(it) },
-          dot(it.category), h("span", { class: "name" }, it.name ?? "(no name)"),
-          h("span", { class: "muted" }, String(usage(kind, it.name))),
-          editing ? button("Edit", () => edit(i)) : null,
-          editing ? button("✕", () => remove(make, kind, i)) : null)));
-    main.append(h("p", { class: "legend" }, editing
-      ? "The number is how many places use it. Renaming updates them; deleting leaves them pointing at nothing (shown as problems)."
-      : "Turn on Edit to change the library. The number is how many places use each item."));
-    main.append(h("div", { class: "lib" },
-      section("Exercises", "exercise", f.exercises ?? [], it => exerciseDetail(it, it.plan, null), editExercise, "exercises"),
-      section("Circuits", "circuit", f.circuits ?? [], it => `${it.rounds ?? 1} rounds · ${(it.stations ?? []).map(s => s.exercise).join(", ")}`, editCircuit, "circuits"),
-      section("Modules", "module", f.modules ?? [], it => (it.entries ?? []).map(e => e.exercise ?? e.circuit).join(", "), editModule, "modules"),
-    ));
-  }
-  function remove(listKey, kind, index) {
-    const item = state.file[listKey][index];
-    const used = usage(kind, item.name);
-    if (!confirm(`Delete ${item.name}?` + (used ? ` It is used in ${used} place${used === 1 ? "" : "s"}, which will then point at nothing.` : ""))) return;
-    change(f => f[listKey].splice(index, 1));
-  }
-
   /** Writes [obj] at [index] of [listKey] (or adds it), renaming references when the name changed. */
   function store(listKey, kind, index, obj) {
     const names = (state.file[listKey] ?? []).filter((_, i) => i !== index).map(x => nameKey(x.name));
@@ -1213,82 +1242,361 @@ const Editor = (() => {
     });
   }
 
-  function editExercise(index) {
-    const ex = index == null ? { name: "", mode: "REPETITIONS" } : clone(state.file.exercises[index]);
+  // ---------------------------------------------------------------- the library: list and panel
+
+  /*
+   * The library is a list on the left — one category at a time, filterable — and the selected
+   * item's editor on the right, in place rather than in a dialog. The same panel opens beside the
+   * Global table when a row there is clicked. Edits are kept in the panel until Save.
+   */
+  const KINDS = {
+    exercise: { list: "exercises", title: "Exercises" },
+    circuit: { list: "circuits", title: "Circuits" },
+    module: { list: "modules", title: "Modules" },
+  };
+  const lib = { cat: "exercise", index: null, filter: "" };
+  let globalPick = null; // { kind, index } beside the Global table
+
+  const namesOf = listKey => (state.file?.[listKey] ?? []).map(x => x.name);
+  const exerciseNamed = name => (state.file.exercises ?? []).find(e => nameKey(e.name) === nameKey(name)) ?? null;
+  const tagsOf = name => (exerciseNamed(name)?.variations ?? []).map(v => String(v.tag ?? "").toUpperCase());
+
+  /** The visible list: the category's items, filtered, by name; each with its index in the file. */
+  function visibleItems(cat = lib.cat) {
+    const all = (state.file?.[KINDS[cat].list] ?? []).map((it, i) => ({ it, i }));
+    const words = lib.filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return all.filter(({ it }) => words.every(w => String(it.name ?? "").toLowerCase().includes(w)))
+      .sort((a, b) => String(a.it.name).localeCompare(String(b.it.name)));
+  }
+
+  function renderLibrary(main) {
+    if (!state.file) { main.append(h("p", { class: "muted" }, "Open a plan, or start a new one.")); return; }
+    const cats = h("div", { class: "seg libcats" }, Object.entries(KINDS).map(([k, v]) => {
+      const b = h("button", { "aria-pressed": String(lib.cat === k) }, `${v.title} (${(state.file[v.list] ?? []).length})`);
+      b.onclick = () => { lib.cat = k; lib.index = null; render(); };
+      return b;
+    }));
+    const filter = input(lib.filter, { placeholder: "Filter  ( / )", id: "libfilter" });
+    filter.oninput = () => {
+      lib.filter = filter.value;
+      const pos = filter.selectionStart;
+      render();
+      const again = document.getElementById("libfilter");
+      again?.focus(); again?.setSelectionRange(pos, pos);
+    };
+    const items = visibleItems();
+    const listNode = h("div", { class: "liblist", id: "liblist", tabindex: "0" }, items.map(({ it, i }) => {
+      const row = h("div", { class: "librow" + (lib.index === i ? " on" : ""), "data-i": i },
+        dot(it.category), h("span", { class: "name" }, it.name ?? "(no name)"),
+        h("span", { class: "muted" }, String(usage(lib.cat, it.name))));
+      row.onclick = () => { lib.index = i; render(); };
+      return row;
+    }), items.length ? null : h("div", { class: "muted", style: "padding:6px" }, "Nothing here."));
+    const side = h("div", { class: "libside" }, cats,
+      h("div", { class: "libtools" }, filter, button("+ New", () => { lib.index = "new"; render(); focusPanel(); })),
+      listNode,
+      h("p", { class: "legend" }, "The number is how many places use it. ↑↓ choose · ←→ category · Enter edit · Esc back · / filter · a new · ? keys"));
+    const panel = h("div", { class: "libpanel", id: "libpanel" },
+      lib.index == null ? h("p", { class: "muted" }, "Choose something on the left, or + New.") : panelFor(lib.cat, lib.index, () => {}));
+    main.append(h("div", { class: "libwrap" }, side, panel));
+    requestAnimationFrame(() => document.querySelector(".librow.on")?.scrollIntoView({ block: "nearest" }));
+  }
+
+  /** The editor for one library item, or a new one ([index] "new"). */
+  function panelFor(kind, index, onClose) {
+    if (kind === "exercise") return exercisePanel(index, onClose);
+    if (kind === "circuit") return circuitPanel(index, onClose);
+    return modulePanel(index, onClose);
+  }
+
+  /** A compact line of label-and-field pairs, so a wide screen is used across, not down. */
+  function line(...pairs) {
+    return h("div", { class: "line" }, pairs.map(([label, el, grow]) => h("label", { class: "pair" + (grow ? " grow" : "") }, h("span", {}, label), el)));
+  }
+  /**
+   * The plan fields three to a row. Untouched, it gives back the plan exactly as it was — an empty
+   * plan `{}` (one plain set) is not the same as no plan (the exercise's default).
+   */
+  function planGrid(plan) {
+    const pf = planFields(plan);
+    const node = h("div", { class: "form g3" }, pf.nodes);
+    let touched = false;
+    node.addEventListener("input", () => { touched = true; });
+    node.addEventListener("change", () => { touched = true; });
+    return { node, read: () => touched ? pf.read() : (plan === undefined ? undefined : clone(plan)) };
+  }
+  /** The raw JSON of an item, always folded away; changed, it replaces the item outright. */
+  function jsonBox(obj) {
+    const t = textarea(JSON.stringify(obj, null, 2));
+    const before = t.value;
+    return {
+      node: h("details", { class: "json" }, h("summary", {}, "JSON"), t),
+      changed: () => t.value !== before,
+      read: () => parseLenient(t.value),
+    };
+  }
+  /**
+   * A list of rows that can be added, removed and reordered. [makeRow] builds one row from its
+   * data and returns { node, read }.
+   */
+  function rowsEditor(items, makeRow, addLabel, blank) {
+    const rows = [];
+    const box = h("div", { class: "rows" });
+    function add(data) {
+      const r = makeRow(data);
+      const wrapRow = h("div", { class: "rowedit" }, r.node, h("span", { class: "rowtools" },
+        button("↑", () => { const i = rows.indexOf(entry); if (i > 0) { rows.splice(i, 1); rows.splice(i - 1, 0, entry); redraw(); } }, "Up"),
+        button("↓", () => { const i = rows.indexOf(entry); if (i < rows.length - 1) { rows.splice(i, 1); rows.splice(i + 1, 0, entry); redraw(); } }, "Down"),
+        button("✕", () => { rows.splice(rows.indexOf(entry), 1); redraw(); }, "Remove")));
+      const entry = { node: wrapRow, read: r.read };
+      rows.push(entry);
+      return entry;
+    }
+    function redraw() { box.replaceChildren(...rows.map(r => r.node)); }
+    items.forEach(add);
+    redraw();
+    const addButton = button(addLabel, () => { const e = add(blank()); redraw(); e.node.querySelector("input, select")?.focus(); });
+    return { node: h("div", {}, box, addButton), read: () => rows.map(r => r.read()).filter(Boolean) };
+  }
+  /** Sets a plan after tidying, which would otherwise drop an empty `{}` that means something. */
+  function withPlan(obj, plan) {
+    if (plan !== undefined) obj.plan = plan; else delete obj.plan;
+    return obj;
+  }
+  /** A plan folded into a row: its summary when closed, its fields when open. */
+  function rowPlan(plan, exerciseName) {
+    const g = planGrid(plan);
+    const ex = exerciseNamed(exerciseName);
+    const summary = plan ? (ex ? planSummary(ex, plan, false) : "own plan") : "default plan";
+    return { node: h("details", { class: "rowplan" }, h("summary", {}, summary), g.node), read: g.read };
+  }
+  /** An exercise name with its variation list kept in step. */
+  function exercisePick(name, variation) {
+    const nameEl = input(name ?? "", { list: "names-exercise", placeholder: "Exercise" });
+    const varEl = h("select", {});
+    const fill = () => {
+      const tags = tagsOf(nameEl.value);
+      const current = varEl.value || (variation ? String(variation).toUpperCase() : "");
+      varEl.replaceChildren(...["", ...tags].map(t => h("option", { value: t }, t || "default")));
+      if (current && !tags.includes(current)) varEl.append(h("option", { value: current }, current + " ?"));
+      varEl.value = current;
+    };
+    nameEl.addEventListener("change", fill);
+    fill();
+    return { nameEl, varEl };
+  }
+  const nameLists = () => h("div", {},
+    list("names-exercise", namesOf("exercises")), list("names-circuit", namesOf("circuits")), list("names-module", namesOf("modules")));
+
+  /** Save, revert and delete, and where an error is said. */
+  function panelActions(kind, index, save) {
+    const err = h("div", { class: "err" });
+    const saveB = button(index === "new" ? "Add" : "Save", () => {
+      let message;
+      try { message = save(); } catch (e) { message = e.message; }
+      if (message) err.textContent = message;
+    });
+    saveB.classList.add("primary");
+    const bar = h("div", { class: "panelbar" }, err, h("span", { style: "flex:1" }),
+      index === "new" ? null : button("Delete", () => {
+        const listKey = KINDS[kind].list;
+        const item = state.file[listKey][index];
+        const used = usage(kind, item.name);
+        if (!confirm(`Delete ${item.name}?` + (used ? ` It is used in ${used} place${used === 1 ? "" : "s"}, which will then point at nothing.` : ""))) return;
+        lib.index = null; globalPick = null;
+        change(f => f[listKey].splice(index, 1));
+      }),
+      button("Revert", () => render()),
+      saveB);
+    return bar;
+  }
+  /** Stores the edited item and keeps it selected under its (possibly new) name. */
+  function storeAndSelect(kind, index, obj) {
+    const listKey = KINDS[kind].list;
+    const message = store(listKey, kind, index === "new" ? null : index, obj);
+    if (message) return message;
+    const i = state.file[listKey].indexOf(obj) >= 0 ? state.file[listKey].indexOf(obj)
+      : state.file[listKey].findIndex(x => nameKey(x.name) === nameKey(obj.name));
+    if (globalPick && globalPick.kind === kind) globalPick.index = i; else lib.index = i;
+    render();
+  }
+
+  function exercisePanel(index, onClose) {
+    const ex = index === "new" ? { name: "", mode: "REPETITIONS" } : clone(state.file.exercises[index]);
     const name = input(ex.name);
     const mode = select(MODES, parseMode(ex.mode) ?? "REPETITIONS");
     const category = select(CATEGORIES, ex.category ? normEnum(ex.category) : "");
     const unilateral = checkbox(ex.unilateral);
-    const unit = input(ex.unit);
+    const unit = input(ex.unit, { placeholder: "kg, s, cm…" });
     const meaning = select(MEANINGS, ex.meaning ? normEnum(ex.meaning) : "");
-    const description = textarea(ex.description); description.style.fontFamily = "inherit";
+    const description = textarea(ex.description); description.classList.add("prose");
     const notes = input(ex.notes);
-    const plan = planFields(ex.plan);
-    const variations = textarea(ex.variations?.length ? JSON.stringify(ex.variations, null, 2) : "");
-    dialog(index == null ? "New exercise" : `Edit ${ex.name}`, form(
-      ...field("Name", name), ...field("Mode", mode), ...field("Category", category), ...field("Unilateral", unilateral),
-      ...field("Unit", unit), ...field("Meaning", meaning), ...field("Description", description), ...field("Notes", notes),
-      h("div", { class: "sub" }, "Default plan"), ...plan.nodes,
-      h("div", { class: "sub" }, "Variations (JSON list of { tag, notes, plan })"), h("div", { class: "span" }, variations),
-    ), () => {
-      const out = Object.assign(ex, tidy({
-        name: name.value.trim(), mode: mode.value, category: category.value || undefined,
-        unilateral: unilateral.checked || undefined, unit: unit.value.trim() || undefined,
-        meaning: meaning.value || undefined, description: description.value.trim() || undefined,
-        notes: notes.value.trim() || undefined,
-      }));
-      ["category", "unilateral", "unit", "meaning", "description", "notes", "plan", "variations"].forEach(k => {
-        if (out[k] === undefined) delete out[k];
+    const plan = planGrid(ex.plan);
+    const variations = rowsEditor(ex.variations ?? [], v => {
+      const tag = input(v.tag ?? "", { placeholder: "TAG", class: "tag" });
+      const vnotes = input(v.notes ?? "", { placeholder: "Notes" });
+      const p = rowPlan(v.plan, ex.name);
+      return {
+        node: h("div", { class: "rowmain" }, tag, vnotes, p.node),
+        read: () => {
+          const t = tag.value.trim().toUpperCase();
+          if (!t) return null;
+          return withPlan(tidy(Object.assign({}, v, { tag: t, notes: vnotes.value.trim() || undefined, plan: undefined })), p.read());
+        },
+      };
+    }, "+ Variation", () => ({}));
+    const json = jsonBox(ex);
+    const save = () => {
+      if (json.changed()) return storeAndSelect("exercise", index, json.read());
+      const out = Object.assign(ex, {
+        name: name.value.trim(), mode: mode.value,
+        category: category.value || undefined, unilateral: unilateral.checked || undefined,
+        unit: unit.value.trim() || undefined, meaning: meaning.value || undefined,
+        description: description.value.trim() || undefined, notes: notes.value.trim() || undefined,
+        plan: plan.read(),
       });
-      if (!category.value) delete out.category;
-      if (!unilateral.checked) delete out.unilateral;
-      if (!unit.value.trim()) delete out.unit;
-      if (!meaning.value) delete out.meaning;
-      if (!description.value.trim()) delete out.description;
-      if (!notes.value.trim()) delete out.notes;
-      const p = plan.read(); if (p) out.plan = p; else delete out.plan;
-      const v = jsonOf(variations, []); if (v.length) out.variations = v; else delete out.variations;
-      return store("exercises", "exercise", index, out);
-    });
+      const vs = variations.read();
+      out.variations = vs.length ? vs : undefined;
+      Object.keys(out).forEach(k => out[k] === undefined && delete out[k]);
+      return storeAndSelect("exercise", index, out);
+    };
+    return h("div", { class: "panelform" }, nameLists(),
+      h("h3", {}, index === "new" ? "New exercise" : ex.name, onClose && globalPick ? button("✕", onClose, "Close") : null),
+      line(["Name", name, true], ["Mode", mode], ["Category", category]),
+      line(["Unilateral", unilateral], ["Unit", unit], ["Meaning", meaning]),
+      h("label", { class: "pair block" }, h("span", {}, "Description"), description),
+      line(["Notes", notes, true]),
+      h("div", { class: "sub" }, "Default plan"), plan.node,
+      h("div", { class: "sub" }, "Variations"), variations.node,
+      json.node,
+      panelActions("exercise", index, save));
   }
 
-  function editCircuit(index) {
-    const c = index == null ? { name: "", rounds: 1, stations: [] } : clone(state.file.circuits[index]);
+  function circuitPanel(index, onClose) {
+    const c = index === "new" ? { name: "", rounds: 1, stations: [] } : clone(state.file.circuits[index]);
     const name = input(c.name);
     const category = select(CATEGORIES, c.category ? normEnum(c.category) : "");
     const rounds = number(c.rounds ?? 1);
     const transition = number(c.transitionSeconds);
     const roundRest = number(c.roundRestSeconds);
-    const stations = textarea(JSON.stringify(c.stations ?? [], null, 2));
-    dialog(index == null ? "New circuit" : `Edit ${c.name}`, form(
-      ...field("Name", name), ...field("Category", category), ...field("Rounds", rounds),
-      ...field("Transition (s)", transition), ...field("Round rest (s)", roundRest),
-      h("div", { class: "sub" }, "Stations (JSON list of { exercise, variation, plan })"), h("div", { class: "span" }, stations),
-    ), () => {
-      c.name = name.value.trim();
+    const stations = rowsEditor(c.stations ?? [], s => {
+      const pick = exercisePick(s.exercise, s.variation);
+      const p = rowPlan(s.plan, s.exercise);
+      return {
+        node: h("div", { class: "rowmain" }, pick.nameEl, pick.varEl, p.node),
+        read: () => {
+          const n = pick.nameEl.value.trim(); if (!n) return null;
+          return withPlan(tidy(Object.assign({}, s, { exercise: n, variation: pick.varEl.value || undefined, plan: undefined })), p.read());
+        },
+      };
+    }, "+ Station", () => ({}));
+    const json = jsonBox(c);
+    const save = () => {
+      if (json.changed()) return storeAndSelect("circuit", index, json.read());
+      Object.assign(c, { name: name.value.trim(), rounds: num(rounds) ?? 1 });
       if (category.value) c.category = category.value; else delete c.category;
-      c.rounds = num(rounds) ?? 1;
       if (num(transition) != null) c.transitionSeconds = num(transition); else delete c.transitionSeconds;
       if (num(roundRest) != null) c.roundRestSeconds = num(roundRest); else delete c.roundRestSeconds;
-      c.stations = jsonOf(stations, []);
-      return store("circuits", "circuit", index, c);
-    });
+      c.stations = stations.read();
+      return storeAndSelect("circuit", index, c);
+    };
+    return h("div", { class: "panelform" }, nameLists(),
+      h("h3", {}, index === "new" ? "New circuit" : c.name, onClose && globalPick ? button("✕", onClose, "Close") : null),
+      line(["Name", name, true], ["Category", category]),
+      line(["Rounds", rounds], ["Transition (s)", transition], ["Round rest (s)", roundRest]),
+      h("div", { class: "sub" }, "Stations, in order (one set each per round)"), stations.node,
+      json.node,
+      panelActions("circuit", index, save));
   }
 
-  function editModule(index) {
-    const m = index == null ? { name: "", entries: [] } : clone(state.file.modules[index]);
+  function modulePanel(index, onClose) {
+    const m = index === "new" ? { name: "", entries: [] } : clone(state.file.modules[index]);
     const name = input(m.name);
-    const description = textarea(m.description); description.style.fontFamily = "inherit";
-    const entries = textarea(JSON.stringify(m.entries ?? [], null, 2));
-    dialog(index == null ? "New module" : `Edit ${m.name}`, form(
-      ...field("Name", name), ...field("Description", description),
-      h("div", { class: "sub" }, "Entries (JSON list of { exercise, variation, plan, optional } or { circuit })"), h("div", { class: "span" }, entries),
-    ), () => {
+    const description = textarea(m.description); description.classList.add("prose");
+    const entries = rowsEditor(m.entries ?? [], e => {
+      const kind = select([["exercise", "exercise"], ["circuit", "circuit"]], e.circuit != null ? "circuit" : "exercise");
+      const pick = exercisePick(e.exercise ?? e.circuit, e.variation);
+      const optional = checkbox(e.optional);
+      const optLabel = h("label", { class: "inline" }, optional, " optional");
+      const p = rowPlan(e.plan, e.exercise);
+      const sync = () => {
+        const isEx = kind.value === "exercise";
+        pick.nameEl.setAttribute("list", isEx ? "names-exercise" : "names-circuit");
+        pick.nameEl.placeholder = isEx ? "Exercise" : "Circuit";
+        [pick.varEl, optLabel, p.node].forEach(el => { el.style.display = isEx ? "" : "none"; });
+      };
+      kind.onchange = sync; sync();
+      return {
+        node: h("div", { class: "rowmain" }, kind, pick.nameEl, pick.varEl, optLabel, p.node),
+        read: () => {
+          const n = pick.nameEl.value.trim(); if (!n) return null;
+          if (kind.value === "circuit") return { circuit: n };
+          const out = Object.assign({}, e, { exercise: n, variation: pick.varEl.value || undefined,
+            optional: optional.checked || undefined, plan: undefined });
+          delete out.circuit;
+          return withPlan(tidy(out), p.read());
+        },
+      };
+    }, "+ Entry", () => ({}));
+    const json = jsonBox(m);
+    const save = () => {
+      if (json.changed()) return storeAndSelect("module", index, json.read());
       m.name = name.value.trim();
       if (description.value.trim()) m.description = description.value.trim(); else delete m.description;
-      m.entries = jsonOf(entries, []);
-      return store("modules", "module", index, m);
-    });
+      m.entries = entries.read();
+      return storeAndSelect("module", index, m);
+    };
+    return h("div", { class: "panelform" }, nameLists(),
+      h("h3", {}, index === "new" ? "New module" : m.name, onClose && globalPick ? button("✕", onClose, "Close") : null),
+      line(["Name", name, true]),
+      h("label", { class: "pair block" }, h("span", {}, "Description"), description),
+      h("div", { class: "sub" }, "Entries, in order"), entries.node,
+      json.node,
+      panelActions("module", index, save));
+  }
+
+  /** Moves the keyboard into the panel: its first field. */
+  function focusPanel() {
+    requestAnimationFrame(() => document.querySelector("#libpanel input, #libpanel select, #libpanel textarea, #globalpanel input")?.focus());
+  }
+  function focusList() { document.getElementById("liblist")?.focus(); }
+
+  /** Library keys, while the list (not a field) has the keyboard. */
+  function libraryKey(e) {
+    const items = visibleItems();
+    const at = items.findIndex(x => x.i === lib.index);
+    const cats = Object.keys(KINDS);
+    const pick = i => { if (items[i]) { lib.index = items[i].i; render(); focusList(); } };
+    switch (e.key) {
+      case "ArrowDown": case "j": e.preventDefault(); pick(at < 0 ? 0 : Math.min(at + 1, items.length - 1)); return true;
+      case "ArrowUp": case "k": e.preventDefault(); pick(at < 0 ? 0 : Math.max(at - 1, 0)); return true;
+      case "ArrowRight": case "l": case "ArrowLeft": case "h": {
+        e.preventDefault();
+        const c = cats.indexOf(lib.cat) + (e.key === "ArrowRight" || e.key === "l" ? 1 : -1);
+        if (cats[c]) { lib.cat = cats[c]; lib.index = null; render(); focusList(); }
+        return true;
+      }
+      case "Enter": case "e": e.preventDefault(); if (lib.index != null) focusPanel(); return true;
+      case "/": e.preventDefault(); document.getElementById("libfilter")?.focus(); return true;
+      case "a": e.preventDefault(); lib.index = "new"; render(); focusPanel(); return true;
+      case "Delete":
+        e.preventDefault();
+        if (lib.index != null && lib.index !== "new") document.querySelector("#libpanel .panelbar button:not(.primary)")?.click();
+        return true;
+    }
+    return false;
+  }
+
+  /** The Global table's side panel: the exercise, circuit or module a click picked. */
+  function globalPanel() {
+    if (!globalPick) return null;
+    const close = () => { globalPick = null; render(); };
+    return h("div", { class: "libpanel", id: "globalpanel" }, panelFor(globalPick.kind, globalPick.index, close));
+  }
+  function pickInGlobal(kind, index) {
+    if (index == null || index < 0) return;
+    globalPick = { kind, index };
+    render();
   }
 
   // ---------------------------------------------------------------- the board: selection, keys, drag
@@ -1672,6 +1980,26 @@ const Editor = (() => {
     const found = dir > 0 ? cols.slice(at + 1).find(w => w.deload) : cols.slice(0, at).reverse().find(w => w.deload);
     if (found) goTo(stop(found.index, c.day, c.index ?? 0));
   }
+  /** Ctrl+[ / Ctrl+]: the plan's first or last week, the weekday kept. */
+  function jumpEnd(dir) {
+    const c = startCursor(); if (!c) return;
+    const cols = columns(); const w = dir < 0 ? cols[0] : cols[cols.length - 1];
+    if (w) goTo(stop(w.index, c.day, c.index ?? 0));
+  }
+  /** Ctrl+{ / Ctrl+}: the first or last day of the cursor's phase. */
+  function jumpPhaseEdge(dir) {
+    const c = startCursor(); if (!c) return;
+    const cols = columns(); const here = cols[colOf(c.week)];
+    const ph = here?.phase; if (!ph) return;
+    const date = dir < 0 ? ph.from : ph.to;
+    // The week holding that day; failing that, the phase's nearest week inside the plan.
+    const inPhase = cols.filter(w => w.phase === ph);
+    const w = cols.find(x => date >= x.start && date <= addDays(x.start, 6)) ?? (dir < 0 ? inPhase[0] : inPhase[inPhase.length - 1]);
+    if (!w) return;
+    const day = DAYS[Math.min(6, Math.max(0, Math.round((date - w.start) / 86400000)))];
+    goTo(stop(w.index, day, dir < 0 ? 0 : 1e9));
+  }
+
   /** The first week of the previous or next phase, the weekday kept. Stops at the ends. */
   function jumpPhase(dir) {
     const c = startCursor(); if (!c) return;
@@ -1871,7 +2199,7 @@ const Editor = (() => {
     if (single) {
       const extra = textarea(JSON.stringify(single, null, 2));
       const before = extra.value;
-      body.append(h("details", {}, h("summary", {}, "The item as JSON"), form(h("div", { class: "span" }, extra))));
+      body.append(h("details", { class: "json" }, h("summary", {}, "JSON"), extra));
       // Editing the JSON replaces the item outright; the fields above are then ignored.
       apply.unshift(() => {
         if (extra.value === before) return;
@@ -1881,6 +2209,8 @@ const Editor = (() => {
         apply.length = 1;
       });
     }
+    // Wide, not tall: two label-and-field pairs to a row.
+    body.querySelectorAll(".form").forEach(f => f.classList.add("g2"));
     const title = single ? "Edit" : `Edit ${objs.length} items`;
     dialog(title, body, () => {
       // The edit happens on the live objects inside one change, so it undoes as one.
@@ -1952,10 +2282,11 @@ const Editor = (() => {
     ["Ctrl+arrow", "Move the selection that way"],
     ["Shift+arrow", "Copy the selection that way; the selection follows the copies"],
     ["Page Up / Down", "About one screen up or down"],
-    ["Home / End", "First / last week, same day"],
-    ["Ctrl+Home / End", "First / last day of the week"],
+    ["Home / End", "First / last day of the week"],
+    ["Ctrl+[ / Ctrl+]", "First / last week of the plan, same day"],
     ["[ / ]", "Previous / next deload week, same day"],
     ["{ / }", "Previous / next phase (its first week), same day"],
+    ["Ctrl+{ / Ctrl+}", "First / last day of the current phase"],
     ["w, or click a week heading", "Select the whole week (right-click it for the week's menu)"],
     ["q", "Mark or unmark the week as a deload"],
     ["n", "The week's note"],
@@ -1971,6 +2302,11 @@ const Editor = (() => {
     ["Drag the ⠿ handle", "Move; hold Shift while dragging to copy"],
     ["Right-click", "The menu for what is under the pointer"],
     ["Escape", "Cancel a drag, close the editor, or clear the selection"],
+    ["Library: ↑↓ / jk", "Choose in the list"],
+    ["Library: ←→ / hl", "Exercises, circuits, modules"],
+    ["Library: Enter / e", "Into the editor panel; Escape back to the list"],
+    ["Library: / · a · Delete", "Filter · new · delete"],
+    ["Global: click a row", "Edit that exercise (or a group's module or circuit) beside the table; Escape closes"],
     ["?", "This help"],
   ];
   function help() {
@@ -2070,6 +2406,10 @@ const Editor = (() => {
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === "Escape") {
       if (board.drag) { cancelDrag(); e.preventDefault(); return; }
+      if (!document.querySelector("dialog[open]") && typing(e.target) && (state.view === "library" || state.view === "global")) {
+        e.target.blur(); if (state.view === "library") focusList(); return;
+      }
+      if (state.view === "global" && globalPick && !document.querySelector("dialog[open]")) { globalPick = null; render(); return; }
       if (document.getElementById("ctxmenu")) { closeMenu(); return; }
       if (!document.querySelector("dialog[open]") && !typing(e.target) && board.items.length + (board.slot ? 1 : 0)) { clearSelection(); return; }
       return;
@@ -2079,6 +2419,8 @@ const Editor = (() => {
     if (ctrl && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
     if (ctrl && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
     if (ctrl && e.key.toLowerCase() === "s") { e.preventDefault(); save(); return; }
+    if (e.key === "?" && state.file) { e.preventDefault(); help(); return; }
+    if (state.view === "library" && state.file && !ctrl && !e.altKey) { if (libraryKey(e)) return; }
     if (!state.editing || state.view !== "week" || !state.file) return;
     if (document.getElementById("ctxmenu")) return;
 
@@ -2110,9 +2452,9 @@ const Editor = (() => {
       case "PageUp": e.preventDefault(); page("up"); return;
       case "Home": case "End": {
         e.preventDefault();
+        // First / last day of the week (Ctrl or not).
         const c = startCursor(); if (!c) return;
-        if (ctrl) { const day = e.key === "Home" ? "monday" : "sunday"; goTo(stop(c.week, day, e.key === "Home" ? 0 : 1e9)); }
-        else { const w = e.key === "Home" ? columns()[0] : columns()[columns().length - 1]; goTo(stop(w.index, c.day, c.index ?? 0)); }
+        goTo(stop(c.week, e.key === "Home" ? "monday" : "sunday", e.key === "Home" ? 0 : 1e9));
         return;
       }
       case "Enter": case "e": e.preventDefault(); editSelection(); return;
@@ -2125,10 +2467,10 @@ const Editor = (() => {
       case "w": e.preventDefault(); { const c = startCursor(); if (c) selectWeek(c.week); } return;
       case "q": e.preventDefault(); { const i = currentWeek(); if (i != null) toggleDeload(i); } return;
       case "n": e.preventDefault(); { const w = weekAt(currentWeek()); if (w) editNote(w); } return;
-      case "[": e.preventDefault(); jumpDeload(-1); return;
-      case "]": e.preventDefault(); jumpDeload(1); return;
-      case "{": e.preventDefault(); jumpPhase(-1); return;
-      case "}": e.preventDefault(); jumpPhase(1); return;
+      case "[": e.preventDefault(); if (ctrl) jumpEnd(-1); else jumpDeload(-1); return;
+      case "]": e.preventDefault(); if (ctrl) jumpEnd(1); else jumpDeload(1); return;
+      case "{": e.preventDefault(); if (ctrl) jumpPhaseEdge(-1); else jumpPhase(-1); return;
+      case "}": e.preventDefault(); if (ctrl) jumpPhaseEdge(1); else jumpPhase(1); return;
       case "p": if (!ctrl) { e.preventDefault(); paste(false); } return;
       case "P": if (!ctrl) { e.preventDefault(); paste(true); } return;
       case "d": if (!ctrl) pendingPair("d", cut); return;
@@ -2272,7 +2614,7 @@ const Editor = (() => {
       button(`Restore the unsaved draft (${d.name || "plan"}, ${new Date(d.at).toLocaleString()})`, restoreDraft)));
   }
 
-  return { button, wrap, addItem, addWeek, editPhases, renderLibrary, updateHeader, offerDraft, afterRender, restoreFocus };
+  return { globalPanel, pickInGlobal, button, wrap, addItem, addWeek, editPhases, renderLibrary, updateHeader, offerDraft, afterRender, restoreFocus };
 })();
 
 const dropZone = document.getElementById("drop");
