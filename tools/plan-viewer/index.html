@@ -1218,6 +1218,30 @@ const Editor = (() => {
 
   // ---------------------------------------------------------------- the library
 
+  /**
+   * How many times each [kind] is planned, by name key: every placement in a week counts, and a
+   * module's or circuit's placement counts once for each thing inside it (less the module's omits).
+   */
+  function plannedCounts(kind) {
+    const f = state.file, counts = new Map();
+    const modules = new Map((f.modules ?? []).map(m => [nameKey(m.name), m]));
+    const circuits = new Map((f.circuits ?? []).map(c => [nameKey(c.name), c]));
+    const visit = (item, seen) => {
+      if (!item) return;
+      const own = item[kind];
+      if (own != null) counts.set(nameKey(own), (counts.get(nameKey(own)) ?? 0) + 1);
+      const m = item.module != null && modules.get(nameKey(item.module));
+      const c = item.circuit != null && circuits.get(nameKey(item.circuit));
+      const inner = m ? [m, m.entries] : c ? [c, c.stations] : null;
+      if (!inner || seen.has(inner[0])) return;
+      const skip = new Set((m ? item.omit ?? [] : []).map(nameKey));
+      const next = new Set(seen).add(inner[0]);
+      (inner[1] ?? []).forEach(e => { if (!(e.exercise != null && skip.has(nameKey(e.exercise)))) visit(e, next); });
+    };
+    (f.weeks ?? []).forEach(w => ["unscheduled", ...DAYS].forEach(d => (w[d] ?? []).forEach(it => visit(it, new Set()))));
+    return counts;
+  }
+
   /** How many places name [name] as a [kind], so a deletion can say what it would break. */
   function usage(kind, name) {
     const key = nameKey(name); let n = 0;
@@ -1270,7 +1294,7 @@ const Editor = (() => {
     module: { list: "modules", title: "Modules" },
   };
   const lib = { cat: "exercise", index: null, filter: "", sort: "name", dir: 1 };
-  const SORTS = { name: "Name", category: "Category", usage: "Times used" };
+  const SORTS = { name: "Name", category: "Category", usage: "Times planned" };
   let globalPick = null; // { kind, index } beside the Global table
 
   const namesOf = listKey => (state.file?.[listKey] ?? []).map(x => x.name);
@@ -1283,10 +1307,11 @@ const Editor = (() => {
     const words = lib.filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const byName = (a, b) => String(a.it.name).localeCompare(String(b.it.name));
     const catRank = it => { const r = Object.keys(CATEGORY_VAR).indexOf(normEnum(it.category)); return r < 0 ? 99 : r; };
+    const planned = plannedCounts(cat), times = it => planned.get(nameKey(it.name)) ?? 0;
     const compare = {
       name: byName,
       category: (a, b) => catRank(a.it) - catRank(b.it),
-      usage: (a, b) => usage(cat, a.it.name) - usage(cat, b.it.name),
+      usage: (a, b) => times(a.it) - times(b.it),
     }[lib.sort] ?? byName;
     // Ties fall back to the name, always A to Z, so the order within a category or a count is stable.
     return all.filter(({ it }) => words.every(w => String(it.name ?? "").toLowerCase().includes(w)))
@@ -1309,24 +1334,25 @@ const Editor = (() => {
       again?.focus(); again?.setSelectionRange(pos, pos);
     };
     const items = visibleItems();
+    const planned = plannedCounts(lib.cat);
     const listNode = h("div", { class: "liblist", id: "liblist", tabindex: "0" }, items.map(({ it, i }) => {
       const row = h("div", { class: "librow" + (lib.index === i ? " on" : ""), "data-i": i },
         dot(it.category), h("span", { class: "name" }, it.name ?? "(no name)"),
-        h("span", { class: "muted" }, String(usage(lib.cat, it.name))));
+        h("span", { class: "muted" }, String(planned.get(nameKey(it.name)) ?? 0)));
       row.onclick = () => { lib.index = i; render(); };
       return row;
     }), items.length ? null : h("div", { class: "muted", style: "padding:6px" }, "Nothing here."));
     const side = h("div", { class: "libside" }, cats,
       h("div", { class: "libtools" }, filter, sortButton(), button("+ New", () => { lib.index = "new"; render(); focusPanel(); })),
       listNode,
-      h("p", { class: "legend" }, "The number is how many places use it. ↑↓ choose · ←→ category · Enter edit · Esc back · / filter · a new · ? keys"));
+      h("p", { class: "legend" }, "The number is how many times it is planned. ↑↓ choose · ←→ category · Enter edit · Esc back · Ctrl+S save · / filter · a new · ? keys"));
     const panel = h("div", { class: "libpanel", id: "libpanel" },
       lib.index == null ? h("p", { class: "muted" }, "Choose something on the left, or + New.") : panelFor(lib.cat, lib.index, () => {}));
     main.append(h("div", { class: "libwrap" }, side, panel));
     requestAnimationFrame(() => document.querySelector(".librow.on")?.scrollIntoView({ block: "nearest" }));
   }
 
-  /** The sort: by name, category or times used, either way; the current one ticked. */
+  /** The sort: by name, category or times planned, either way; the current one ticked. */
   function sortButton() {
     const b = button("⇅", () => {
       const r = b.getBoundingClientRect();
@@ -2349,12 +2375,13 @@ const Editor = (() => {
       ["/", "Filter the list"],
       ["a", "New item"],
       ["Delete", "Delete the chosen item"],
+      ["Ctrl+S", "Save the open item (here and in the global panel)"],
     ]],
     ["Everywhere", [
       ["` or ~", "Switch between the weekly view and the global table"],
       ["Ctrl+Z", "Undo"],
       ["Ctrl+Shift+Z / Ctrl+Y", "Redo"],
-      ["Ctrl+S", "Save the file"],
+      ["Ctrl+S", "Save the file (with no item open)"],
       ["Escape", "Cancel a drag, close a dialog or panel, or clear the selection"],
       ["?", "This help"],
     ]],
@@ -2466,6 +2493,17 @@ const Editor = (() => {
       if (document.getElementById("ctxmenu")) { closeMenu(); return; }
       if (!document.querySelector("dialog[open]") && !typing(e.target) && board.items.length + (board.slot ? 1 : 0)) { clearSelection(); return; }
       return;
+    }
+    // Ctrl+S with an item open in the library or global panel saves that item, even mid-typing.
+    if (ctrl && e.key.toLowerCase() === "s" && !document.querySelector("dialog[open]")) {
+      const panelSave = (state.view === "library" || state.view === "global")
+        && document.querySelector("#libpanel button.primary, #globalpanel button.primary");
+      if (panelSave) {
+        e.preventDefault();
+        if (typing(document.activeElement)) document.activeElement.blur();
+        panelSave.click();
+        return;
+      }
     }
     if (document.querySelector("dialog[open]") || typing(e.target)) return;
     // History and saving work in every view.
