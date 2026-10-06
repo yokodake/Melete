@@ -349,4 +349,36 @@ class PlanCheckTest {
         )
         assertTrue(onModule.hasProblem("\"optional\" only goes with an exercise"))
     }
+
+    @Test
+    fun `phases and deload weeks are planning notes, checked and never imported`() {
+        val fine = resolve(
+            overrideLibrary + """
+            "phases": [
+              { "name": "Base", "from": "2026-10-05", "to": "2026-11-15", "note": "volume" },
+              { "name": "Strength", "from": "2026-11-16", "to": "2027-01-10" }
+            ],
+            "weeks": [ { "weekStart": "2026-10-19", "deload": true, "note": "easy", "monday": [ { "exercise": "Cossack" } ] } ]
+            """
+        )
+        assertEquals(emptyList<String>(), fine.problems)
+        assertEquals(emptyList<String>(), fine.warnings)
+        assertEquals(1, fine.plan!!.slots.single().items.size)
+
+        val bad = resolve(
+            overrideLibrary + """
+            "phases": [
+              { "from": "2026-10-05", "to": "2026-11-15" },
+              { "name": "Late", "from": "2026-12-01", "to": "2026-11-01" },
+              { "name": "Odd", "from": "soon", "to": "2026-12-01" },
+              { "name": "A", "from": "2027-01-01", "to": "2027-01-20" },
+              { "name": "B", "from": "2027-01-15", "to": "2027-02-01" }
+            ]
+            """
+        )
+        assertTrue(bad.hasProblem("Phase 1 has no name"))
+        assertTrue(bad.hasProblem("Phase Late ends"))
+        assertTrue(bad.hasProblem("\"soon\" is not a date"))
+        assertTrue(bad.warnings.any { "Phases A and B overlap" in it })
+    }
 }

@@ -28,6 +28,20 @@ data class PlanFile(
     val weeks: List<PlanWeek> = emptyList(),
     /** Benchmarks and their results; see [PlanBenchmark]. */
     val benchmarks: List<PlanBenchmark> = emptyList(),
+    /**
+     * The plan's periods, for whoever writes the plan: checked for sense, then not imported.
+     * The app lives through a phase; it does not need to know its name.
+     */
+    val phases: List<PlanPhase> = emptyList(),
+)
+
+/** A named stretch of the plan, both days included. Planning metadata only. */
+@Serializable
+data class PlanPhase(
+    val name: String? = null,
+    val from: String? = null,
+    val to: String? = null,
+    val note: String? = null,
 )
 
 @Serializable
@@ -133,6 +147,10 @@ data class PlanItem(
 @Serializable
 data class PlanWeek(
     val weekStart: String? = null,
+    /** Planning metadata, not imported: this is a deload week. */
+    val deload: Boolean? = null,
+    /** Planning metadata, not imported: a word about the week. */
+    val note: String? = null,
     val unscheduled: List<PlanItem> = emptyList(),
     val monday: List<PlanItem> = emptyList(),
     val tuesday: List<PlanItem> = emptyList(),

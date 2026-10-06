@@ -96,6 +96,25 @@
   td.total { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
   .legend { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
 
+  /* planning metadata: phases as coloured bands, deload weeks shaded */
+  .phase { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px;
+    margin-left: 6px; color: var(--ink); }
+  .ph0 { --ph: 74, 160, 150; } .ph1 { --ph: 120, 110, 200; } .ph2 { --ph: 190, 140, 60; }
+  .ph3 { --ph: 200, 90, 120; } .ph4 { --ph: 90, 150, 80; } .ph5 { --ph: 100, 140, 200; }
+  .phase[class*=ph] { background: rgba(var(--ph), .25); }
+  .weekgrid > .whead[class*=ph] { box-shadow: inset 0 4px 0 rgba(var(--ph), .9); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px;
+    margin-left: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+  .wnote { color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 2px; }
+  .weekgrid > .cell.deload { background: color-mix(in srgb, var(--surface-2) 70%, var(--line)); }
+  thead tr.phases th { font-size: 12px; padding: 2px 6px; }
+  thead tr.phases th[class*=ph] { background: rgba(var(--ph), .3); }
+  th.deload, td.deload { box-shadow: inset 0 0 0 9999px rgba(127, 127, 127, .12); }
+  thead th.deload .wk::after { content: " · deload"; }
+  .phaserow { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.4fr auto; gap: 6px; align-items: center; margin: 4px 0; }
+  .phaserow input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 6px; width: 100%; }
+
   /* editing */
   .edittools { display: inline-flex; gap: 6px; }
   .tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
@@ -228,7 +247,7 @@ function resolve(file) {
   if (file.format !== "melete-plan") problems.push(`"format" is ${JSON.stringify(file.format)}; the importer wants "melete-plan".`);
   if (file.version !== 1) problems.push(`"version" is ${JSON.stringify(file.version)}; the importer reads version 1.`);
 
-  const known = new Set(["format", "version", "exercises", "circuits", "modules", "weeks", "benchmarks"]);
+  const known = new Set(["format", "version", "exercises", "circuits", "modules", "weeks", "benchmarks", "phases"]);
   Object.keys(file).filter(k => !known.has(k)).forEach(k => problems.push(`Unknown top-level key "${k}".`));
 
   function index(list, kind) {
@@ -276,7 +295,7 @@ function resolve(file) {
     if (start.getUTCDay() !== 1) problems.push(`Week ${week.weekStart} does not start on a Monday.`);
     if (seen.has(iso(start))) problems.push(`Week ${week.weekStart} is written twice.`);
     seen.add(iso(start));
-    const weekKeys = new Set(["weekStart", "unscheduled", ...DAYS]);
+    const weekKeys = new Set(["weekStart", "deload", "note", "unscheduled", ...DAYS]);
     Object.keys(week).filter(k => !weekKeys.has(k)).forEach(k => problems.push(`Week ${week.weekStart}: unknown key "${k}".`));
 
     const slots = [{ key: "unscheduled", label: "Unscheduled", date: null, raw: week.unscheduled ?? [] },
@@ -327,7 +346,7 @@ function resolve(file) {
         return resolved ? Object.assign(resolved, { ref }) : { kind: "invalid", ref, raw: item };
       });
     });
-    weeks.push({ start, slots, index: i });
+    weeks.push({ start, slots, index: i, deload: week.deload === true, note: week.note ?? null });
   });
 
   function circuitItem(name, where) {
@@ -344,7 +363,27 @@ function resolve(file) {
   }
 
   weeks.sort((a, b) => a.start - b.start);
-  return { weeks, problems: [...problems, ...missing], counts: {
+
+  // Phases: planning metadata, checked as the importer checks them. A week belongs to the phase
+  // its first day falls in.
+  const phases = [];
+  (file.phases ?? []).forEach((ph, n) => {
+    const name = String(ph?.name ?? "").trim();
+    if (!name) { problems.push(`Phase ${n + 1} has no name.`); return; }
+    const from = parseDate(ph.from), to = parseDate(ph.to);
+    if (!from) { problems.push(`Phase ${name}: ${ph.from == null ? "no \"from\"" : `"${ph.from}" is not a date`}.`); return; }
+    if (!to) { problems.push(`Phase ${name}: ${ph.to == null ? "no \"to\"" : `"${ph.to}" is not a date`}.`); return; }
+    if (to < from) { problems.push(`Phase ${name} ends before it starts.`); return; }
+    phases.push({ name, from, to, note: ph.note ?? null, index: n });
+  });
+  phases.sort((a, b) => a.from - b.from).forEach((ph, k) => { ph.color = k % 6; });
+  phases.forEach((a, k) => {
+    const b = phases[k + 1];
+    if (b && b.from <= a.to) problems.push(`Phases ${a.name} and ${b.name} overlap (a warning in the app).`);
+  });
+  weeks.forEach(w => { w.phase = phases.find(ph => w.start >= ph.from && w.start <= ph.to) ?? null; });
+
+  return { weeks, phases, problems: [...problems, ...missing], counts: {
     exercises: exercises.size, circuits: circuits.size, modules: modules.size, weeks: weeks.length,
   } };
 }
@@ -470,7 +509,9 @@ let state = { plan: null, view: "week", fileName: "", file: null, header: "", ed
 
 function renderWeek(main) {
   const { weeks } = state.plan;
-  if (state.editing) main.append(h("p", {}, Editor.button("+ Add a week", () => Editor.addWeek())));
+  if (state.editing) main.append(h("p", { class: "tools" },
+    Editor.button("+ Add a week", () => Editor.addWeek()),
+    Editor.button("Phases…", () => Editor.editPhases())));
   if (!weeks.length) { main.append(h("p", { class: "muted" }, "This file plans no weeks.")); return; }
   // One grid row per slot, shared by every week, so a row is as tall as its busiest week and the
   // days line up across columns. Unscheduled gets a row only if some week uses it.
@@ -480,12 +521,18 @@ function renderWeek(main) {
   grid.style.gridTemplateRows = `repeat(${rows}, auto)`;
   weeks.forEach(week => {
     const end = addDays(week.start, 6);
-    grid.append(h("div", { class: "cell whead" }, `${dayMonth(week.start)} – ${dayMonth(end)}`,
+    const shade = week.deload ? " deload" : "";
+    grid.append(h("div", { class: "cell whead" + shade + (week.phase ? ` ph${week.phase.color}` : "") },
+      `${dayMonth(week.start)} – ${dayMonth(end)}`,
       h("span", { class: "wk" }, `W${isoWeek(week.start)} · ${end.getUTCFullYear()}`),
+      h("div", {},
+        week.phase ? h("span", { class: `phase ph${week.phase.color}`, title: week.phase.note ?? week.phase.name }, week.phase.name) : null,
+        week.deload ? h("span", { class: "badge" }, "deload") : null),
+      week.note ? h("div", { class: "wnote" }, week.note) : null,
       state.editing ? Editor.weekTools(week) : null));
     const slots = withUnscheduled ? week.slots : week.slots.slice(1);
     slots.forEach((slot, n) => {
-      grid.append(h("div", { class: "cell day" + (n === slots.length - 1 ? " last" : "") },
+      grid.append(h("div", { class: "cell day" + shade + (n === slots.length - 1 ? " last" : "") },
         h("h2", {}, slot.label, state.editing ? Editor.button("+", () => Editor.addItem(week, slot)) : null),
         slot.items.length ? slot.items.map(it => state.editing ? Editor.wrap(it, week, slot) : itemNode(it))
           : h("div", { class: "empty" }, "—")));
@@ -584,8 +631,18 @@ function renderGlobal(main) {
     "Each cell: occurrences that week, weighted by sets against the row's most (1 = its fullest week's sets). " +
     "Circuit stations count rounds as sets. Hover a cell for the sets."));
   const groups = buildTable();
-  const thead = h("thead", {}, h("tr", {}, h("th", { class: "rowname" }, "Exercise"),
-    weeks.map(w => h("th", {}, dayMonth(w.start), h("span", { class: "wk" }, `W${isoWeek(w.start)}`))),
+  // A row of phase bands over the weeks they cover, when the plan names any.
+  const bands = [];
+  weeks.forEach(w => {
+    const last = bands[bands.length - 1];
+    if (last && last.phase === w.phase) last.span++;
+    else bands.push({ phase: w.phase, span: 1 });
+  });
+  const phaseRow = state.plan.phases?.length ? h("tr", { class: "phases" }, h("th", { class: "rowname" }, "Phase"),
+    bands.map(b => h("th", { colspan: b.span, class: b.phase ? `ph${b.phase.color}` : "", title: b.phase?.note ?? "" }, b.phase?.name ?? "")),
+    h("th", {})) : null;
+  const thead = h("thead", {}, phaseRow, h("tr", {}, h("th", { class: "rowname" }, "Exercise"),
+    weeks.map(w => h("th", { class: w.deload ? "deload" : "", title: w.note ?? "" }, dayMonth(w.start), h("span", { class: "wk" }, `W${isoWeek(w.start)}`))),
     h("th", {}, "Total")));
   const tbody = h("tbody");
   groups.forEach(g => {
@@ -596,7 +653,7 @@ function renderGlobal(main) {
         const sets = r.perWeek.get(wi) ?? [];
         const num = sets.reduce((a, b) => a + b, 0);
         totalNum += num;
-        const td = h("td", { class: "v" + (num ? "" : " zero") }, fraction(num, r.maxSets));
+        const td = h("td", { class: "v" + (num ? "" : " zero") + (weeks[wi].deload ? " deload" : "") }, fraction(num, r.maxSets));
         if (num) {
           const value = num / r.maxSets;
           td.style.background = `rgba(var(--heat), ${Math.min(0.12 + 0.28 * value, 0.7)})`;
@@ -957,11 +1014,71 @@ const Editor = (() => {
 
   function weekTools(week) {
     return h("div", { class: "tools" },
+      button(week.deload ? "Not deload" : "Deload", () => change(f => {
+        const w = f.weeks[week.index];
+        if (w.deload) delete w.deload; else w.deload = true;
+      }), "Mark or unmark this as a deload week"),
+      button("Note", () => editNote(week)),
       button("Copy to…", () => copyWeek(week)),
-      button("Clear", () => { if (confirm(`Empty the week of ${dayMonth(week.start)}?`)) change(f => { f.weeks[week.index] = { weekStart: f.weeks[week.index].weekStart }; }); }),
+      button("Clear", () => { if (confirm(`Empty the week of ${dayMonth(week.start)}?`)) change(f => {
+        const w = f.weeks[week.index];
+        // The week's metadata stays; only its workouts go.
+        f.weeks[week.index] = tidy({ weekStart: w.weekStart, deload: w.deload, note: w.note });
+      }); }),
       button("Delete", () => { if (confirm(`Delete the week of ${dayMonth(week.start)}?`)) change(f => { f.weeks.splice(week.index, 1); }); }),
     );
   }
+  function editNote(week) {
+    const note = input(week.note ?? "");
+    dialog(`Note for the week of ${dayMonth(week.start)}`, form(...field("Note", note)), () => {
+      change(f => {
+        const w = f.weeks[week.index];
+        const t = note.value.trim();
+        if (t) w.note = t; else delete w.note;
+      });
+    });
+  }
+
+  /** The plan's phases as rows of name, first day, last day and note. */
+  function editPhases() {
+    const rows = [];
+    const box = h("div", {});
+    function addRow(ph = {}) {
+      const name = input(ph.name ?? "", { placeholder: "Name" });
+      const from = input(ph.from ?? "", { type: "date" });
+      const to = input(ph.to ?? "", { type: "date" });
+      const note = input(ph.note ?? "", { placeholder: "Note" });
+      const row = { name, from, to, note, extra: ph };
+      const node = h("div", { class: "phaserow" }, name, from, to, note,
+        button("✕", () => { rows.splice(rows.indexOf(row), 1); node.remove(); }));
+      rows.push(row); box.append(node);
+    }
+    (state.file.phases ?? []).forEach(addRow);
+    // Starting from the plan's weeks makes the first phase quick to fill in.
+    if (!rows.length) {
+      const ws = state.plan.weeks;
+      addRow(ws.length ? { from: iso(ws[0].start), to: iso(addDays(ws[ws.length - 1].start, 6)) } : {});
+    }
+    dialog("Phases", h("div", {},
+      h("div", { class: "phaserow muted" }, "Name", "First day", "Last day", "Note", ""),
+      box,
+      h("p", {}, button("+ Add a phase", () => addRow())),
+      h("p", { class: "muted" }, "A week belongs to the phase its first day falls in. The app checks phases and ignores them."),
+    ), () => {
+      const out = rows.map(r => tidy(Object.assign({}, r.extra, {
+        name: r.name.value.trim(), from: r.from.value || undefined, to: r.to.value || undefined,
+        note: r.note.value.trim() || undefined,
+      }))).filter(ph => ph.name || ph.from || ph.to);
+      if (out.some(ph => !ph.name)) return "Every phase needs a name.";
+      if (out.some(ph => !ph.from || !ph.to)) return "Every phase needs a first and a last day.";
+      if (out.some(ph => ph.to < ph.from)) return "A phase cannot end before it starts.";
+      change(f => {
+        out.sort((a, b) => a.from.localeCompare(b.from));
+        if (out.length) f.phases = out; else delete f.phases;
+      });
+    });
+  }
+
   function addWeek() {
     const weeks = state.plan.weeks;
     const last = weeks.length ? weeks[weeks.length - 1].start : null;
@@ -1175,7 +1292,7 @@ const Editor = (() => {
       button(`Restore the unsaved draft (${d.name || "plan"}, ${new Date(d.at).toLocaleString()})`, restoreDraft)));
   }
 
-  return { button, wrap, addItem, weekTools, addWeek, renderLibrary, updateHeader, offerDraft };
+  return { button, wrap, addItem, weekTools, addWeek, editPhases, renderLibrary, updateHeader, offerDraft };
 })();
 
 const dropZone = document.getElementById("drop");

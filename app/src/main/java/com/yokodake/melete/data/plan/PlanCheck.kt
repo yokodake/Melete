@@ -506,6 +506,33 @@ object PlanCheck {
             }.toSet()
         }
 
+        // ---------------------------------------------------------- phases
+
+        // Planning metadata: nothing is imported, but a phase that cannot mean anything is a
+        // mistake worth naming, and two that claim the same days are worth a word.
+        val phases = file.phases.mapIndexedNotNull { index, phase ->
+            val label = phase.name?.trim()?.takeIf { it.isNotEmpty() } ?: run {
+                problems += "Phase ${index + 1} has no name."
+                return@mapIndexedNotNull null
+            }
+            fun date(raw: String?, field: String): LocalDate? = when {
+                raw == null -> { problems += "Phase $label has no \"$field\"."; null }
+                else -> runCatching { LocalDate.parse(raw.trim()) }.getOrNull()
+                    ?: run { problems += "Phase $label: \"$raw\" is not a date (YYYY-MM-DD)."; null }
+            }
+            val from = date(phase.from, "from")
+            val to = date(phase.to, "to")
+            if (from == null || to == null) return@mapIndexedNotNull null
+            if (to < from) {
+                problems += "Phase $label ends ($to) before it starts ($from)."
+                return@mapIndexedNotNull null
+            }
+            Triple(label, from, to)
+        }
+        phases.sortedBy { it.second }.zipWithNext().forEach { (a, b) ->
+            if (b.second <= a.third) warnings += "Phases ${a.first} and ${b.first} overlap (${b.second} to ${minOf(a.third, b.third)})."
+        }
+
         // ---------------------------------------------------------- weeks
 
         val seenWeeks = mutableSetOf<LocalDate>()
