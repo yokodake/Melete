@@ -1328,7 +1328,7 @@ const Editor = (() => {
 
   /** The sort: by name, category or times used, either way; the current one ticked. */
   function sortButton() {
-    const b = button(lib.dir > 0 ? "⇅ ↑" : "⇅ ↓", () => {
+    const b = button("⇅", () => {
       const r = b.getBoundingClientRect();
       menu(r.left, r.bottom + 4, Object.entries(SORTS).flatMap(([key, label]) => [1, -1].map(dir => [
         `${lib.sort === key && lib.dir === dir ? "✓ " : "   "}${label} ${{
