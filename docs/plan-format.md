@@ -21,18 +21,26 @@ land; the page scrolls near its edges and Escape cancels.
 Keys (they give way to typing in any field): arrows or hjkl move between cards and empty days
 (↑↓ through a day and on into the next, ←→ the same day a week earlier or later); **Ctrl+arrow**
 moves the selection; **Shift+arrow** copies it that way and follows the copies; Page Up/Down,
-Home/End (first / last week), Ctrl+Home/End (first / last day of the week); Enter/`e` edit, `a`
+Home/End (first / last day of the week), Ctrl+[ / Ctrl+] (first / last week of the plan); Enter/`e` edit, `a`
 add, Delete remove (a selected day: its workouts); Ctrl+X/C/V and `dd`/`yy`/`p`/`P`; Ctrl+Z,
 Ctrl+Shift+Z or Ctrl+Y; Escape; `?` lists them all. `[` / `]` jump to the previous / next deload
 week and `{` / `}` to the first week of the previous / next phase, keeping the weekday and stopping
-at the ends. `w`, or a click on a week's heading, selects the whole week: copy, cut, paste and
+at the ends; Ctrl+{ / Ctrl+} go to the first / last day of the current phase. `w`, or a click on a week's heading, selects the whole week: copy, cut, paste and
 Delete then act on the week, and Shift+←/→ copies it into the week before or after (created if the
 plan lacks it; *Append*, *Replace* or *Cancel* if it already has workouts). `q` marks the current week as a deload (or not) and `n` edits its
 note; a right-click on a week's heading offers those, copying and pasting the week, copying it onto
 the following weeks, clearing its workouts and deleting the week (Shift+Delete on a selected week).
 *+ Add a week* and *Phases…* sit above the weeks; a new phase starts the day after the last one ends
-and runs to the end of the plan. The **Library** view adds, edits and deletes exercises, circuits and
-modules; renaming one renames every reference to it. Every change re-runs the checks and can be
+and runs to the end of the plan. The **Library** view lists one category at a time (Exercises, Circuits, Modules), filterable, with
+how many places use each item; the chosen item opens in a panel beside the list. The exercise
+editor is laid out across (name, mode and category on a line; unilateral, unit and meaning on the
+next; the plan three fields to a row); variations, a circuit's stations and a module's entries are
+rows — the exercise picked from the file's names, its variation from that exercise's, optional, a
+plan folded into the row, ↑ ↓ to reorder, ✕ to remove. The raw JSON is folded away under *JSON*;
+changed, it replaces the item. Renaming renames every reference. Keys in the list: ↑↓ (jk) choose,
+←→ (hl) change category, Enter or `e` into the panel, Escape back, `/` filter, `a` new, Delete. In
+the **Global** table, a click on an exercise's row, or on a module's or circuit's group heading,
+opens the same panel beside the table (Escape closes it). Every change re-runs the checks and can be
 undone; **Save** (Ctrl+S) downloads the file, its leading comment lines kept. An unsaved draft stays
 in the browser and is offered again on an empty page. Nothing is uploaded.
 
