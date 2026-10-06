@@ -106,10 +106,10 @@
   .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px;
     margin-left: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
   .wnote { color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 2px; }
-  .weekgrid > .cell.deload { background: color-mix(in srgb, var(--surface-2) 70%, var(--line)); }
+  .weekgrid > .cell.deload { background: color-mix(in srgb, var(--surface-2) 90%, var(--muted)); }
   thead tr.phases th { font-size: 12px; padding: 2px 6px; }
   thead tr.phases th[class*=ph] { background: rgba(var(--ph), .3); }
-  th.deload, td.deload { box-shadow: inset 0 0 0 9999px rgba(127, 127, 127, .12); }
+  th.deload, td.deload { box-shadow: inset 0 0 0 9999px rgba(127, 127, 127, .22); }
   thead th.deload .wk::after { content: " · deload"; }
   .phaserow { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.4fr auto; gap: 6px; align-items: center; margin: 4px 0; }
   .phaserow input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
@@ -564,8 +564,7 @@ function renderWeek(main) {
       h("div", {},
         week.phase ? h("span", { class: `phase ph${week.phase.color}`, title: week.phase.note ?? week.phase.name }, week.phase.name) : null,
         week.deload ? h("span", { class: "badge" }, "deload") : null),
-      week.note ? h("div", { class: "wnote" }, week.note) : null,
-      state.editing ? Editor.weekTools(week) : null));
+      week.note ? h("div", { class: "wnote" }, week.note) : null));
     const slots = withUnscheduled ? week.slots : week.slots.slice(1);
     slots.forEach((slot, n) => {
       grid.append(h("div", Object.assign({ class: "cell day" + shade + (n === slots.length - 1 ? " last" : "") + (state.editing ? " slot" : "") },
@@ -748,6 +747,8 @@ function load(name, text) {
     // The comment lines at the top of the file, kept so saving does not lose them.
     state.header = (text.match(/^(\s*\/\/[^\n]*\n)+/) ?? [""])[0].trim();
     state.past = []; state.future = [];
+    // A plan is opened to be worked on: editing starts on. Edit switches to the plain view.
+    state.editing = true;
     state.plan = resolve(file);
   } catch (e) {
     state.file = null;
@@ -1025,21 +1026,16 @@ const Editor = (() => {
 
   // ---------------------------------------------------------------- weeks
 
-  function weekTools(week) {
-    return h("div", { class: "tools" },
-      button(week.deload ? "Not deload" : "Deload", () => change(f => {
-        const w = f.weeks[week.index];
-        if (w.deload) delete w.deload; else w.deload = true;
-      }), "Mark or unmark this as a deload week"),
-      button("Note", () => editNote(week)),
-      button("Copy to…", () => copyWeek(week)),
-      button("Clear", () => { if (confirm(`Empty the week of ${dayMonth(week.start)}?`)) change(f => {
-        const w = f.weeks[week.index];
-        // The week's metadata stays; only its workouts go.
-        f.weeks[week.index] = tidy({ weekStart: w.weekStart, deload: w.deload, note: w.note });
-      }); }),
-      button("Delete", () => { if (confirm(`Delete the week of ${dayMonth(week.start)}?`)) change(f => { f.weeks.splice(week.index, 1); }); }),
-    );
+  /** The resolved week for a file index, or null. */
+  const weekAt = index => (state.plan?.weeks ?? []).find(w => w.index === index) ?? null;
+  function toggleDeload(index) {
+    if (!state.file.weeks[index]) return;
+    change(f => { const w = f.weeks[index]; if (w.deload) delete w.deload; else w.deload = true; });
+  }
+  function deleteWeek(index) {
+    const week = weekAt(index); if (!week) return;
+    if (!confirm(`Delete the week of ${dayMonth(week.start)}, its workouts, deload mark and note?`)) return;
+    change(f => { f.weeks.splice(index, 1); });
   }
   function editNote(week) {
     const note = input(week.note ?? "");
@@ -1066,7 +1062,20 @@ const Editor = (() => {
         button("✕", () => { rows.splice(rows.indexOf(row), 1); node.remove(); }));
       rows.push(row); box.append(node);
     }
-    (state.file.phases ?? []).forEach(addRow);
+    /**
+     * A new phase starts the day after the latest one ends (the week after it, for phases that
+     * end on a Sunday) and runs to the end of the plan.
+     */
+    function nextPhase() {
+      const ends = rows.map(r => parseDate(r.to.value)).filter(Boolean);
+      const ws = state.plan.weeks;
+      const planEnd = ws.length ? addDays(ws[ws.length - 1].start, 6) : null;
+      if (!ends.length) return planEnd ? { from: iso(ws[0].start), to: iso(planEnd) } : {};
+      const from = addDays(new Date(Math.max(...ends)), 1);
+      const to = planEnd && planEnd >= from ? planEnd : addDays(from, 6);
+      return { from: iso(from), to: iso(to) };
+    }
+    (state.file.phases ?? []).forEach(ph => addRow(ph));
     // Starting from the plan's weeks makes the first phase quick to fill in.
     if (!rows.length) {
       const ws = state.plan.weeks;
@@ -1075,7 +1084,7 @@ const Editor = (() => {
     dialog("Phases", h("div", {},
       h("div", { class: "phaserow muted" }, "Name", "First day", "Last day", "Note", ""),
       box,
-      h("p", {}, button("+ Add a phase", () => addRow())),
+      h("p", {}, button("+ Add a phase", () => addRow(nextPhase()))),
       h("p", { class: "muted" }, "A week belongs to the phase its first day falls in. The app checks phases and ignores them."),
     ), () => {
       const out = rows.map(r => tidy(Object.assign({}, r.extra, {
@@ -1106,7 +1115,7 @@ const Editor = (() => {
     }, "Add");
   }
   /** Copies a week's contents onto the following weeks, creating them or replacing what is there. */
-  function copyWeek(week) {
+  function copyWeekDialog(week) {
     const count = number(1);
     const from = input(iso(addDays(week.start, 7)), { type: "date" });
     const replace = checkbox(true);
@@ -1388,7 +1397,7 @@ const Editor = (() => {
     if (!bar) return;
     const n = board.items.length;
     if (board.week != null) {
-      bar.textContent = "Week selected · Shift+←/→ copy it to the previous / next week · Ctrl+C / X / V · Delete clears it · ? for keys";
+      bar.textContent = "Week selected · q deload · n note · Shift+←/→ copy it across · Ctrl+C / X / V · Delete clears it · Shift+Delete deletes it · ? for keys";
       return;
     }
     bar.textContent = n ? `${n} selected · Enter edit · Ctrl+arrows move · Shift+arrows copy · Delete · ? for keys`
@@ -1646,6 +1655,12 @@ const Editor = (() => {
     const w = state.file.weeks[board.week];
     if (!w || !board.clipWeek) return;
     putWeek(w.weekStart, board.clipWeek);
+  }
+
+  /** The week q and n act on: the selected week, else the cursor's. */
+  function currentWeek() {
+    if (board.week != null) return board.week;
+    return startCursor()?.week ?? null;
   }
 
   // ---------------------------------------------------------------- jumps: deloads and phases
@@ -1941,7 +1956,10 @@ const Editor = (() => {
     ["Ctrl+Home / End", "First / last day of the week"],
     ["[ / ]", "Previous / next deload week, same day"],
     ["{ / }", "Previous / next phase (its first week), same day"],
-    ["w, or click a week heading", "Select the whole week"],
+    ["w, or click a week heading", "Select the whole week (right-click it for the week's menu)"],
+    ["q", "Mark or unmark the week as a deload"],
+    ["n", "The week's note"],
+    ["Shift+Delete on a week", "Delete the week itself"],
     ["Shift+← / → on a week", "Copy the week into the previous / next week (append or replace if it has workouts)"],
     ["Enter / e / double-click", "Edit the selection"],
     ["a", "Add to the selected day (after the selected card)"],
@@ -2016,8 +2034,25 @@ const Editor = (() => {
     if (ref) { if (!board.items.some(r => sameRef(r, ref))) setSelection([ref], ref); editSelection(); }
     else if (slotFromEl(e.target)) { selectSlot(slotFromEl(e.target)); addHere(); }
   }
+  function weekMenu(x, y) {
+    const i = board.week; const w = weekAt(i); if (!w) return;
+    menu(x, y, [
+      [w.deload ? "Not a deload week" : "Deload week", "q", () => toggleDeload(i)],
+      [w.note ? "Edit the note…" : "Add a note…", "n", () => editNote(w)],
+      "-",
+      ["Copy week", "Ctrl+C", copyToClipboard],
+      ["Paste week", "Ctrl+V", () => paste(false), !board.clipWeek],
+      ["Copy to the next week", "Shift+→", () => copyWeekTo("right")],
+      ["Copy to following weeks…", "", () => copyWeekDialog(w)],
+      "-",
+      ["Clear its workouts", "Del", deleteSelection],
+      ["Delete the week", "Shift+Del", () => deleteWeek(i)],
+    ]);
+  }
   function onContextMenu(e) {
     if (!state.editing || state.view !== "week") return;
+    const head = e.target.closest?.(".whead[data-week]");
+    if (head) { e.preventDefault(); selectWeek(+head.dataset.week, { reveal: false }); weekMenu(e.clientX, e.clientY); return; }
     const ref = refFromEl(e.target);
     const slot = slotFromEl(e.target);
     if (!ref && !slot) return;
@@ -2082,9 +2117,14 @@ const Editor = (() => {
       }
       case "Enter": case "e": e.preventDefault(); editSelection(); return;
       case "a": e.preventDefault(); addHere(); return;
-      case "Delete": case "Backspace": e.preventDefault(); deleteSelection(); return;
+      case "Delete": case "Backspace":
+        e.preventDefault();
+        if (e.shiftKey && board.week != null) deleteWeek(board.week); else deleteSelection();
+        return;
       case "?": e.preventDefault(); help(); return;
       case "w": e.preventDefault(); { const c = startCursor(); if (c) selectWeek(c.week); } return;
+      case "q": e.preventDefault(); { const i = currentWeek(); if (i != null) toggleDeload(i); } return;
+      case "n": e.preventDefault(); { const w = weekAt(currentWeek()); if (w) editNote(w); } return;
       case "[": e.preventDefault(); jumpDeload(-1); return;
       case "]": e.preventDefault(); jumpDeload(1); return;
       case "{": e.preventDefault(); jumpPhase(-1); return;
@@ -2232,7 +2272,7 @@ const Editor = (() => {
       button(`Restore the unsaved draft (${d.name || "plan"}, ${new Date(d.at).toLocaleString()})`, restoreDraft)));
   }
 
-  return { button, wrap, addItem, weekTools, addWeek, editPhases, renderLibrary, updateHeader, offerDraft, afterRender, restoreFocus };
+  return { button, wrap, addItem, addWeek, editPhases, renderLibrary, updateHeader, offerDraft, afterRender, restoreFocus };
 })();
 
 const dropZone = document.getElementById("drop");

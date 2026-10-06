@@ -27,9 +27,11 @@ Ctrl+Shift+Z or Ctrl+Y; Escape; `?` lists them all. `[` / `]` jump to the previo
 week and `{` / `}` to the first week of the previous / next phase, keeping the weekday and stopping
 at the ends. `w`, or a click on a week's heading, selects the whole week: copy, cut, paste and
 Delete then act on the week, and Shift+←/→ copies it into the week before or after (created if the
-plan lacks it; *Append*, *Replace* or *Cancel* if it already has workouts). Weeks are added, copied onto the following
-weeks, cleared or deleted from their headers, where *Deload* and *Note* mark them; *Phases…* above
-the weeks edits the phases. The **Library** view adds, edits and deletes exercises, circuits and
+plan lacks it; *Append*, *Replace* or *Cancel* if it already has workouts). `q` marks the current week as a deload (or not) and `n` edits its
+note; a right-click on a week's heading offers those, copying and pasting the week, copying it onto
+the following weeks, clearing its workouts and deleting the week (Shift+Delete on a selected week).
+*+ Add a week* and *Phases…* sit above the weeks; a new phase starts the day after the last one ends
+and runs to the end of the plan. The **Library** view adds, edits and deletes exercises, circuits and
 modules; renaming one renames every reference to it. Every change re-runs the checks and can be
 undone; **Save** (Ctrl+S) downloads the file, its leading comment lines kept. An unsaved draft stays
 in the browser and is offered again on an empty page. Nothing is uploaded.
@@ -214,7 +216,8 @@ the app lives through a phase without needing its name.
   `note` is optional. Overlapping phases are a warning, not a mistake.
 - A week can say `"deload": true` and carry a `note`.
 - The plan editor (`tools/plan-viewer`) shows phases as coloured bands over the weeks and the table,
-  shades deload weeks, and edits both (*Phases…* above the weeks; *Deload* and *Note* on a week).
+  shades deload weeks (faintly in the weeks, more clearly in the table), and edits both (*Phases…*
+  above the weeks; `q` and `n`, or the week heading's right-click menu, on a week).
   A week belongs to the phase its first day falls in.
 - An app older than 2026-10-06 refuses these keys as unknown; update it before importing a file
   that uses them.
