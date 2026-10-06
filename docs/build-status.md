@@ -429,6 +429,29 @@ returns the field to today's definition. Every tracker is optional, *Not set* in
 than kept blank. The diary has its own repository and tables; nothing counts it, and logging never
 asks for it.
 
+## Reminders
+
+Opt-in notifications, all off until turned on under **Settings → Reminders**:
+
+- **Daily logging reminder** — at a chosen time, only when today has work that is neither logged,
+  skipped nor optional. "Anything to log?", listing the day's workouts (a module, a circuit or an
+  exercise, each once): "Board session, Finger training + 2 more". Tap: the calendar on that day.
+- **Weekly review** — a chosen weekday and time. "Weekly review", "Week of 5 Oct: 9 of 12 done"
+  (counted as Home counts). A review on the first two days of a week opens the week just finished;
+  from the third day on, the week under way. Tap: the calendar on that week.
+- **Tracker reminders** — any number: a phrase (the title; "Daily notes" without one), the trackers,
+  a time, and either *On days* (chosen weekdays) or *Day after workouts* (chosen categories and/or
+  exercises, circuits, modules; matching work logged or planned, not skipped; optional work only
+  once done). Trackers already
+  filled in that day are left out of the body, and nothing comes when none are left. Tap: that
+  day's daily notes.
+
+How: one alarm per reminder (`USE_EXACT_ALARM`, granted at install), set for its next time. When it
+goes off, the app reads the day, notifies only if there is something to say, and sets the next one
+— so a reminder comes at most once a day, however many workouts match. Alarms are set again when
+the app starts, after a reboot, an update or a clock change. The settings are preferences, kept out
+of backups. The decisions are `ReminderRules` (unit-tested); Android's side is `Reminders.kt`.
+
 ## Backup and restore
 
 *Import / export* is in Settings (and Home offers *Import plan* when nothing is planned), with *Backup* (Export, Restore) and *Plans* (Import a plan)
@@ -531,6 +554,10 @@ com.yokodake.melete
     TimerService.kt         foreground service (specialUse) and the notification actions
     TimerCuePlayer.kt       generated USAGE_MEDIA tone and vibration
     TimerNotifications.kt   channels, the ongoing countdown, the finished alert
+  reminders/
+    ReminderSettings.kt     the reminders' settings (SharedPreferences, JSON)
+    ReminderRules.kt        when each comes and what it says: pure, unit-tested
+    Reminders.kt            alarms, the notification, the alarm and restore receivers
 ```
 
 ## Important choices
@@ -1716,9 +1743,8 @@ Agreed with the user (2026-10-06), in order:
    day per plan file; `weekStart` may then be any day, day keys read as that weekday within the
    seven days. Monday files stay valid.
 
-Recorded, not scheduled: notifications (an evening "not logged yet" with Log / Skipped actions
-first, a morning "today" second; all opt-in, no guilt), the running-timer polish and the week
-menu UX (both waiting on the user's thinking).
+Recorded, not scheduled: the running-timer polish and the week menu UX (both waiting on the
+user's thinking). Notifications are built — see *Reminders*; not yet checked on the phone.
 
 Small follow-ups, recorded 2026-09-28 (not scheduled):
 

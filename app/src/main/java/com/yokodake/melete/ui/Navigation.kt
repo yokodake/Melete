@@ -7,6 +7,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import com.yokodake.melete.ui.benchmark.BenchmarkDetailRoute
 import com.yokodake.melete.ui.benchmark.BenchmarkEditorRoute
@@ -17,6 +18,10 @@ import com.yokodake.melete.ui.history.RecordsRoute
 import com.yokodake.melete.ui.home.HomeRoute
 import com.yokodake.melete.data.KeepAwake
 import com.yokodake.melete.ui.settings.SettingsRoute
+import com.yokodake.melete.ui.settings.RemindersRoute
+import com.yokodake.melete.data.reminders.OpenTarget
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.runtime.collectAsState
 import com.yokodake.melete.ui.module.ModuleDetailRoute
 import com.yokodake.melete.ui.routine.RoutineDetailRoute
@@ -142,6 +147,10 @@ data class BackupDestination(
 @Serializable
 data object SettingsDestination
 
+/** The reminders: logging, weekly review, trackers. */
+@Serializable
+data object RemindersDestination
+
 /** One day's notes and trackers. */
 @Serializable
 data class DiaryDestination(val dateEpochDay: Long)
@@ -168,10 +177,16 @@ data class CircuitReviewDestination(val circuitInstanceId: String)
 data object HomeDestination
 
 /**
- * The saved-state key on the week's entry that asks it to show today — the current week, scrolled
- * to the day. Its value changes with every request, so asking twice asks twice.
+ * The saved-state key on the week's entry that asks it to show a day — its week, scrolled to the
+ * day — as a [LongArray] of the epoch day and a nonce, so asking twice asks twice.
  */
-const val GO_TO_TODAY = "goToToday"
+const val GO_TO_DAY = "goToDay"
+
+/** A request for the week view to show [date]; [nonce] tells two requests for one day apart. */
+data class DayRequest(val date: LocalDate, val nonce: Long)
+
+/** What a tapped reminder asked to show. */
+data class OpenRequest(val target: OpenTarget, val date: LocalDate, val nonce: Long)
 
 /** Every benchmark and where it stands. */
 @Serializable
@@ -240,7 +255,11 @@ private enum class Tab(
 }
 
 @Composable
-fun MeleteApp(navController: NavHostController = rememberNavController()) {
+fun MeleteApp(
+    navController: NavHostController = rememberNavController(),
+    openRequest: StateFlow<OpenRequest?> = MutableStateFlow(null),
+    onOpenHandled: () -> Unit = {},
+) {
     KeepScreenOnWhileCountingDown()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val bottomBar: @Composable () -> Unit = {
@@ -250,6 +269,23 @@ fun MeleteApp(navController: NavHostController = rememberNavController()) {
         )
     }
     MeleteNavHost(navController, bottomBar)
+    // A tapped reminder: the day or week in the calendar, or the day's notes.
+    val request by openRequest.collectAsState()
+    LaunchedEffect(request) {
+        val open = request ?: return@LaunchedEffect
+        when (open.target) {
+            OpenTarget.DAY, OpenTarget.WEEK -> navController.showDay(open.date)
+            OpenTarget.NOTES -> navController.navigate(DiaryDestination(open.date.toEpochDay()))
+        }
+        onOpenHandled()
+    }
+}
+
+/** The calendar tab, on [date]'s week and scrolled to the day. */
+private fun NavHostController.showDay(date: LocalDate) {
+    switchTab(WeekDestination)
+    getBackStackEntry<WeekDestination>().savedStateHandle[GO_TO_DAY] =
+        longArrayOf(date.toEpochDay(), System.nanoTime())
 }
 
 @Composable
@@ -257,11 +293,7 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
     NavHost(navController = navController, startDestination = HomeDestination) {
         composable<HomeDestination> {
             HomeRoute(
-                onOpenToday = {
-                    navController.switchTab(WeekDestination)
-                    navController.getBackStackEntry<WeekDestination>().savedStateHandle[GO_TO_TODAY] =
-                        System.nanoTime()
-                },
+                onOpenToday = { navController.showDay(LocalDate.now()) },
                 onOpenDailyNote = { navController.navigate(DiaryDestination(it.toEpochDay())) },
                 onOpenBenchmarks = { navController.navigate(BenchmarksDestination) },
                 onOpenLibrary = { navController.navigate(LibraryDestination) },
@@ -316,9 +348,9 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
             )
         }
         composable<WeekDestination> { entry ->
-            val todayRequest by entry.savedStateHandle.getStateFlow(GO_TO_TODAY, 0L).collectAsState()
+            val dayRequest by entry.savedStateHandle.getStateFlow<LongArray?>(GO_TO_DAY, null).collectAsState()
             WeekRoute(
-                todayRequest = todayRequest,
+                dayRequest = dayRequest?.let { DayRequest(LocalDate.ofEpochDay(it[0]), it[1]) },
                 onOpenOccurrence = {
                     navController.navigate(ExerciseDetailDestination(occurrenceId = it))
                 },
@@ -460,8 +492,12 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
         composable<SettingsDestination> {
             SettingsRoute(
                 onOpenImportExport = { navController.navigate(BackupDestination()) },
+                onOpenReminders = { navController.navigate(RemindersDestination) },
                 onBack = { navController.popBackStack() },
             )
+        }
+        composable<RemindersDestination> {
+            RemindersRoute(onBack = { navController.popBackStack() })
         }
         composable<BackupDestination> { entry ->
             BackupRoute(

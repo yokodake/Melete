@@ -9,11 +9,13 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!--
-      No exact-alarm permission. Exact alarms existed to sound a cue from a process that had been
-      killed, and surviving being killed is explicitly not a requirement: the foreground service
-      is what keeps a countdown alive while the phone is locked or another app is in front, and
-      that is the case the timer is for.
+      The timer does not use exact alarms: the foreground service keeps a countdown alive while the
+      phone is locked. The reminders do: they come at a time the user chose, and an inexact alarm
+      can be late by a long way while the phone sleeps. Granted at install, nothing to ask.
     -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Alarms are cleared by a reboot; the reminders set theirs again after one. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".MeleteApplication"
@@ -50,6 +52,22 @@
         <receiver
             android:name=".data.timer.TimerActionReceiver"
             android:exported="false" />
+
+        <receiver
+            android:name=".data.reminders.ReminderAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Exported for the system's broadcasts only; it does nothing but set the alarms again. -->
+        <receiver
+            android:name=".data.reminders.ReminderRestoreReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

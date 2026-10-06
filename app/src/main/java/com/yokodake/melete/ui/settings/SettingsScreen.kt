@@ -1,5 +1,6 @@
 package com.yokodake.melete.ui.settings
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -92,6 +93,7 @@ class SettingsViewModel(
 @Composable
 fun SettingsRoute(
     onOpenImportExport: () -> Unit,
+    onOpenReminders: () -> Unit,
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
@@ -137,6 +139,8 @@ fun SettingsRoute(
                 }
             }
 
+            item { LinkRow(R.drawable.ic_reminder, "Reminders", onOpenReminders) }
+
             item { Heading("Display") }
             item {
                 // A placeholder until appearance is built: the app follows the system for now.
@@ -157,28 +161,7 @@ fun SettingsRoute(
             }
 
             item { Heading("Data") }
-            item {
-                Surface(
-                    onClick = onOpenImportExport,
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_menu_import_export),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text("Import / export", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
+            item { LinkRow(R.drawable.ic_menu_import_export, "Import / export", onOpenImportExport) }
 
             item { Heading("About") }
             item { About() }
@@ -186,8 +169,33 @@ fun SettingsRoute(
     }
 }
 
+/** A row that opens a page of its own. */
 @Composable
-private fun Heading(text: String) {
+private fun LinkRow(@DrawableRes icon: Int, title: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+internal fun Heading(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
@@ -197,7 +205,7 @@ private fun Heading(text: String) {
 }
 
 @Composable
-private fun SettingRow(
+internal fun SettingRow(
     title: String,
     subtitle: String?,
     enabled: Boolean = true,

@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.ui.DayRequest
 import com.yokodake.melete.data.BenchmarkDayResult
 import com.yokodake.melete.data.DiaryDay
 import com.yokodake.melete.data.Tracker
@@ -96,17 +97,17 @@ fun WeekRoute(
     onReviewCircuit: (circuitInstanceId: String) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
-    /** Changes whenever something asks for today: the current week, scrolled to the day. */
-    todayRequest: Long = 0L,
+    /** Changes whenever something asks for a day: its week, scrolled to the day. */
+    dayRequest: DayRequest? = null,
     viewModel: WeekViewModel = viewModel(factory = WeekViewModel.Factory),
 ) {
     // Week or month: the calendar's two views, switched from the title. Survives a trip into a
     // workout and back, and a visit to another tab.
     var showingMonth by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(todayRequest) {
-        if (todayRequest != 0L) {
+    LaunchedEffect(dayRequest) {
+        if (dayRequest != null) {
             showingMonth = false
-            viewModel.showCurrentWeek()
+            viewModel.showWeekOf(dayRequest.date)
         }
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -169,7 +170,7 @@ fun WeekRoute(
         onModuleRecordedExercises = viewModel::moduleRecordedExercises,
         bottomBar = bottomBar,
         modifier = modifier,
-        todayRequest = todayRequest,
+        dayRequest = dayRequest,
     )
 }
 
@@ -215,7 +216,7 @@ fun WeekScreen(
     onModuleRecordedExercises: suspend (String) -> Int = { 0 },
     bottomBar: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
-    todayRequest: Long = 0L,
+    dayRequest: DayRequest? = null,
 ) {
     val rows = remember(state) { state.toRows() }
     val listState = rememberLazyListState()
@@ -304,20 +305,23 @@ fun WeekScreen(
     // Only when the week itself changes: coming back from a workout, the drawer or another tab
     // keeps the place in the list rather than jumping to today again.
     var positionedFor by rememberSaveable { mutableStateOf<Long?>(null) }
-    // A request for today scrolls to it once the current week is showing, even when that week
-    // was already on screen but scrolled away.
+    // A request for a day scrolls to it once its week is showing, even when that week was
+    // already on screen but scrolled away.
     var handledRequest by rememberSaveable { mutableStateOf(0L) }
-    LaunchedEffect(todayRequest, state.weekStart, rows.size) {
-        if (todayRequest == 0L || todayRequest == handledRequest || !state.isCurrentWeek) return@LaunchedEffect
-        val todayIndex = rows.indexOfFirst { it is WeekRow.DayHeading && it.isToday }
-        if (todayIndex >= 0) {
-            listState.scrollToItem(todayIndex)
-            handledRequest = todayRequest
+    val requestHere = dayRequest?.takeIf {
+        it.nonce != handledRequest && WeekMath.contains(state.weekStart, it.date)
+    }
+    LaunchedEffect(requestHere, rows.size) {
+        val request = requestHere ?: return@LaunchedEffect
+        val dayIndex = rows.indexOfFirst { it is WeekRow.DayHeading && it.date == request.date }
+        if (dayIndex >= 0) {
+            handledRequest = request.nonce
             positionedFor = state.weekStart.toEpochDay()
+            listState.scrollToItem(dayIndex)
         }
     }
     LaunchedEffect(state.weekStart) {
-        if (positionedFor == state.weekStart.toEpochDay()) return@LaunchedEffect
+        if (positionedFor == state.weekStart.toEpochDay() || requestHere != null) return@LaunchedEffect
         positionedFor = state.weekStart.toEpochDay()
         val todayIndex = rows.indexOfFirst { it is WeekRow.DayHeading && it.isToday }
         listState.scrollToItem(if (todayIndex >= 0) todayIndex else 0)

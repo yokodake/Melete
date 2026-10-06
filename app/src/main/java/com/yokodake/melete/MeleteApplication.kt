@@ -9,6 +9,8 @@ import com.yokodake.melete.data.backup.BackupService
 import com.yokodake.melete.data.plan.PlanImporter
 import com.yokodake.melete.data.MeleteDatabase
 import com.yokodake.melete.data.TrainingRepository
+import com.yokodake.melete.data.reminders.ReminderSettings
+import com.yokodake.melete.data.reminders.Reminders
 import com.yokodake.melete.data.timer.TimerController
 import com.yokodake.melete.data.timer.TimerCuePlayer
 import com.yokodake.melete.data.timer.TimerNotifications
@@ -39,6 +41,13 @@ class AppContainer(context: Context) {
 
     val planImporter: PlanImporter by lazy { PlanImporter(database, trainingRepository, backupService) }
 
+    val reminderSettings: ReminderSettings by lazy { ReminderSettings(applicationContext) }
+
+    /** The reminders' alarms and notifications. */
+    val reminders: Reminders by lazy {
+        Reminders(applicationContext, reminderSettings, trainingRepository, diaryRepository)
+    }
+
     val timerNotifications: TimerNotifications by lazy { TimerNotifications(applicationContext) }
 
     /**
@@ -65,5 +74,7 @@ class MeleteApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // Alarms are lost when the app is force-stopped; opening it sets them again.
+        container.reminders.reschedule()
     }
 }
