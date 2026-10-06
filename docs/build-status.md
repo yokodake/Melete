@@ -1,7 +1,8 @@
 # Build status
 
-Last updated: 2026-10-06, after 6C (month view), optional exercises and the plan editor
-(schema 12, backup format 3, plan format 1). The tentative 1.0 was 6B. Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
+Last updated: 2026-10-06: **version 1.1** (schema 12, backup format 3, plan format 1), after 6C
+(month view), optional exercises and the plan editor. The tentative 1.0 was 6B. A schema change
+raises at least the minor version. Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -1662,9 +1663,9 @@ Hand checks to do:
 
 ## 2026-10-05 and 06
 
-**Release** still runs the build from before 2026-10-05 (schema 11). Installing today's build
-upgrades it to 12 on first open; the upgrade was checked on debug's real database (the file's
-header read 12 after opening, no crash). The new winter plan,
+**Release** runs **1.1** (installed 2026-10-06; first briefly as 1.0 build 31, which already
+carried schema 12). It upgraded from schema 11 to 12 on first open without a crash, as debug's real
+database had first. The new winter plan,
 `winter_2026-27_plan.json` (Base 5 Oct–15 Nov, Strength 16 Nov–10 Jan; specificity not
 programmed), waits in the phone's Download folder to be imported with **Replace plans** + **From
 today**, which clears planned work from today and library items the file does not name, and keeps

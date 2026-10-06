@@ -9,7 +9,7 @@ plugins {
 }
 
 /** The version people talk about. Changing it starts the build number again from 0. */
-val appVersionName = "1.0"
+val appVersionName = "1.1"
 
 /**
  * One build number for debug and release alike, counting every build of the app: any invocation
