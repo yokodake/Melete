@@ -179,6 +179,30 @@ week only — the saved module or circuit keeps its own:
 - `rounds` is at least 1.
 - All three go only where a module or circuit is placed in a week, never in the definitions.
 
+## Phases and deload weeks
+
+Planning metadata, for whoever writes the plan. The importer checks it and **imports none of it**:
+the app lives through a phase without needing its name.
+
+```jsonc
+"phases": [
+  { "name": "Base",     "from": "2026-10-05", "to": "2026-11-15" },
+  { "name": "Strength", "from": "2026-11-16", "to": "2027-01-10", "note": "3 load, deload, 3 load, deload" }
+],
+"weeks": [
+  { "weekStart": "2026-10-19", "deload": true, "note": "AC 10 easy", "monday": [ … ] }
+]
+```
+
+- A phase needs a `name`, a `from` and a `to` (both days included, `to` not before `from`);
+  `note` is optional. Overlapping phases are a warning, not a mistake.
+- A week can say `"deload": true` and carry a `note`.
+- The plan editor (`tools/plan-viewer`) shows phases as coloured bands over the weeks and the table,
+  shades deload weeks, and edits both (*Phases…* above the weeks; *Deload* and *Note* on a week).
+  A week belongs to the phase its first day falls in.
+- An app older than 2026-10-06 refuses these keys as unknown; update it before importing a file
+  that uses them.
+
 ## Benchmarks
 
 Reference tests and their results, recorded apart from training (no card, nothing counted). A file
