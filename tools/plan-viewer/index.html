@@ -145,6 +145,10 @@
   .selbar { position: sticky; bottom: 0; margin-top: 8px; padding: 6px 10px; background: var(--surface-2);
     border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; }
   table.keys td { padding: 3px 8px; border-bottom: 1px solid var(--line); white-space: normal; }
+  .keyhelp h4 { margin: 12px 0 4px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .keyhelp section:first-child h4 { margin-top: 0; }
+  table.keys { width: 100%; }
+  table.keys td:first-child { width: 38%; }
   kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--line);
     border-radius: 4px; padding: 0 4px; }
   dialog details { margin-top: 10px; }
@@ -155,6 +159,8 @@
   .libside { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 90px); }
   .libcats { display: flex; } .libcats button { flex: 1; }
   .libtools { display: flex; gap: 6px; }
+  .sortbtn { white-space: nowrap; }
+  .ctxmenu button span:first-child { white-space: pre; }
   .libtools input { flex: 1; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
     border-radius: 6px; padding: 4px 8px; }
   .liblist { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 4px; }
@@ -199,6 +205,9 @@
   .globalwrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 40%); gap: 14px; align-items: start; }
   .globalwrap .libpanel { position: sticky; top: 64px; max-height: calc(100vh - 90px); overflow: auto; }
   td.rowname, tr.group td { cursor: pointer; }
+  /* What the side panel edits: every row of that exercise, or that group's heading. */
+  tr.picked > td { box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
+  tr.picked > td.rowname, tr.group.picked > td { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); }
 
   /* editing */
   .edittools { display: inline-flex; gap: 6px; }
@@ -736,7 +745,10 @@ function renderGlobal(main) {
     const groupRow = h("tr", { class: "group" }, h("td", { colspan: weeks.length + 2 }, g.title, g.kind ? h("span", { class: "kind" }, g.kind) : null));
     if (g.kind === "module" || g.kind === "circuit") {
       const listKey = g.kind === "module" ? "modules" : "circuits";
-      groupRow.onclick = () => Editor.pickInGlobal(g.kind, (state.file?.[listKey] ?? []).findIndex(x => nameKey(x.name) === nameKey(g.title)));
+      const index = (state.file?.[listKey] ?? []).findIndex(x => nameKey(x.name) === nameKey(g.title));
+      groupRow.onclick = () => Editor.pickInGlobal(g.kind, index);
+      const picked = Editor.globalPicked();
+      if (picked && picked.kind === g.kind && picked.index === index) groupRow.classList.add("picked");
     }
     tbody.append(groupRow);
     g.rows.forEach(r => {
@@ -756,7 +768,10 @@ function renderGlobal(main) {
       const nameCell = h("td", { class: "rowname", title: r.ex ? exerciseDetail(r.ex, r.ex.plan ?? null, null) : r.label }, h("span", { class: "in" }, dot(r.category), r.label,
           r.tags.size ? h("span", { class: "chip" }, [...r.tags].join(" ")) : null));
       if (r.ex && state.file) nameCell.onclick = () => Editor.pickInGlobal("exercise", (state.file.exercises ?? []).indexOf(r.ex));
-      tbody.append(h("tr", {}, nameCell, cells, h("td", { class: "total" }, fraction(totalNum, r.maxSets))));
+      const tr = h("tr", {}, nameCell, cells, h("td", { class: "total" }, fraction(totalNum, r.maxSets)));
+      const picked = Editor.globalPicked();
+      if (picked?.kind === "exercise" && r.ex && state.file && (state.file.exercises ?? []).indexOf(r.ex) === picked.index) tr.classList.add("picked");
+      tbody.append(tr);
     });
   });
   const table = h("div", { class: "tablewrap" }, h("table", {}, thead, tbody));
@@ -1254,7 +1269,8 @@ const Editor = (() => {
     circuit: { list: "circuits", title: "Circuits" },
     module: { list: "modules", title: "Modules" },
   };
-  const lib = { cat: "exercise", index: null, filter: "" };
+  const lib = { cat: "exercise", index: null, filter: "", sort: "name", dir: 1 };
+  const SORTS = { name: "Name", category: "Category", usage: "Times used" };
   let globalPick = null; // { kind, index } beside the Global table
 
   const namesOf = listKey => (state.file?.[listKey] ?? []).map(x => x.name);
@@ -1265,8 +1281,16 @@ const Editor = (() => {
   function visibleItems(cat = lib.cat) {
     const all = (state.file?.[KINDS[cat].list] ?? []).map((it, i) => ({ it, i }));
     const words = lib.filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const byName = (a, b) => String(a.it.name).localeCompare(String(b.it.name));
+    const catRank = it => { const r = Object.keys(CATEGORY_VAR).indexOf(normEnum(it.category)); return r < 0 ? 99 : r; };
+    const compare = {
+      name: byName,
+      category: (a, b) => catRank(a.it) - catRank(b.it),
+      usage: (a, b) => usage(cat, a.it.name) - usage(cat, b.it.name),
+    }[lib.sort] ?? byName;
+    // Ties fall back to the name, always A to Z, so the order within a category or a count is stable.
     return all.filter(({ it }) => words.every(w => String(it.name ?? "").toLowerCase().includes(w)))
-      .sort((a, b) => String(a.it.name).localeCompare(String(b.it.name)));
+      .sort((a, b) => lib.dir * compare(a, b) || byName(a, b));
   }
 
   function renderLibrary(main) {
@@ -1293,13 +1317,30 @@ const Editor = (() => {
       return row;
     }), items.length ? null : h("div", { class: "muted", style: "padding:6px" }, "Nothing here."));
     const side = h("div", { class: "libside" }, cats,
-      h("div", { class: "libtools" }, filter, button("+ New", () => { lib.index = "new"; render(); focusPanel(); })),
+      h("div", { class: "libtools" }, filter, sortButton(), button("+ New", () => { lib.index = "new"; render(); focusPanel(); })),
       listNode,
       h("p", { class: "legend" }, "The number is how many places use it. ↑↓ choose · ←→ category · Enter edit · Esc back · / filter · a new · ? keys"));
     const panel = h("div", { class: "libpanel", id: "libpanel" },
       lib.index == null ? h("p", { class: "muted" }, "Choose something on the left, or + New.") : panelFor(lib.cat, lib.index, () => {}));
     main.append(h("div", { class: "libwrap" }, side, panel));
     requestAnimationFrame(() => document.querySelector(".librow.on")?.scrollIntoView({ block: "nearest" }));
+  }
+
+  /** The sort: by name, category or times used, either way; the current one ticked. */
+  function sortButton() {
+    const b = button(lib.dir > 0 ? "⇅ ↑" : "⇅ ↓", () => {
+      const r = b.getBoundingClientRect();
+      menu(r.left, r.bottom + 4, Object.entries(SORTS).flatMap(([key, label]) => [1, -1].map(dir => [
+        `${lib.sort === key && lib.dir === dir ? "✓ " : "   "}${label} ${{
+          name: dir > 0 ? "A → Z" : "Z → A",
+          category: dir > 0 ? "(app order)" : "(reversed)",
+          usage: dir > 0 ? "fewest first" : "most first",
+        }[key]}`,
+        "", () => { lib.sort = key; lib.dir = dir; render(); },
+      ])));
+    }, `Sort: ${SORTS[lib.sort]}, ${lib.dir > 0 ? "ascending" : "descending"}`);
+    b.classList.add("sortbtn");
+    return b;
   }
 
   /** The editor for one library item, or a new one ([index] "new"). */
@@ -2277,40 +2318,52 @@ const Editor = (() => {
       edit(f => { moveTo(f, objs, to, rawList(to).length); return objs; });
     }, "Move");
   }
+  /** The keyboard, by where it applies. Keys only: what the mouse does is in plan-format.md. */
   const KEYS = [
-    ["Arrows / hjkl", "Move between cards and empty days"],
-    ["Ctrl+arrow", "Move the selection that way"],
-    ["Shift+arrow", "Copy the selection that way; the selection follows the copies"],
-    ["Page Up / Down", "About one screen up or down"],
-    ["Home / End", "First / last day of the week"],
-    ["Ctrl+[ / Ctrl+]", "First / last week of the plan, same day"],
-    ["[ / ]", "Previous / next deload week, same day"],
-    ["{ / }", "Previous / next phase (its first week), same day"],
-    ["Ctrl+{ / Ctrl+}", "First / last day of the current phase"],
-    ["w, or click a week heading", "Select the whole week (right-click it for the week's menu)"],
-    ["q", "Mark or unmark the week as a deload"],
-    ["n", "The week's note"],
-    ["Shift+Delete on a week", "Delete the week itself"],
-    ["Shift+← / → on a week", "Copy the week into the previous / next week (append or replace if it has workouts)"],
-    ["Enter / e / double-click", "Edit the selection"],
-    ["a", "Add to the selected day (after the selected card)"],
-    ["Delete", "Remove the selection; on a selected day or week, its workouts"],
-    ["Ctrl+X / C / V", "Cut / copy / paste (after the selection, or into the selected day)"],
-    ["dd / yy / p / P", "Cut / copy / paste after / paste before"],
-    ["Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y", "Undo, redo"],
-    ["Click, Ctrl+click, Shift+click", "Select, add to the selection, select a range"],
-    ["Drag the ⠿ handle", "Move; hold Shift while dragging to copy"],
-    ["Right-click", "The menu for what is under the pointer"],
-    ["Escape", "Cancel a drag, close the editor, or clear the selection"],
-    ["Library: ↑↓ / jk", "Choose in the list"],
-    ["Library: ←→ / hl", "Exercises, circuits, modules"],
-    ["Library: Enter / e", "Into the editor panel; Escape back to the list"],
-    ["Library: / · a · Delete", "Filter · new · delete"],
-    ["Global: click a row", "Edit that exercise (or a group's module or circuit) beside the table; Escape closes"],
-    ["?", "This help"],
+    ["Weekly", [
+      ["Arrows / hjkl", "Move between cards and empty days"],
+      ["Ctrl+arrow", "Move the selection that way"],
+      ["Shift+arrow", "Copy the selection that way; the selection follows the copies"],
+      ["Page Up / Down", "About one screen up or down"],
+      ["Home / End", "First / last day of the week"],
+      ["Ctrl+[ / Ctrl+]", "First / last week of the plan, same day"],
+      ["[ / ]", "Previous / next deload week, same day"],
+      ["{ / }", "Previous / next phase (its first week), same day"],
+      ["Ctrl+{ / Ctrl+}", "First / last day of the current phase"],
+      ["Enter / e", "Edit the selection"],
+      ["a", "Add to the selected day (after the selected card)"],
+      ["Delete", "Remove the selection; on a selected day or week, its workouts"],
+      ["Ctrl+X / C / V", "Cut / copy / paste (after the selection, or into the selected day or week)"],
+      ["dd / yy / p / P", "Cut / copy / paste after / paste before"],
+      ["w", "Select the whole week"],
+      ["Shift+← / → on a week", "Copy the week into the previous / next week (append or replace if it has workouts)"],
+      ["Shift+Delete on a week", "Delete the week itself"],
+      ["q", "Mark or unmark the week as a deload"],
+      ["n", "The week's note"],
+    ]],
+    ["Library", [
+      ["↑ ↓ / j k", "Choose in the list"],
+      ["← → / h l", "Exercises, circuits, modules"],
+      ["Enter / e", "Into the editor panel"],
+      ["Escape", "From the panel back to the list"],
+      ["/", "Filter the list"],
+      ["a", "New item"],
+      ["Delete", "Delete the chosen item"],
+    ]],
+    ["Everywhere", [
+      ["` or ~", "Switch between the weekly view and the global table"],
+      ["Ctrl+Z", "Undo"],
+      ["Ctrl+Shift+Z / Ctrl+Y", "Redo"],
+      ["Ctrl+S", "Save the file"],
+      ["Escape", "Cancel a drag, close a dialog or panel, or clear the selection"],
+      ["?", "This help"],
+    ]],
   ];
   function help() {
-    dialog("Keys", h("table", { class: "keys" }, KEYS.map(([k, v]) => h("tr", {}, h("td", {}, h("kbd", {}, k)), h("td", {}, v)))), () => {}, "Close");
+    dialog("Keys", h("div", { class: "keyhelp" }, KEYS.map(([section, rows]) => h("section", {},
+      h("h4", {}, section),
+      h("table", { class: "keys" }, rows.map(([k, v]) => h("tr", {}, h("td", {}, h("kbd", {}, k)), h("td", {}, v))))))),
+    () => {}, "Close");
   }
 
   // ---------------------------------------------------------------- the page's events
@@ -2420,6 +2473,13 @@ const Editor = (() => {
     if (ctrl && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
     if (ctrl && e.key.toLowerCase() === "s") { e.preventDefault(); save(); return; }
     if (e.key === "?" && state.file) { e.preventDefault(); help(); return; }
+    // ` or ~: between the weeks and the table (from the library, to the weeks).
+    if ((e.key === "`" || e.key === "~") && state.file && !ctrl && !e.altKey) {
+      e.preventDefault();
+      state.view = state.view === "week" ? "global" : "week";
+      render();
+      return;
+    }
     if (state.view === "library" && state.file && !ctrl && !e.altKey) { if (libraryKey(e)) return; }
     if (!state.editing || state.view !== "week" || !state.file) return;
     if (document.getElementById("ctxmenu")) return;
@@ -2614,7 +2674,7 @@ const Editor = (() => {
       button(`Restore the unsaved draft (${d.name || "plan"}, ${new Date(d.at).toLocaleString()})`, restoreDraft)));
   }
 
-  return { globalPanel, pickInGlobal, button, wrap, addItem, addWeek, editPhases, renderLibrary, updateHeader, offerDraft, afterRender, restoreFocus };
+  return { globalPanel, pickInGlobal, globalPicked: () => globalPick, button, wrap, addItem, addWeek, editPhases, renderLibrary, updateHeader, offerDraft, afterRender, restoreFocus };
 })();
 
 const dropZone = document.getElementById("drop");
