@@ -1,0 +1,2272 @@
+// Winter 2026–27 · Base (5 Oct–15 Nov) + Strength (16 Nov–10 Jan). Specificity is not programmed yet.
+// Import with Replace plans, From today.
+{
+  "format": "melete-plan",
+  "version": 1,
+  "exercises": [
+    {
+      "name": "Open route",
+      "mode": "ACTIVITY",
+      "category": "OPEN_CLIMBING",
+      "plan": {
+        "minutes": 120
+      }
+    },
+    {
+      "name": "AC Boulder Mileage",
+      "mode": "DURATION",
+      "category": "STRUCTURED_CLIMBING",
+      "description": "One manageable boulder started each minute; accurate, clean completions.",
+      "plan": {
+        "sets": 15,
+        "seconds": 60,
+        "restSeconds": 0,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Edge pickup",
+      "mode": "DURATION",
+      "category": "FINGER_TRAINING",
+      "unilateral": true,
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "description": "End of the warm-up: progressive holds, half crimp, building to 80% of the last tested max.",
+      "plan": {
+        "sets": 5,
+        "seconds": 7,
+        "sideSwitchSeconds": 30
+      }
+    },
+    {
+      "name": "Strength intervals",
+      "mode": "REPETITIONS",
+      "category": "STRUCTURED_CLIMBING",
+      "description": "Hard problems; make each lap better than the last. Monday’s main work, not an add-on to projecting.",
+      "plan": {
+        "sets": 3,
+        "reps": 3,
+        "restSeconds": 300,
+        "repRestSeconds": 180,
+        "effort": "HARD"
+      }
+    },
+    {
+      "name": "Power triples",
+      "mode": "REPETITIONS",
+      "category": "STRUCTURED_CLIMBING",
+      "description": "Power endurance: hold power through the later attempts, not just the first.",
+      "plan": {
+        "sets": 3,
+        "reps": 3,
+        "restSeconds": 300,
+        "repRestSeconds": 60,
+        "effort": "HARD"
+      }
+    },
+    {
+      "name": "Limit board",
+      "mode": "ACTIVITY",
+      "category": "BOARD_CLIMBING",
+      "description": "Max efforts, long rests.",
+      "plan": {
+        "minutes": 60
+      }
+    },
+    {
+      "name": "Benchmarks or classics",
+      "mode": "ACTIVITY",
+      "category": "BOARD_CLIMBING",
+      "description": "Fewer attempts, not less time: e.g. ~6 problems × ~3 tries, 6 min rest.",
+      "plan": {
+        "minutes": 120
+      }
+    },
+    {
+      "name": "Board volume",
+      "mode": "ACTIVITY",
+      "category": "BOARD_CLIMBING",
+      "description": "Problems just above flash level, varied styles.",
+      "plan": {
+        "minutes": 60
+      }
+    },
+    {
+      "name": "Movement drills",
+      "mode": "ACTIVITY",
+      "category": "BOARD_CLIMBING",
+      "plan": {
+        "minutes": 20
+      }
+    },
+    {
+      "name": "Open boulder",
+      "mode": "ACTIVITY",
+      "category": "OPEN_CLIMBING",
+      "plan": {
+        "minutes": 60
+      }
+    },
+    {
+      "name": "Flex class",
+      "mode": "ACTIVITY",
+      "category": "FLEXIBILITY",
+      "plan": {
+        "minutes": 60
+      }
+    },
+    {
+      "name": "Silks",
+      "mode": "ACTIVITY",
+      "category": "OTHER_ACTIVITY",
+      "plan": {
+        "minutes": 60
+      }
+    },
+    {
+      "name": "HoG (GG)",
+      "mode": "ACTIVITY",
+      "category": "FINGER_TRAINING",
+      "plan": {
+        "minutes": 30
+      }
+    },
+    {
+      "name": "Abs follow-along",
+      "mode": "ACTIVITY",
+      "category": "STRENGTH_CONDITIONING",
+      "plan": {
+        "minutes": 10
+      }
+    },
+    {
+      "name": "Incline bench (barbell)",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "description": "Start with 2–3 reps in reserve.",
+      "variations": [
+        {
+          "tag": "STR",
+          "plan": {
+            "sets": 3,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        }
+      ],
+      "plan": {
+        "sets": 2,
+        "reps": 8,
+        "restSeconds": 150,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Wide pull-up",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "ADDED_LOAD",
+      "description": "2–3 reps in reserve.",
+      "variations": [
+        {
+          "tag": "STR",
+          "notes": "Weighted. Start near +20 kg (2RM above +35 kg).",
+          "plan": {
+            "sets": 3,
+            "reps": 4,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        }
+      ],
+      "plan": {
+        "sets": 2,
+        "reps": 10,
+        "restSeconds": 150,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "External rotation",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unilateral": true,
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "description": "Rotator cuff. Keep all winter, taper included.",
+      "plan": {
+        "sets": 2,
+        "reps": 10,
+        "restSeconds": 60,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Lateral raise",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "plan": {
+        "sets": 2,
+        "reps": 10,
+        "restSeconds": 60,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Bent-over fly",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "description": "Rear delt + scapular retraction; pause at the top.",
+      "plan": {
+        "sets": 2,
+        "reps": 8,
+        "restSeconds": 90,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Dumbbell curl",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "description": "Elbow rehab.",
+      "plan": {
+        "sets": 3,
+        "reps": 8,
+        "restSeconds": 90,
+        "effort": "MODERATE"
+      },
+      "variations": [
+        {
+          "tag": "ECC",
+          "notes": "Extra controlled eccentric.",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Single-leg hip thrust",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unilateral": true,
+      "unit": "kg",
+      "meaning": "ADDED_LOAD",
+      "description": "Shoulders on a secure bench, brief top pause.",
+      "plan": {
+        "sets": 2,
+        "reps": 8,
+        "restSeconds": 90,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Wrist flexor curl",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "plan": {
+        "sets": 2,
+        "reps": 10,
+        "restSeconds": 60,
+        "effort": "HARD"
+      }
+    },
+    {
+      "name": "Wrist extensor curl",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "plan": {
+        "sets": 2,
+        "reps": 10,
+        "restSeconds": 60,
+        "effort": "HARD"
+      }
+    },
+    {
+      "name": "Hammer rotation",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unilateral": true,
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "description": "Pronation/supination, controlled 2–3 s.",
+      "plan": {
+        "sets": 2,
+        "reps": 12,
+        "restSeconds": 60,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Sciatic sliders",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "description": "No sustained stretch, no provoked tingling. Always first.",
+      "plan": {
+        "sets": 2,
+        "reps": 10,
+        "restSeconds": 30,
+        "effort": "EASY"
+      }
+    },
+    {
+      "name": "Active 90/90",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "description": "Controlled; hand support if needed.",
+      "plan": {
+        "sets": 2,
+        "reps": 6,
+        "restSeconds": 45,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Loaded Cossack",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "description": "~3 s lowering, controlled depth.",
+      "plan": {
+        "sets": 2,
+        "reps": 6,
+        "restSeconds": 120,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Frog PAILs/RAILs",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "description": "Each set: 30 s settle → 10 s push → 10 s pull → 20 s relax. Moderate contractions initially.",
+      "plan": {
+        "sets": 2,
+        "seconds": 70,
+        "restSeconds": 60,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Frog passive hold",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "plan": {
+        "sets": 2,
+        "seconds": 60,
+        "restSeconds": 30,
+        "effort": "EASY"
+      }
+    },
+    {
+      "name": "Wall straddle",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "description": "Stop at tingling.",
+      "plan": {
+        "sets": 1,
+        "seconds": 120,
+        "effort": "EASY"
+      }
+    },
+    {
+      "name": "Lat stretch (bench)",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "plan": {
+        "sets": 2,
+        "seconds": 45,
+        "effort": "EASY"
+      }
+    },
+    {
+      "name": "Butterfly",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "plan": {
+        "sets": 1,
+        "seconds": 60,
+        "effort": "EASY"
+      }
+    },
+    {
+      "name": "Clamshell",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "description": "Dumbbell or band. Pelvis stacked.",
+      "plan": {
+        "sets": 2,
+        "reps": 10,
+        "restSeconds": 60,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Fire hydrant",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "description": "2 s pause. Stop before pelvic rotation substitutes.",
+      "plan": {
+        "sets": 2,
+        "reps": 8,
+        "restSeconds": 60,
+        "effort": "MODERATE"
+      }
+    },
+    {
+      "name": "Side-split iso",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "description": "Stable width inside benchmark max.",
+      "plan": {
+        "sets": 2,
+        "seconds": 20,
+        "restSeconds": 90,
+        "effort": "MODERATE"
+      }
+    }
+  ],
+  "circuits": [
+    {
+      "name": "Cooldown",
+      "category": "FLEXIBILITY",
+      "rounds": 2,
+      "transitionSeconds": 15,
+      "roundRestSeconds": 0,
+      "stations": [
+        {
+          "exercise": "Sciatic sliders",
+          "plan": {
+            "reps": 10,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Frog passive hold",
+          "plan": {
+            "seconds": 60,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Wall straddle",
+          "plan": {
+            "seconds": 120,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Lat stretch (bench)",
+          "plan": {
+            "seconds": 45,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Butterfly",
+          "plan": {
+            "seconds": 60,
+            "effort": "EASY"
+          }
+        }
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "name": "FA",
+      "description": "Loaded end-range hip work. Short day: drop one abductor exercise and the split iso.",
+      "entries": [
+        {
+          "exercise": "Sciatic sliders"
+        },
+        {
+          "exercise": "Active 90/90"
+        },
+        {
+          "exercise": "Loaded Cossack",
+          "plan": {
+            "sets": 3,
+            "reps": 6,
+            "restSeconds": 120,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Frog PAILs/RAILs"
+        },
+        {
+          "exercise": "Clamshell"
+        },
+        {
+          "exercise": "Fire hydrant"
+        },
+        {
+          "exercise": "Side-split iso"
+        }
+      ]
+    },
+    {
+      "name": "FA · deload",
+      "description": "Easy. Frog as passive holds; no split iso.",
+      "entries": [
+        {
+          "exercise": "Sciatic sliders",
+          "plan": {
+            "sets": 1,
+            "reps": 10,
+            "restSeconds": 30,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Active 90/90",
+          "plan": {
+            "sets": 1,
+            "reps": 6,
+            "restSeconds": 45,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Loaded Cossack",
+          "plan": {
+            "sets": 2,
+            "reps": 6,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Clamshell",
+          "plan": {
+            "sets": 1,
+            "reps": 10,
+            "restSeconds": 45,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Frog passive hold"
+        }
+      ]
+    },
+    {
+      "name": "Wrist block",
+      "description": "Medial elbow capacity. Thursday only: it shares tissue with silks.",
+      "entries": [
+        {
+          "exercise": "Wrist flexor curl"
+        },
+        {
+          "exercise": "Wrist extensor curl"
+        },
+        {
+          "exercise": "Hammer rotation"
+        }
+      ]
+    },
+    {
+      "name": "Wrist block · deload",
+      "entries": [
+        {
+          "exercise": "Wrist flexor curl",
+          "plan": {
+            "sets": 1,
+            "reps": 10,
+            "restSeconds": 60,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Wrist extensor curl",
+          "plan": {
+            "sets": 1,
+            "reps": 10,
+            "restSeconds": 60,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Hammer rotation",
+          "plan": {
+            "sets": 1,
+            "reps": 12,
+            "restSeconds": 60,
+            "effort": "EASY"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shoulder support",
+      "entries": [
+        {
+          "exercise": "External rotation"
+        },
+        {
+          "exercise": "Bent-over fly"
+        },
+        {
+          "exercise": "Lateral raise"
+        }
+      ]
+    }
+  ],
+  "weeks": [
+    {
+      "weekStart": "2026-10-05",
+      "monday": [
+        {
+          "exercise": "Movement drills"
+        },
+        {
+          "exercise": "AC Boulder Mileage",
+          "plan": {
+            "sets": 15,
+            "seconds": 60,
+            "restSeconds": 0,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 150,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 120
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA",
+          "plans": {
+            "Loaded Cossack": {
+              "sets": 2,
+              "reps": 6,
+              "restSeconds": 120,
+              "effort": "MODERATE"
+            }
+          }
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-10-12",
+      "monday": [
+        {
+          "exercise": "Movement drills"
+        },
+        {
+          "exercise": "AC Boulder Mileage",
+          "plan": {
+            "sets": 15,
+            "seconds": 60,
+            "restSeconds": 0,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 150,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 120
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-10-19",
+      "monday": [
+        {
+          "exercise": "Movement drills"
+        },
+        {
+          "exercise": "AC Boulder Mileage",
+          "plan": {
+            "sets": 10,
+            "seconds": 60,
+            "restSeconds": 0,
+            "effort": "EASY"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "plan": {
+            "sets": 2,
+            "reps": 10,
+            "restSeconds": 150,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 150,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "Wrist block · deload"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 90
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA · deload"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-10-26",
+      "monday": [
+        {
+          "exercise": "Movement drills"
+        },
+        {
+          "exercise": "AC Boulder Mileage",
+          "plan": {
+            "sets": 20,
+            "seconds": 60,
+            "restSeconds": 0,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 150,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 90
+          }
+        },
+        {
+          "exercise": "Board volume",
+          "plan": {
+            "minutes": 30
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-11-02",
+      "monday": [
+        {
+          "exercise": "Movement drills"
+        },
+        {
+          "exercise": "AC Boulder Mileage",
+          "plan": {
+            "sets": 20,
+            "seconds": 60,
+            "restSeconds": 0,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "plan": {
+            "sets": 4,
+            "reps": 8,
+            "restSeconds": 150,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 90
+          }
+        },
+        {
+          "exercise": "Board volume",
+          "plan": {
+            "minutes": 30
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA",
+          "plans": {
+            "Loaded Cossack": {
+              "sets": 4,
+              "reps": 6,
+              "restSeconds": 120,
+              "effort": "MODERATE"
+            }
+          }
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 4,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-11-09",
+      "monday": [
+        {
+          "exercise": "Movement drills"
+        },
+        {
+          "exercise": "AC Boulder Mileage",
+          "plan": {
+            "sets": 10,
+            "seconds": 60,
+            "restSeconds": 0,
+            "effort": "EASY"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "plan": {
+            "sets": 2,
+            "reps": 10,
+            "restSeconds": 150,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 150,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "Wrist block · deload"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 90
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA · deload"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-11-16",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals",
+          "plan": {
+            "sets": 2,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 3,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Limit board"
+        },
+        {
+          "exercise": "Board volume"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-11-23",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals",
+          "plan": {
+            "sets": 2,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 4,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Limit board"
+        },
+        {
+          "exercise": "Board volume"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-11-30",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals",
+          "plan": {
+            "sets": 2,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 4,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Limit board"
+        },
+        {
+          "exercise": "Board volume"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-12-07",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals",
+          "plan": {
+            "sets": 1,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR",
+          "plan": {
+            "sets": 2,
+            "reps": 4,
+            "restSeconds": 180,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 2,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "Wrist block · deload"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Benchmarks or classics"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA · deload"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-12-14",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals"
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 4,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Limit board"
+        },
+        {
+          "exercise": "Board volume"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-12-21",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals"
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 4,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Silks"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Limit board"
+        },
+        {
+          "exercise": "Board volume"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2026-12-28",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals"
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR"
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 4,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "module": "Shoulder support"
+        },
+        {
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Edge pickup"
+        },
+        {
+          "exercise": "Limit board"
+        },
+        {
+          "exercise": "Board volume"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "module": "Shoulder support"
+        }
+      ]
+    },
+    {
+      "weekStart": "2027-01-04",
+      "monday": [
+        {
+          "exercise": "Open boulder",
+          "plan": {
+            "minutes": 25
+          }
+        },
+        {
+          "exercise": "Strength intervals",
+          "plan": {
+            "sets": 1,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
+          }
+        },
+        {
+          "circuit": "Cooldown"
+        },
+        {
+          "exercise": "Wide pull-up",
+          "variation": "STR",
+          "plan": {
+            "sets": 2,
+            "reps": 4,
+            "restSeconds": 180,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Dumbbell curl",
+          "variation": "ECC",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "tuesday": [
+        {
+          "exercise": "Open route"
+        },
+        {
+          "circuit": "Cooldown"
+        }
+      ],
+      "wednesday": [
+        {
+          "exercise": "Incline bench (barbell)",
+          "variation": "STR",
+          "plan": {
+            "sets": 2,
+            "reps": 5,
+            "restSeconds": 180,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Flex class"
+        }
+      ],
+      "thursday": [
+        {
+          "exercise": "HoG (GG)"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "Wrist block · deload"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Benchmarks or classics"
+        },
+        {
+          "exercise": "HoG (GG)"
+        }
+      ],
+      "sunday": [
+        {
+          "module": "FA · deload"
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Abs follow-along"
+        },
+        {
+          "exercise": "Bent-over fly",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        }
+      ]
+    }
+  ]
+}
