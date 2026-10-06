@@ -33,8 +33,9 @@ note; a right-click on a week's heading offers those, copying and pasting the we
 the following weeks, clearing its workouts and deleting the week (Shift+Delete on a selected week).
 *+ Add a week* and *Phases…* sit above the weeks; a new phase starts the day after the last one ends
 and runs to the end of the plan. The **Library** view lists one category at a time (Exercises, Circuits, Modules), filterable and
-sortable (⇅: by name, by category in the app's order, or by times used, either way), with how many
-places use each item; the chosen item opens in a panel beside the list. The exercise
+sortable (⇅: by name, by category in the app's order, or by times planned, either way), with how many
+times each item is planned (a module's or circuit's placement counts for everything in it, less the
+module's omits); the chosen item opens in a panel beside the list. The exercise
 editor is laid out across (name, mode and category on a line; unilateral, unit and meaning on the
 next; the plan three fields to a row); variations, a circuit's stations and a module's entries are
 rows — the exercise picked from the file's names, its variation from that exercise's, optional, a
@@ -42,8 +43,9 @@ plan folded into the row, ↑ ↓ to reorder, ✕ to remove. The raw JSON is fol
 changed, it replaces the item. Renaming renames every reference. Keys in the list: ↑↓ (jk) choose,
 ←→ (hl) change category, Enter or `e` into the panel, Escape back, `/` filter, `a` new, Delete. In
 the **Global** table, a click on an exercise's row, or on a module's or circuit's group heading,
-opens the same panel beside the table (Escape closes it). Every change re-runs the checks and can be
-undone; **Save** (Ctrl+S) downloads the file, its leading comment lines kept. An unsaved draft stays
+opens the same panel beside the table (Escape closes it). With an item open in either panel, Ctrl+S
+saves that item (even while typing in a field). Every change re-runs the checks and can be
+undone; **Save** (Ctrl+S, with no item open) downloads the file, its leading comment lines kept. An unsaved draft stays
 in the browser and is offered again on an empty page. Nothing is uploaded.
 
 The test library, `app/src/androidTest/assets/test-library.json`, is a complete example. Version
