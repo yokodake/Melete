@@ -1,7 +1,7 @@
 # Build status
 
-Last updated: 2026-09-28, phase 6B: history and basic graphs — the tentative 1.0 (schema 11,
-backup format 2, plan format 1). Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
+Last updated: 2026-10-06, after 6C (month view), optional exercises and the plan editor
+(schema 12, backup format 3, plan format 1). The tentative 1.0 was 6B. Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
 trust; **How it got here** is a dated record of the work, kept because the reasoning behind a
@@ -32,11 +32,14 @@ the two ever disagree, the code and the first half win.
 | Timer polish (follow-up, after phase 6) | not started — recorded in `ui-ux-handoff.md` |
 | Attempt-based sets | ✅ built; unit tests pass |
 | 6B — history and basic graphs (the tentative 1.0) | ✅ built; unit tests and all 105 device tests pass; screens still to be checked by hand |
-| 6C — month view | built 2026-10-05 on debug; unit tests pass; not checked by eye |
-| 7B — profile and settings (bodyweight tracking) | not started |
-| 8 — progression analysis | not started |
-| 9 — remote and web | not started |
-| 10 — appearance | not started |
+| 6C — month view | ✅ built 2026-10-05; log/unlog and skip from a line; unit tests pass; checked by hand on debug |
+| Optional exercises and `omit` (follow-ups) | ✅ built 2026-10-05; unit tests pass; schema 12 upgrade checked on debug's database |
+| Plan editor (`tools/plan-viewer`) | ✅ basic version 2026-10-05; smoke-tested headless; UX to refine with use |
+| Week long-press menu UX | to be rethought by the user before changes |
+| 7B — profile and settings (bodyweight tracking) | not started; lower priority |
+| 8 — progression analysis | not started; waits for more logged data |
+| 9 — remote and web | not started; needs a web server |
+| 10 — appearance | not started; large, later |
 
 Schema version **12** (10 was the **baseline**; `MIGRATION_10_11` added the benchmark tables,
 `MIGRATION_11_12` the `optional` flag on scheduled exercises and module entries): every schema
@@ -1657,9 +1660,64 @@ Hand checks to do:
   rest between sets, sides and sets. The same sequence as planned attempts; the last numbers are
   remembered like the repeater's.
 
+## 2026-10-05 and 06
+
+**Release** still runs the build from before 2026-10-05 (schema 11). Installing today's build
+upgrades it to 12 on first open; the upgrade was checked on debug's real database (the file's
+header read 12 after opening, no crash). The new winter plan,
+`winter_2026-27_plan.json` (Base 5 Oct–15 Nov, Strength 16 Nov–10 Jan; specificity not
+programmed), waits in the phone's Download folder to be imported with **Replace plans** + **From
+today**, which clears planned work from today and library items the file does not name, and keeps
+last week, logs, benchmarks and the diary.
+
+- **Week cards:** a long press offers *Log workout* (or *Unlog*, confirmed, once logged: sets,
+  notes, effort and duration deleted, back to planned on the same day), *Skip* / *Unskip* for
+  dated untouched work (a skipped circuit shows a *Skipped* chip), and *Make optional* /
+  *Make required*, above the existing Duplicate / Take out / Remove. Skipping and unlogging live in
+  the repository, shared with the month. The menu works but its UX is to be rethought.
+- **Benchmarks** are listed alphabetically (the list and a day's results).
+- **`omit` and optional exercises:** see the follow-ups below.
+- **6C, the month view:** the calendar's title shows the period as a button — the week's dates
+  open the month, the month's name returns to the week. A grid (one mark per category, filled when
+  done, hollow when planned, two then "+"; today ringed in blue, the selected day filled; folds to
+  the selected week) above every day of the month with the week's day headings, diary and
+  benchmark lines, and compact workout lines (the user prefers them to full cards). A long press
+  on a line logs or unlogs, skips or unskips. *Logged only* hides plans. Unit tests: `MonthViewTest`.
+- **Debug seed:** 52 more weeks from 5 Oct 2026 using every exercise, variation, circuit, module
+  and per-week override; `LibrarySeed` plans each week only while it is empty, so re-runs add
+  without doubling.
+- **Plan viewer → plan editor** (`tools/plan-viewer/index.html`): the global table splits an
+  exercise from its variations and sorts modules and circuits alphabetically; **Edit** adds,
+  edits, moves, duplicates and deletes items, adds, copies, clears and deletes weeks, and edits the
+  library (renames carried to every reference), with undo/redo, a browser draft and Save. Smoke-
+  tested in headless Chrome on the winter plan and the seed (no errors, delete/undo exact, unchanged
+  library saves leave the file identical). Documented in `plan-format.md`.
+
+Checks: 274 unit tests pass. The instrumented suite was not run (the user's call: unit tests are
+enough for now).
+
 ## Next step
 
-**6C — the month view**, or the timer polish recorded in `ui-ux-handoff.md`.
+Agreed with the user (2026-10-06), in order:
+
+1. **Plan editor keyboard and drag-and-drop.** Arrows (and hjkl) move the focus — ↑↓ through a
+   day's workouts and on into the next day, ←→ the same weekday a week earlier or later; **Ctrl**
+   moves the workout that way; **Shift** duplicates it that way and follows the copy (Shift+→ =
+   the same workout next week). Home/End for the week, Ctrl+Home/End (gg/G) for the plan, { } for
+   phases, [ ] for deloads; Enter edits, Delete removes, y/p copy and paste. Alt+arrows are the
+   browser's, so not used. Drag-and-drop with the mouse.
+2. **Plan metadata for planning:** phases (`"phases": [{ name, from, to }]`) and deload weeks
+   (`"deload": true`, a `note` per week), accepted and ignored by the importer, shown by the
+   editor as bands, shading and table groups.
+3. **A configurable start of the week, Saturday by default** for the user. Weeks computed from
+   dates rather than stored: dated items keep only their date, undated (Anytime) items an anchor
+   date, and every screen buckets by the current rule, so changing it needs no rewrite. One start
+   day per plan file; `weekStart` may then be any day, day keys read as that weekday within the
+   seven days. Monday files stay valid.
+
+Recorded, not scheduled: notifications (an evening "not logged yet" with Log / Skipped actions
+first, a morning "today" second; all opt-in, no guilt), the running-timer polish and the week
+menu UX (both waiting on the user's thinking).
 
 Small follow-ups, recorded 2026-09-28 (not scheduled):
 
