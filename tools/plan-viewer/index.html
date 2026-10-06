@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Melete plan viewer</title>
+<title>Melete plan editor</title>
 <style>
   :root {
     --bg: #fbf8fb; --surface: #ffffff; --surface-2: #f3eef3; --line: #ddd5dd;
@@ -95,18 +95,54 @@
   td.v.zero { color: var(--line); }
   td.total { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
   .legend { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+
+  /* editing */
+  .edittools { display: inline-flex; gap: 6px; }
+  .tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .tools button, .day h2 button { font-size: 12px; padding: 1px 7px; border-radius: 6px; }
+  .day h2 { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .card.bad { border-color: var(--warn); }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
+    padding: 16px; max-width: min(680px, 94vw); width: 100%; }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h3 { margin: 0 0 10px; font-size: 16px; }
+  .form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 10px; align-items: center; }
+  .form > label { color: var(--muted); font-size: 13px; }
+  .form input, .form select, .form textarea { font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; width: 100%; }
+  .form input[type=checkbox] { width: auto; justify-self: start; }
+  .form textarea { min-height: 80px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .form .span { grid-column: 1 / -1; }
+  .form .sub { grid-column: 1 / -1; font-weight: 600; margin-top: 6px; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .err { color: var(--warn); font-size: 13px; min-height: 1em; }
+  .lib { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .lib section { background: var(--surface-2); border-radius: 12px; padding: 10px; }
+  .lib h2 { font-size: 14px; margin: 0 0 6px; display: flex; justify-content: space-between; align-items: center; }
+  .lib .row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; background: var(--surface);
+    margin: 4px 0; border: 1px solid var(--line); }
+  .lib .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lib .row button { font-size: 12px; padding: 1px 7px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Plan viewer</h1>
+  <h1>Plan editor</h1>
   <label class="file">Open plan… <input id="file" type="file" accept=".json,application/json,text/plain"></label>
   <span class="fname" id="fname"></span>
   <span style="flex:1"></span>
   <div class="seg" role="group" aria-label="View">
     <button id="v-week" aria-pressed="true">Weekly</button>
     <button id="v-global" aria-pressed="false">Global</button>
+    <button id="v-library" aria-pressed="false">Library</button>
   </div>
+  <span class="edittools">
+    <button id="e-new" title="Start an empty plan">New</button>
+    <button id="e-edit" aria-pressed="false" title="Edit the plan">Edit</button>
+    <button id="e-undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="e-redo" title="Redo (Ctrl+Y)">Redo</button>
+    <button id="e-save" title="Download the plan file">Save</button>
+  </span>
 </header>
 <main id="main">
   <div class="drop" id="drop">Drop a <code>melete-plan</code> .json here, or use <b>Open plan…</b><br>
@@ -243,11 +279,14 @@ function resolve(file) {
     const weekKeys = new Set(["weekStart", "unscheduled", ...DAYS]);
     Object.keys(week).filter(k => !weekKeys.has(k)).forEach(k => problems.push(`Week ${week.weekStart}: unknown key "${k}".`));
 
-    const slots = [{ label: "Unscheduled", date: null, raw: week.unscheduled ?? [] },
-      ...DAYS.map((d, n) => ({ label: `${DAY_LABEL[n]} ${dayMonth(addDays(start, n))}`, date: addDays(start, n), raw: week[d] ?? [] }))];
+    const slots = [{ key: "unscheduled", label: "Unscheduled", date: null, raw: week.unscheduled ?? [] },
+      ...DAYS.map((d, n) => ({ key: d, label: `${DAY_LABEL[n]} ${dayMonth(addDays(start, n))}`, date: addDays(start, n), raw: week[d] ?? [] }))];
     const where = s => `${week.weekStart}, ${s.label}`;
     slots.forEach(slot => {
-      slot.items = slot.raw.map(item => {
+      // Each placed item keeps where it sits in the file, so the editor can change it there.
+      slot.items = slot.raw.map((item, index) => {
+        const ref = { week: i, day: slot.key, index };
+        const resolved = (() => {
         const kinds = ["exercise", "circuit", "module", "activity"].filter(k => item[k] != null);
         if (kinds.length !== 1) { problems.push(`${where(slot)}: an item must be exactly one of exercise, circuit, module, activity.`); return null; }
         if (item.exercise) {
@@ -284,9 +323,11 @@ function resolve(file) {
           };
         }
         return { kind: "activity", name: item.activity, minutes: item.minutes ?? null };
-      }).filter(Boolean);
+        })();
+        return resolved ? Object.assign(resolved, { ref }) : { kind: "invalid", ref, raw: item };
+      });
     });
-    weeks.push({ start, slots });
+    weeks.push({ start, slots, index: i });
   });
 
   function circuitItem(name, where) {
@@ -409,6 +450,9 @@ function circuitCard(item) {
       `${s.ex.name}${s.variation ? " [" + s.variation + "]" : ""} — ${planSummary(s.ex, s.plan, true)}`))));
 }
 function itemNode(item) {
+  if (item.kind === "invalid") return h("div", { class: "card bad" },
+    h("div", { class: "top" }, h("span", { class: "name" }, "Unreadable item")),
+    h("div", { class: "sub" }, JSON.stringify(item.raw)));
   if (item.kind === "exercise") return exerciseCard(item);
   if (item.kind === "circuit") return circuitCard(item);
   if (item.kind === "activity") return h("div", {
@@ -422,26 +466,29 @@ function itemNode(item) {
     item.entries.length ? item.entries.map(itemNode) : h("div", { class: "empty" }, "No entries."));
 }
 
-let state = { plan: null, view: "week", fileName: "" };
+let state = { plan: null, view: "week", fileName: "", file: null, header: "", editing: false, past: [], future: [] };
 
 function renderWeek(main) {
   const { weeks } = state.plan;
+  if (state.editing) main.append(h("p", {}, Editor.button("+ Add a week", () => Editor.addWeek())));
   if (!weeks.length) { main.append(h("p", { class: "muted" }, "This file plans no weeks.")); return; }
   // One grid row per slot, shared by every week, so a row is as tall as its busiest week and the
   // days line up across columns. Unscheduled gets a row only if some week uses it.
-  const withUnscheduled = weeks.some(w => w.slots[0].items.length);
+  const withUnscheduled = state.editing || weeks.some(w => w.slots[0].items.length);
   const rows = 1 + (withUnscheduled ? 1 : 0) + 7;
   const grid = h("div", { class: "weekgrid" });
   grid.style.gridTemplateRows = `repeat(${rows}, auto)`;
   weeks.forEach(week => {
     const end = addDays(week.start, 6);
     grid.append(h("div", { class: "cell whead" }, `${dayMonth(week.start)} – ${dayMonth(end)}`,
-      h("span", { class: "wk" }, `W${isoWeek(week.start)} · ${end.getUTCFullYear()}`)));
+      h("span", { class: "wk" }, `W${isoWeek(week.start)} · ${end.getUTCFullYear()}`),
+      state.editing ? Editor.weekTools(week) : null));
     const slots = withUnscheduled ? week.slots : week.slots.slice(1);
     slots.forEach((slot, n) => {
       grid.append(h("div", { class: "cell day" + (n === slots.length - 1 ? " last" : "") },
-        h("h2", {}, slot.label),
-        slot.items.length ? slot.items.map(itemNode) : h("div", { class: "empty" }, "—")));
+        h("h2", {}, slot.label, state.editing ? Editor.button("+", () => Editor.addItem(week, slot)) : null),
+        slot.items.length ? slot.items.map(it => state.editing ? Editor.wrap(it, week, slot) : itemNode(it))
+          : h("div", { class: "empty" }, "—")));
     });
   });
   main.append(h("div", { class: "weeks" }, grid));
@@ -571,7 +618,7 @@ function renderGlobal(main) {
 function render() {
   const main = document.getElementById("main");
   main.replaceChildren();
-  if (!state.plan) { main.append(dropZone); return; }
+  if (!state.plan) { main.append(dropZone); Editor.updateHeader(); return; }
   const { problems, counts } = state.plan;
   main.append(h("p", { class: "muted", style: "margin-top:0" },
     `${counts.exercises} exercises · ${counts.circuits} circuits · ${counts.modules} modules · ${counts.weeks} weeks`));
@@ -581,9 +628,13 @@ function render() {
     d.open = problems.length <= 6;
     main.append(d);
   }
-  state.view === "week" ? renderWeek(main) : renderGlobal(main);
+  if (state.view === "week") renderWeek(main);
+  else if (state.view === "global") renderGlobal(main);
+  else Editor.renderLibrary(main);
   document.getElementById("v-week").setAttribute("aria-pressed", state.view === "week");
   document.getElementById("v-global").setAttribute("aria-pressed", state.view === "global");
+  document.getElementById("v-library").setAttribute("aria-pressed", state.view === "library");
+  Editor.updateHeader();
 }
 
 function load(name, text) {
@@ -591,14 +642,545 @@ function load(name, text) {
   document.getElementById("fname").textContent = name;
   try {
     const file = parseLenient(text);
+    state.file = file;
+    // The comment lines at the top of the file, kept so saving does not lose them.
+    state.header = (text.match(/^(\s*\/\/[^\n]*\n)+/) ?? [""])[0].trim();
+    state.past = []; state.future = [];
     state.plan = resolve(file);
   } catch (e) {
+    state.file = null;
     state.plan = { weeks: [], problems: [`Not readable JSON: ${e.message}`], counts: { exercises: 0, circuits: 0, modules: 0, weeks: 0 } };
   }
   render();
 }
 
+// ------------------------------------------------------------------ editing
+
+/**
+ * The editor works on the file itself (state.file), never on the resolved view: every change is
+ * made to the JSON the importer reads, then the whole file is resolved again, so the weeks, the
+ * table and the problem list always describe exactly what Save would write.
+ */
+const Editor = (() => {
+  const DRAFT_KEY = "melete-plan-editor-draft";
+  const EFFORTS = ["", "VERY_EASY", "EASY", "MODERATE", "HARD", "VERY_HARD"];
+  const MODES = ["REPETITIONS", "DURATION", "REPEATERS", "ACTIVITY"];
+  const CATEGORIES = ["", ...Object.keys(CATEGORY_VAR)];
+  const MEANINGS = ["", "TOTAL_LOAD", "ADDED_LOAD"];
+  const clone = x => JSON.parse(JSON.stringify(x));
+
+  function button(label, onClick, title) {
+    const b = h("button", title ? { title } : {}, label);
+    b.onclick = e => { e.stopPropagation(); onClick(); };
+    return b;
+  }
+
+  // ---------------------------------------------------------------- history and saving
+
+  /** Applies one change to the file, remembering the file as it was for Undo. */
+  function change(fn) {
+    if (!state.file) return;
+    state.past.push(JSON.stringify(state.file));
+    if (state.past.length > 200) state.past.shift();
+    state.future = [];
+    fn(state.file);
+    refresh();
+  }
+  function refresh() {
+    state.plan = resolve(state.file);
+    saveDraft();
+    render();
+  }
+  function undo() {
+    if (!state.past.length) return;
+    state.future.push(JSON.stringify(state.file));
+    state.file = JSON.parse(state.past.pop());
+    refresh();
+  }
+  function redo() {
+    if (!state.future.length) return;
+    state.past.push(JSON.stringify(state.file));
+    state.file = JSON.parse(state.future.pop());
+    refresh();
+  }
+  function text() {
+    return (state.header ? state.header + "\n" : "") + JSON.stringify(state.file, null, 2) + "\n";
+  }
+  function save() {
+    if (!state.file) return;
+    const blob = new Blob([text()], { type: "application/json" });
+    const a = h("a", { href: URL.createObjectURL(blob), download: state.fileName || "plan.json" });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  // A draft in this browser, so a closed tab does not lose an afternoon of edits.
+  function saveDraft() {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ name: state.fileName, header: state.header, file: state.file, at: Date.now() })); } catch (e) { /* storage off */ }
+  }
+  function readDraft() {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null"); } catch (e) { return null; }
+  }
+  function restoreDraft() {
+    const d = readDraft(); if (!d?.file) return;
+    state.fileName = d.name || "plan.json"; state.header = d.header ?? ""; state.file = d.file;
+    state.past = []; state.future = []; state.editing = true;
+    document.getElementById("fname").textContent = state.fileName + " (draft)";
+    refresh();
+  }
+  function newPlan() {
+    if (state.file && !confirm("Start an empty plan? The current one stays only in Undo until you load another file.")) return;
+    if (state.file) state.past.push(JSON.stringify(state.file));
+    state.file = { format: "melete-plan", version: 1, exercises: [], circuits: [], modules: [], weeks: [] };
+    state.fileName = "plan.json"; state.header = ""; state.editing = true; state.future = [];
+    document.getElementById("fname").textContent = state.fileName;
+    refresh();
+  }
+
+  function updateHeader() {
+    const has = !!state.file;
+    const edit = document.getElementById("e-edit");
+    edit.setAttribute("aria-pressed", state.editing);
+    edit.disabled = !has;
+    document.getElementById("e-undo").disabled = !state.past.length;
+    document.getElementById("e-redo").disabled = !state.future.length;
+    document.getElementById("e-save").disabled = !has;
+  }
+
+  // ---------------------------------------------------------------- dialogs
+
+  /** A modal with a form; [onOk] returns an error message to keep it open, or nothing. */
+  function dialog(title, body, onOk, okLabel = "Save") {
+    const err = h("div", { class: "err" });
+    const ok = h("button", {}, okLabel);
+    const cancel = h("button", {}, "Cancel");
+    const d = h("dialog", {}, h("h3", {}, title), body, err, h("div", { class: "actions" }, cancel, ok));
+    document.body.append(d);
+    cancel.onclick = () => { d.close(); d.remove(); };
+    ok.onclick = () => {
+      let message;
+      try { message = onOk(); } catch (e) { message = e.message; }
+      if (message) { err.textContent = message; return; }
+      d.close(); d.remove();
+    };
+    d.addEventListener("cancel", () => d.remove());
+    d.showModal();
+    return d;
+  }
+  function form(...rows) { return h("div", { class: "form" }, rows); }
+  function field(label, input) { return [h("label", {}, label), input]; }
+  function input(value, attrs = {}) { const i = h("input", attrs); i.value = value ?? ""; return i; }
+  function number(value) { return input(value, { type: "number", min: "0", step: "1" }); }
+  function textarea(value) { const t = h("textarea", {}); t.value = value ?? ""; return t; }
+  function checkbox(checked) { const c = h("input", { type: "checkbox" }); c.checked = !!checked; return c; }
+  function select(options, value) {
+    const s = h("select", {}, options.map(o => {
+      const [v, l] = Array.isArray(o) ? o : [o, o === "" ? "—" : o.toLowerCase().replace(/_/g, " ")];
+      return h("option", { value: v }, l);
+    }));
+    s.value = value ?? "";
+    return s;
+  }
+  function list(id, names) { return h("datalist", { id }, names.map(n => h("option", { value: n }))); }
+  const num = el => el.value.trim() === "" ? undefined : Number(el.value);
+  function jsonOf(el, fallback) {
+    const t = el.value.trim();
+    if (!t) return fallback;
+    return parseLenient(t);
+  }
+  // Drop undefined, empty strings and empty objects, so the file stays as short as it was.
+  function tidy(o) {
+    Object.keys(o).forEach(k => {
+      const v = o[k];
+      if (v === undefined || v === "" || v === null || (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length)) delete o[k];
+    });
+    return o;
+  }
+
+  /** The plan fields: every one of them, filled from [plan]; read() gives the plan or undefined. */
+  function planFields(plan) {
+    plan = plan ?? {};
+    const f = {
+      sets: number(plan.sets), reps: number(plan.reps), seconds: number(plan.seconds),
+      restSeconds: number(plan.restSeconds), repRestSeconds: number(plan.repRestSeconds),
+      sideSwitchSeconds: number(plan.sideSwitchSeconds), minutes: number(plan.minutes),
+      plannedMinutes: number(plan.plannedMinutes), effort: select(EFFORTS, plan.effort ? normEnum(plan.effort) : ""),
+      rReps: number(plan.repeater?.reps), rWork: number(plan.repeater?.workSeconds), rRest: number(plan.repeater?.restSeconds),
+    };
+    const nodes = [
+      ...field("Sets", f.sets), ...field("Reps", f.reps), ...field("Set length (s)", f.seconds),
+      ...field("Rest between sets (s)", f.restSeconds), ...field("Rest between reps (s)", f.repRestSeconds),
+      ...field("Side switch (s)", f.sideSwitchSeconds), ...field("Minutes (activity)", f.minutes),
+      ...field("Planned minutes", f.plannedMinutes), ...field("Effort", f.effort),
+      ...field("Repeater reps", f.rReps), ...field("Repeater on (s)", f.rWork), ...field("Repeater off (s)", f.rRest),
+    ];
+    function read() {
+      const p = tidy({
+        sets: num(f.sets), reps: num(f.reps), seconds: num(f.seconds), restSeconds: num(f.restSeconds),
+        repRestSeconds: num(f.repRestSeconds), sideSwitchSeconds: num(f.sideSwitchSeconds), minutes: num(f.minutes),
+        plannedMinutes: num(f.plannedMinutes), effort: f.effort.value || undefined,
+        repeater: num(f.rReps) != null || num(f.rWork) != null
+          ? tidy({ reps: num(f.rReps), workSeconds: num(f.rWork), restSeconds: num(f.rRest) }) : undefined,
+      });
+      return Object.keys(p).length ? p : undefined;
+    }
+    return { nodes, read };
+  }
+
+  // ---------------------------------------------------------------- week items
+
+  function slotList(file, ref, create = false) {
+    const week = file.weeks[ref.week];
+    if (!week[ref.day]) { if (!create) return []; week[ref.day] = []; }
+    return week[ref.day];
+  }
+  function dropEmptySlots(week) {
+    ["unscheduled", ...DAYS].forEach(k => { if (Array.isArray(week[k]) && !week[k].length) delete week[k]; });
+  }
+
+  /** A placed item with its tools under it: move up or down, move elsewhere, edit, delete. */
+  function wrap(item, week, slot) {
+    const node = itemNode(item);
+    const ref = item.ref;
+    const count = slot.raw.length;
+    node.append(h("div", { class: "tools" },
+      button("↑", () => change(f => { const l = slotList(f, ref); if (ref.index > 0) [l[ref.index - 1], l[ref.index]] = [l[ref.index], l[ref.index - 1]]; }), "Up"),
+      button("↓", () => change(f => { const l = slotList(f, ref); if (ref.index < count - 1) [l[ref.index + 1], l[ref.index]] = [l[ref.index], l[ref.index + 1]]; }), "Down"),
+      button("Edit", () => editItem(ref)),
+      button("Move", () => moveItem(ref)),
+      button("Copy", () => change(f => { const l = slotList(f, ref); l.splice(ref.index + 1, 0, clone(l[ref.index])); }), "Duplicate in this day"),
+      button("✕", () => change(f => { slotList(f, ref).splice(ref.index, 1); dropEmptySlots(f.weeks[ref.week]); }), "Delete"),
+    ));
+    return node;
+  }
+
+  function addItem(week, slot) {
+    itemDialog(`Add to ${slot.label}, week of ${dayMonth(week.start)}`, { exercise: "" }, true, item => {
+      change(f => slotList(f, { week: week.index, day: slot.key }, true).push(item));
+    });
+  }
+  function editItem(ref) {
+    const raw = slotList(state.file, ref)[ref.index];
+    itemDialog("Edit item", clone(raw), false, item => change(f => { slotList(f, ref)[ref.index] = item; }));
+  }
+
+  /** The form for one placed item, shaped by its kind. */
+  function itemDialog(title, raw, adding, onDone) {
+    const file = state.file;
+    const kind0 = ["exercise", "circuit", "module", "activity"].find(k => raw[k] != null) ?? "exercise";
+    const kind = select(["exercise", "circuit", "module", "activity"], kind0);
+    const name = input(raw[kind0] ?? "", { list: "names-" + kind0 });
+    const lists = h("div", {},
+      list("names-exercise", (file.exercises ?? []).map(e => e.name)),
+      list("names-circuit", (file.circuits ?? []).map(c => c.name)),
+      list("names-module", (file.modules ?? []).map(m => m.name)));
+    const variation = select([""], raw.variation ?? "");
+    const optional = checkbox(raw.optional);
+    const ownPlan = checkbox(!!raw.plan);
+    const plan = planFields(raw.plan);
+    const rounds = number(raw.rounds);
+    const omit = input((raw.omit ?? []).join(", "));
+    const plans = textarea(raw.plans ? JSON.stringify(raw.plans, null, 2) : "");
+    const minutes = number(raw.minutes);
+    const extra = textarea(JSON.stringify(Object.fromEntries(Object.entries(raw).filter(([k]) =>
+      !["exercise", "circuit", "module", "activity", "variation", "optional", "plan", "rounds", "omit", "plans", "minutes"].includes(k))), null, 2));
+
+    function fillVariations() {
+      const ex = (file.exercises ?? []).find(e => nameKey(e.name) === nameKey(name.value));
+      const tags = (ex?.variations ?? []).map(v => String(v.tag ?? "").toUpperCase());
+      const current = variation.value || raw.variation || "";
+      variation.replaceChildren(...["", ...tags].map(t => h("option", { value: t }, t || "— default —")));
+      if (current && !tags.includes(String(current).toUpperCase())) variation.append(h("option", { value: current }, current + " (not in this file)"));
+      variation.value = current ? String(current).toUpperCase() : "";
+      if (!variation.value && current) variation.value = current;
+    }
+    const groups = {
+      exercise: [...field("Variation", variation), ...field("Optional", optional), ...field("Own plan this week", ownPlan),
+        h("div", { class: "sub" }, "Plan (used when “own plan” is ticked)"), ...plan.nodes],
+      circuit: [...field("Rounds this week", rounds)],
+      module: [...field("Omit (names, comma-separated)", omit),
+        h("div", { class: "sub" }, "Plans this week, by exercise name (JSON object)"), h("div", { class: "span" }, plans)],
+      activity: [...field("Minutes", minutes)],
+    };
+    const body = h("div", {});
+    function layout() {
+      name.setAttribute("list", "names-" + kind.value);
+      if (kind.value === "exercise") fillVariations();
+      body.replaceChildren(lists, form(
+        ...(adding ? field("Kind", kind) : []),
+        ...field(kind.value === "activity" ? "Name" : "Name", name),
+        ...groups[kind.value],
+        h("div", { class: "sub" }, "Other fields (JSON, rarely needed)"), h("div", { class: "span" }, extra),
+      ));
+    }
+    kind.onchange = layout;
+    name.onchange = () => { if (kind.value === "exercise") fillVariations(); };
+    layout();
+    dialog(title, body, () => {
+      const n = name.value.trim();
+      if (!n) return "A name is needed.";
+      const item = { [kind.value]: n };
+      if (kind.value === "exercise") {
+        if (variation.value) item.variation = variation.value;
+        if (ownPlan.checked) { const p = plan.read(); if (p) item.plan = p; }
+        if (optional.checked) item.optional = true;
+      } else if (kind.value === "circuit") {
+        if (num(rounds) != null) item.rounds = num(rounds);
+      } else if (kind.value === "module") {
+        const o = omit.value.split(",").map(x => x.trim()).filter(Boolean);
+        if (o.length) item.omit = o;
+        const p = jsonOf(plans, undefined);
+        if (p && Object.keys(p).length) item.plans = p;
+      } else if (num(minutes) != null) {
+        item.minutes = num(minutes);
+      }
+      Object.assign(item, jsonOf(extra, {}));
+      onDone(item);
+    });
+  }
+
+  /** Moves an item to any day of any week, at the end. */
+  function moveItem(ref) {
+    const weeks = state.plan.weeks;
+    const week = select(weeks.map(w => [String(w.index), `Week of ${dayMonth(w.start)} ${w.start.getUTCFullYear()}`]), String(ref.week));
+    const day = select([["unscheduled", "Unscheduled"], ...DAYS.map((d, n) => [d, DAY_LABEL[n]])], ref.day);
+    dialog("Move to", form(...field("Week", week), ...field("Day", day)), () => {
+      const to = { week: Number(week.value), day: day.value };
+      change(f => {
+        const [item] = slotList(f, ref).splice(ref.index, 1);
+        slotList(f, to, true).push(item);
+        dropEmptySlots(f.weeks[ref.week]);
+      });
+    }, "Move");
+  }
+
+  // ---------------------------------------------------------------- weeks
+
+  function weekTools(week) {
+    return h("div", { class: "tools" },
+      button("Copy to…", () => copyWeek(week)),
+      button("Clear", () => { if (confirm(`Empty the week of ${dayMonth(week.start)}?`)) change(f => { f.weeks[week.index] = { weekStart: f.weeks[week.index].weekStart }; }); }),
+      button("Delete", () => { if (confirm(`Delete the week of ${dayMonth(week.start)}?`)) change(f => { f.weeks.splice(week.index, 1); }); }),
+    );
+  }
+  function addWeek() {
+    const weeks = state.plan.weeks;
+    const last = weeks.length ? weeks[weeks.length - 1].start : null;
+    const today = new Date(); const monday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+    const start = input(iso(last ? addDays(last, 7) : monday), { type: "date" });
+    dialog("Add a week", form(...field("Monday", start)), () => {
+      const d = parseDate(start.value);
+      if (!d || d.getUTCDay() !== 1) return "Pick a Monday.";
+      if (weeks.some(w => iso(w.start) === iso(d))) return "That week is already in the plan.";
+      change(f => { (f.weeks ??= []).push({ weekStart: iso(d) }); f.weeks.sort((a, b) => String(a.weekStart).localeCompare(String(b.weekStart))); });
+    }, "Add");
+  }
+  /** Copies a week's contents onto the following weeks, creating them or replacing what is there. */
+  function copyWeek(week) {
+    const count = number(1);
+    const from = input(iso(addDays(week.start, 7)), { type: "date" });
+    const replace = checkbox(true);
+    dialog(`Copy the week of ${dayMonth(week.start)}`, form(
+      ...field("First week to fill", from), ...field("How many weeks", count), ...field("Replace their contents", replace),
+      h("div", { class: "span muted" }, "Without “replace”, the copied items are added after what each week already holds."),
+    ), () => {
+      const first = parseDate(from.value);
+      const n = num(count) ?? 1;
+      if (!first || first.getUTCDay() !== 1) return "Pick a Monday.";
+      if (n < 1 || n > 104) return "Between 1 and 104 weeks.";
+      change(f => {
+        const source = f.weeks[week.index];
+        for (let k = 0; k < n; k++) {
+          const start = iso(addDays(first, 7 * k));
+          let target = f.weeks.find(w => w.weekStart === start);
+          if (!target) { target = { weekStart: start }; f.weeks.push(target); }
+          ["unscheduled", ...DAYS].forEach(key => {
+            const items = clone(source[key] ?? []);
+            if (replace.checked) { if (items.length) target[key] = items; else delete target[key]; }
+            else if (items.length) target[key] = [...(target[key] ?? []), ...items];
+          });
+        }
+        f.weeks.sort((a, b) => String(a.weekStart).localeCompare(String(b.weekStart)));
+      });
+    }, "Copy");
+  }
+
+  // ---------------------------------------------------------------- the library
+
+  /** How many places name [name] as a [kind], so a deletion can say what it would break. */
+  function usage(kind, name) {
+    const key = nameKey(name); let n = 0;
+    const f = state.file;
+    const visit = item => { if (item && nameKey(item[kind]) === key) n++; };
+    (f.weeks ?? []).forEach(w => ["unscheduled", ...DAYS].forEach(d => (w[d] ?? []).forEach(visit)));
+    (f.circuits ?? []).forEach(c => (c.stations ?? []).forEach(visit));
+    (f.modules ?? []).forEach(m => (m.entries ?? []).forEach(visit));
+    return n;
+  }
+  /** Renames every reference to a renamed exercise, circuit or module across the file. */
+  function rename(f, kind, from, to) {
+    const key = nameKey(from);
+    if (key === nameKey(to)) return;
+    const fix = item => {
+      if (!item) return;
+      if (nameKey(item[kind]) === key) item[kind] = to;
+      if (kind === "exercise" && item.module) {
+        if (item.plans) item.plans = Object.fromEntries(Object.entries(item.plans).map(([k, v]) => [nameKey(k) === key ? to : k, v]));
+        if (item.omit) item.omit = item.omit.map(o => nameKey(o) === key ? to : o);
+      }
+    };
+    (f.weeks ?? []).forEach(w => ["unscheduled", ...DAYS].forEach(d => (w[d] ?? []).forEach(fix)));
+    (f.circuits ?? []).forEach(c => (c.stations ?? []).forEach(fix));
+    (f.modules ?? []).forEach(m => (m.entries ?? []).forEach(fix));
+  }
+
+  function renderLibrary(main) {
+    if (!state.file) { main.append(h("p", { class: "muted" }, "Open a plan, or start a new one.")); return; }
+    const f = state.file;
+    const editing = state.editing;
+    const section = (title, kind, items, describe, edit, make) => h("section", {},
+      h("h2", {}, `${title} (${items.length})`, editing ? button("+ Add", () => edit(null)) : null),
+      [...items].map((it, i) => [it, i]).sort((a, b) => String(a[0].name).localeCompare(String(b[0].name)))
+        .map(([it, i]) => h("div", { class: "row", title: describe(it) },
+          dot(it.category), h("span", { class: "name" }, it.name ?? "(no name)"),
+          h("span", { class: "muted" }, String(usage(kind, it.name))),
+          editing ? button("Edit", () => edit(i)) : null,
+          editing ? button("✕", () => remove(make, kind, i)) : null)));
+    main.append(h("p", { class: "legend" }, editing
+      ? "The number is how many places use it. Renaming updates them; deleting leaves them pointing at nothing (shown as problems)."
+      : "Turn on Edit to change the library. The number is how many places use each item."));
+    main.append(h("div", { class: "lib" },
+      section("Exercises", "exercise", f.exercises ?? [], it => exerciseDetail(it, it.plan, null), editExercise, "exercises"),
+      section("Circuits", "circuit", f.circuits ?? [], it => `${it.rounds ?? 1} rounds · ${(it.stations ?? []).map(s => s.exercise).join(", ")}`, editCircuit, "circuits"),
+      section("Modules", "module", f.modules ?? [], it => (it.entries ?? []).map(e => e.exercise ?? e.circuit).join(", "), editModule, "modules"),
+    ));
+  }
+  function remove(listKey, kind, index) {
+    const item = state.file[listKey][index];
+    const used = usage(kind, item.name);
+    if (!confirm(`Delete ${item.name}?` + (used ? ` It is used in ${used} place${used === 1 ? "" : "s"}, which will then point at nothing.` : ""))) return;
+    change(f => f[listKey].splice(index, 1));
+  }
+
+  /** Writes [obj] at [index] of [listKey] (or adds it), renaming references when the name changed. */
+  function store(listKey, kind, index, obj) {
+    const names = (state.file[listKey] ?? []).filter((_, i) => i !== index).map(x => nameKey(x.name));
+    if (!obj.name) return "A name is needed.";
+    if (names.includes(nameKey(obj.name))) return `Another one is already called “${obj.name}”.`;
+    change(f => {
+      f[listKey] ??= [];
+      if (index == null) f[listKey].push(obj);
+      else { rename(f, kind, f[listKey][index].name, obj.name); f[listKey][index] = obj; }
+    });
+  }
+
+  function editExercise(index) {
+    const ex = index == null ? { name: "", mode: "REPETITIONS" } : clone(state.file.exercises[index]);
+    const name = input(ex.name);
+    const mode = select(MODES, parseMode(ex.mode) ?? "REPETITIONS");
+    const category = select(CATEGORIES, ex.category ? normEnum(ex.category) : "");
+    const unilateral = checkbox(ex.unilateral);
+    const unit = input(ex.unit);
+    const meaning = select(MEANINGS, ex.meaning ? normEnum(ex.meaning) : "");
+    const description = textarea(ex.description); description.style.fontFamily = "inherit";
+    const notes = input(ex.notes);
+    const plan = planFields(ex.plan);
+    const variations = textarea(ex.variations?.length ? JSON.stringify(ex.variations, null, 2) : "");
+    dialog(index == null ? "New exercise" : `Edit ${ex.name}`, form(
+      ...field("Name", name), ...field("Mode", mode), ...field("Category", category), ...field("Unilateral", unilateral),
+      ...field("Unit", unit), ...field("Meaning", meaning), ...field("Description", description), ...field("Notes", notes),
+      h("div", { class: "sub" }, "Default plan"), ...plan.nodes,
+      h("div", { class: "sub" }, "Variations (JSON list of { tag, notes, plan })"), h("div", { class: "span" }, variations),
+    ), () => {
+      const out = Object.assign(ex, tidy({
+        name: name.value.trim(), mode: mode.value, category: category.value || undefined,
+        unilateral: unilateral.checked || undefined, unit: unit.value.trim() || undefined,
+        meaning: meaning.value || undefined, description: description.value.trim() || undefined,
+        notes: notes.value.trim() || undefined,
+      }));
+      ["category", "unilateral", "unit", "meaning", "description", "notes", "plan", "variations"].forEach(k => {
+        if (out[k] === undefined) delete out[k];
+      });
+      if (!category.value) delete out.category;
+      if (!unilateral.checked) delete out.unilateral;
+      if (!unit.value.trim()) delete out.unit;
+      if (!meaning.value) delete out.meaning;
+      if (!description.value.trim()) delete out.description;
+      if (!notes.value.trim()) delete out.notes;
+      const p = plan.read(); if (p) out.plan = p; else delete out.plan;
+      const v = jsonOf(variations, []); if (v.length) out.variations = v; else delete out.variations;
+      return store("exercises", "exercise", index, out);
+    });
+  }
+
+  function editCircuit(index) {
+    const c = index == null ? { name: "", rounds: 1, stations: [] } : clone(state.file.circuits[index]);
+    const name = input(c.name);
+    const category = select(CATEGORIES, c.category ? normEnum(c.category) : "");
+    const rounds = number(c.rounds ?? 1);
+    const transition = number(c.transitionSeconds);
+    const roundRest = number(c.roundRestSeconds);
+    const stations = textarea(JSON.stringify(c.stations ?? [], null, 2));
+    dialog(index == null ? "New circuit" : `Edit ${c.name}`, form(
+      ...field("Name", name), ...field("Category", category), ...field("Rounds", rounds),
+      ...field("Transition (s)", transition), ...field("Round rest (s)", roundRest),
+      h("div", { class: "sub" }, "Stations (JSON list of { exercise, variation, plan })"), h("div", { class: "span" }, stations),
+    ), () => {
+      c.name = name.value.trim();
+      if (category.value) c.category = category.value; else delete c.category;
+      c.rounds = num(rounds) ?? 1;
+      if (num(transition) != null) c.transitionSeconds = num(transition); else delete c.transitionSeconds;
+      if (num(roundRest) != null) c.roundRestSeconds = num(roundRest); else delete c.roundRestSeconds;
+      c.stations = jsonOf(stations, []);
+      return store("circuits", "circuit", index, c);
+    });
+  }
+
+  function editModule(index) {
+    const m = index == null ? { name: "", entries: [] } : clone(state.file.modules[index]);
+    const name = input(m.name);
+    const description = textarea(m.description); description.style.fontFamily = "inherit";
+    const entries = textarea(JSON.stringify(m.entries ?? [], null, 2));
+    dialog(index == null ? "New module" : `Edit ${m.name}`, form(
+      ...field("Name", name), ...field("Description", description),
+      h("div", { class: "sub" }, "Entries (JSON list of { exercise, variation, plan, optional } or { circuit })"), h("div", { class: "span" }, entries),
+    ), () => {
+      m.name = name.value.trim();
+      if (description.value.trim()) m.description = description.value.trim(); else delete m.description;
+      m.entries = jsonOf(entries, []);
+      return store("modules", "module", index, m);
+    });
+  }
+
+  // ---------------------------------------------------------------- wiring
+
+  document.getElementById("e-edit").onclick = () => { state.editing = !state.editing; render(); };
+  document.getElementById("e-undo").onclick = undo;
+  document.getElementById("e-redo").onclick = redo;
+  document.getElementById("e-save").onclick = save;
+  document.getElementById("e-new").onclick = newPlan;
+  document.addEventListener("keydown", e => {
+    if (document.querySelector("dialog[open]")) return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if (e.key === "y" || (e.key === "z" && e.shiftKey)) { e.preventDefault(); redo(); }
+    else if (e.key === "s") { e.preventDefault(); save(); }
+  });
+
+  /** On an empty page, offers the draft left from last time. */
+  function offerDraft(zone) {
+    const d = readDraft();
+    if (!d?.file) return;
+    zone.append(h("div", { style: "margin-top:14px" },
+      button(`Restore the unsaved draft (${d.name || "plan"}, ${new Date(d.at).toLocaleString()})`, restoreDraft)));
+  }
+
+  return { button, wrap, addItem, weekTools, addWeek, renderLibrary, updateHeader, offerDraft };
+})();
+
 const dropZone = document.getElementById("drop");
+Editor.updateHeader();
+Editor.offerDraft(dropZone);
 document.getElementById("file").onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   f.text().then(t => load(f.name, t));
@@ -606,6 +1188,7 @@ document.getElementById("file").onchange = e => {
 };
 document.getElementById("v-week").onclick = () => { state.view = "week"; render(); };
 document.getElementById("v-global").onclick = () => { state.view = "global"; render(); };
+document.getElementById("v-library").onclick = () => { state.view = "library"; render(); };
 document.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("over"); });
 document.addEventListener("dragleave", () => dropZone.classList.remove("over"));
 document.addEventListener("drop", e => {

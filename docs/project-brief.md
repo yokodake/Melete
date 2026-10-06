@@ -183,8 +183,9 @@ Attempt-based sets: a set of N untimed attempts with a rest between them, logged
 Follow-ups after 6C (2026-10-05): optional exercises and the `omit` plan override ✅; the week's
     long-press menu works but its UX is **to be rethought** — the user wants to think it through
     before anything changes.
-Next, the user's choice between: the full-screen **import preview**, or a **web page to write and
-    update a plan** rather than only view it (the plan viewer's week table needs fixing either way).
+Plan editor (2026-10-05): the plan viewer edits too — weeks, items, the library, undo, save. A
+    first, basic version; its UX is to be refined with use. The full-screen import preview stays
+    on the list.
 7A. Benchmarks: named reference tests with latest and best results, recorded apart from training.
     Brought forward for the baseline week. ✅
 7B. Profile and settings: optional bodyweight history, Track bodyweight. Lower priority.

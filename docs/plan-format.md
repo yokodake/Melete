@@ -5,9 +5,18 @@ Import a plan**. Everything is referred to by **name**: there are no ids, timest
 to maintain. (A *backup* is the other kind of file — the whole record with its ids, for putting a
 phone back exactly. It goes through *Restore*.)
 
-To look at a plan file before importing it, open `tools/plan-viewer/index.html` in a browser and
-pick the file: a weekly view like the app's, a global table of exercises by week, and the problems
-the importer would report. It reads the file locally; nothing is uploaded.
+To look at a plan file before importing it, or to write one, open `tools/plan-viewer/index.html`
+in a browser and pick the file (or **New** for an empty plan): a weekly view like the app's, a
+global table of exercises by week, the library, and the problems the importer would report.
+
+**Edit** turns on editing. In the weekly view, **+** on a day adds an exercise, circuit, module or
+one-off activity; each item can be edited (variation, optional, its own plan; a circuit's rounds; a
+module's omit and plans), moved up or down, moved to any day of any week, duplicated or deleted. A
+week can be copied onto the following weeks, cleared or deleted, and weeks added. The **Library**
+view adds, edits and deletes exercises, circuits and modules; renaming one renames every reference
+to it. Every change re-runs the checks, **Undo**/**Redo** (Ctrl+Z / Ctrl+Y) step through them, and
+**Save** (Ctrl+S) downloads the file, its leading comment lines kept. An unsaved draft stays in the
+browser and is offered again on an empty page. Nothing is uploaded.
 
 The test library, `app/src/androidTest/assets/test-library.json`, is a complete example. Version
 1 files stay readable in every later version of the app; the test library is the check.
