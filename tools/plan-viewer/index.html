@@ -115,6 +115,41 @@
   .phaserow input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
     border-radius: 6px; padding: 4px 6px; width: 100%; }
 
+  /* the board: selection, dragging, menus */
+  .it { position: relative; cursor: default; }
+  .it.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .weekgrid > .cell.wsel { box-shadow: inset 3px 0 0 var(--accent), inset -3px 0 0 var(--accent); }
+  .weekgrid > .whead.wsel { box-shadow: inset 3px 0 0 var(--accent), inset -3px 0 0 var(--accent), inset 0 3px 0 var(--accent); }
+  .weekgrid > .last.wsel { box-shadow: inset 3px 0 0 var(--accent), inset -3px 0 0 var(--accent), inset 0 -3px 0 var(--accent); }
+  .whead[data-week] { cursor: pointer; }
+  .it.cur { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .slot.sel { outline: 2px dashed var(--accent); outline-offset: -3px; }
+  .slot.cur { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .grip { cursor: grab; color: var(--muted); user-select: none; touch-action: none; padding: 0 2px; margin-left: -4px;
+    font-size: 13px; line-height: 1; opacity: .35; }
+  .it:hover .grip, .it.sel .grip { opacity: 1; }
+  .dragsrc { opacity: .45; }
+  .slot.droptarget { background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
+  .ghost { position: fixed; z-index: 50; pointer-events: none; background: var(--surface); border: 1px solid var(--accent);
+    border-radius: 8px; padding: 4px 10px; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .ghost .plus { display: none; margin-right: 6px; color: var(--accent); }
+  .ghost.copy .plus { display: inline; }
+  .dropline { position: fixed; z-index: 49; height: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; display: none; }
+  .ctxmenu { position: fixed; z-index: 60; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 4px; min-width: 220px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  .ctxmenu button { display: flex; justify-content: space-between; gap: 18px; width: 100%; border: 0; border-radius: 6px;
+    background: transparent; padding: 5px 10px; text-align: left; }
+  .ctxmenu button:hover:not(:disabled), .ctxmenu button:focus { background: var(--surface-2); outline: none; }
+  .ctxmenu .kbd { color: var(--muted); font-size: 12px; }
+  .ctxmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+  .selbar { position: sticky; bottom: 0; margin-top: 8px; padding: 6px 10px; background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; }
+  table.keys td { padding: 3px 8px; border-bottom: 1px solid var(--line); white-space: normal; }
+  kbd { font: 12px ui-monospace, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0 4px; }
+  dialog details { margin-top: 10px; }
+  dialog summary { cursor: pointer; color: var(--muted); }
+
   /* editing */
   .edittools { display: inline-flex; gap: 6px; }
   .tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
@@ -522,7 +557,8 @@ function renderWeek(main) {
   weeks.forEach(week => {
     const end = addDays(week.start, 6);
     const shade = week.deload ? " deload" : "";
-    grid.append(h("div", { class: "cell whead" + shade + (week.phase ? ` ph${week.phase.color}` : "") },
+    grid.append(h("div", Object.assign({ class: "cell whead" + shade + (week.phase ? ` ph${week.phase.color}` : "") },
+        state.editing ? { "data-week": week.index } : {}),
       `${dayMonth(week.start)} – ${dayMonth(end)}`,
       h("span", { class: "wk" }, `W${isoWeek(week.start)} · ${end.getUTCFullYear()}`),
       h("div", {},
@@ -532,13 +568,15 @@ function renderWeek(main) {
       state.editing ? Editor.weekTools(week) : null));
     const slots = withUnscheduled ? week.slots : week.slots.slice(1);
     slots.forEach((slot, n) => {
-      grid.append(h("div", { class: "cell day" + shade + (n === slots.length - 1 ? " last" : "") },
+      grid.append(h("div", Object.assign({ class: "cell day" + shade + (n === slots.length - 1 ? " last" : "") + (state.editing ? " slot" : "") },
+          state.editing ? { "data-week": week.index, "data-day": slot.key } : {}),
         h("h2", {}, slot.label, state.editing ? Editor.button("+", () => Editor.addItem(week, slot)) : null),
         slot.items.length ? slot.items.map(it => state.editing ? Editor.wrap(it, week, slot) : itemNode(it))
           : h("div", { class: "empty" }, "—")));
     });
   });
   main.append(h("div", { class: "weeks" }, grid));
+  if (state.editing) { main.append(h("div", { id: "selbar", class: "selbar" })); Editor.afterRender(); }
 }
 
 // ------------------------------------------------------------------ global view
@@ -674,7 +712,14 @@ function renderGlobal(main) {
 
 function render() {
   const main = document.getElementById("main");
+  // Redrawing keeps the place: the weeks' sideways scroll and the page's.
+  const keepX = document.querySelector(".weeks")?.scrollLeft ?? 0, keepY = window.scrollY;
   main.replaceChildren();
+  requestAnimationFrame(() => {
+    const weeks = document.querySelector(".weeks");
+    if (weeks) weeks.scrollLeft = keepX;
+    window.scrollTo(window.scrollX, keepY);
+  });
   if (!state.plan) { main.append(dropZone); Editor.updateHeader(); return; }
   const { problems, counts } = state.plan;
   main.append(h("p", { class: "muted", style: "margin-top:0" },
@@ -812,14 +857,18 @@ const Editor = (() => {
     const cancel = h("button", {}, "Cancel");
     const d = h("dialog", {}, h("h3", {}, title), body, err, h("div", { class: "actions" }, cancel, ok));
     document.body.append(d);
-    cancel.onclick = () => { d.close(); d.remove(); };
+    cancel.onclick = () => { d.close(); d.remove(); restoreFocus(); };
     ok.onclick = () => {
       let message;
       try { message = onOk(); } catch (e) { message = e.message; }
       if (message) { err.textContent = message; return; }
-      d.close(); d.remove();
+      d.close(); d.remove(); restoreFocus();
     };
-    d.addEventListener("cancel", () => d.remove());
+    d.addEventListener("cancel", () => { d.remove(); restoreFocus(); });
+    // Enter in a one-line field saves, as a form would.
+    d.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey && e.target.tagName === "INPUT") { e.preventDefault(); ok.click(); }
+    });
     d.showModal();
     return d;
   }
@@ -894,32 +943,11 @@ const Editor = (() => {
     ["unscheduled", ...DAYS].forEach(k => { if (Array.isArray(week[k]) && !week[k].length) delete week[k]; });
   }
 
-  /** A placed item with its tools under it: move up or down, move elsewhere, edit, delete. */
-  function wrap(item, week, slot) {
-    const node = itemNode(item);
-    const ref = item.ref;
-    const count = slot.raw.length;
-    node.append(h("div", { class: "tools" },
-      button("↑", () => change(f => { const l = slotList(f, ref); if (ref.index > 0) [l[ref.index - 1], l[ref.index]] = [l[ref.index], l[ref.index - 1]]; }), "Up"),
-      button("↓", () => change(f => { const l = slotList(f, ref); if (ref.index < count - 1) [l[ref.index + 1], l[ref.index]] = [l[ref.index], l[ref.index + 1]]; }), "Down"),
-      button("Edit", () => editItem(ref)),
-      button("Move", () => moveItem(ref)),
-      button("Copy", () => change(f => { const l = slotList(f, ref); l.splice(ref.index + 1, 0, clone(l[ref.index])); }), "Duplicate in this day"),
-      button("✕", () => change(f => { slotList(f, ref).splice(ref.index, 1); dropEmptySlots(f.weeks[ref.week]); }), "Delete"),
-    ));
-    return node;
-  }
-
   function addItem(week, slot) {
     itemDialog(`Add to ${slot.label}, week of ${dayMonth(week.start)}`, { exercise: "" }, true, item => {
       change(f => slotList(f, { week: week.index, day: slot.key }, true).push(item));
     });
   }
-  function editItem(ref) {
-    const raw = slotList(state.file, ref)[ref.index];
-    itemDialog("Edit item", clone(raw), false, item => change(f => { slotList(f, ref)[ref.index] = item; }));
-  }
-
   /** The form for one placed item, shaped by its kind. */
   function itemDialog(title, raw, adding, onDone) {
     const file = state.file;
@@ -993,21 +1021,6 @@ const Editor = (() => {
       Object.assign(item, jsonOf(extra, {}));
       onDone(item);
     });
-  }
-
-  /** Moves an item to any day of any week, at the end. */
-  function moveItem(ref) {
-    const weeks = state.plan.weeks;
-    const week = select(weeks.map(w => [String(w.index), `Week of ${dayMonth(w.start)} ${w.start.getUTCFullYear()}`]), String(ref.week));
-    const day = select([["unscheduled", "Unscheduled"], ...DAYS.map((d, n) => [d, DAY_LABEL[n]])], ref.day);
-    dialog("Move to", form(...field("Week", week), ...field("Day", day)), () => {
-      const to = { week: Number(week.value), day: day.value };
-      change(f => {
-        const [item] = slotList(f, ref).splice(ref.index, 1);
-        slotList(f, to, true).push(item);
-        dropEmptySlots(f.weeks[ref.week]);
-      });
-    }, "Move");
   }
 
   // ---------------------------------------------------------------- weeks
@@ -1269,6 +1282,940 @@ const Editor = (() => {
     });
   }
 
+  // ---------------------------------------------------------------- the board: selection, keys, drag
+
+  /*
+   * Everything placed in a week — an exercise, a circuit, a module, a one-off activity — is one
+   * kind of thing here: selected, moved, copied, cut, pasted, dragged and deleted the same way. A
+   * module's members and a circuit's stations belong to their group and are never picked alone.
+   *
+   * Positions: a "ref" is { week: index in file.weeks, day: "unscheduled" | weekday, index }; a
+   * slot is the same without an index. The cursor is the position keys move from: an item, or an
+   * empty slot (index null). Changes return the raw objects they produced, and the selection is
+   * found again by identity once the file is resolved, so it follows what was moved or copied.
+   */
+  const SLOTS = ["unscheduled", ...DAYS];
+  const board = {
+    items: [],        // selected refs
+    slot: null,       // a selected slot (paste/add target), or null
+    cursor: null,     // { week, day, index|null }
+    anchor: null,     // for Shift+click ranges
+    clip: [],         // copied raw items (JSON strings)
+    clipWeek: null,   // a copied week's days (JSON string), when the clipboard holds a week
+    week: null,       // a selected whole week (index in file.weeks), or null
+    pendingKey: null, // "d" / "y" waiting for its pair
+    reveal: false,    // scroll the cursor into view after the next paint
+    drag: null,
+  };
+  const sameRef = (a, b) => a && b && a.week === b.week && a.day === b.day && a.index === b.index;
+  const columns = () => state.plan?.weeks ?? [];                       // sorted by date
+  const colOf = weekIndex => columns().findIndex(w => w.index === weekIndex);
+  const rawList = (ref, create = false) => {
+    const w = state.file.weeks[ref.week];
+    if (!w) return [];
+    if (!w[ref.day]) { if (!create) return []; w[ref.day] = []; }
+    return w[ref.day];
+  };
+  const rawAt = ref => rawList(ref)[ref.index];
+  /** Where an object sits in the file now, by identity. */
+  function findRef(obj) {
+    const weeks = state.file.weeks ?? [];
+    for (let w = 0; w < weeks.length; w++) for (const day of SLOTS) {
+      const i = (weeks[w][day] ?? []).indexOf(obj);
+      if (i >= 0) return { week: w, day, index: i };
+    }
+    return null;
+  }
+  /** Selected refs in plan order: by date, then day, then position. */
+  function ordered(refs = board.items) {
+    const key = r => [colOf(r.week), SLOTS.indexOf(r.day), r.index];
+    return [...refs].sort((a, b) => { const x = key(a), y = key(b); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; });
+  }
+  function selectedObjects() { return ordered().map(rawAt).filter(Boolean); }
+
+  function setSelection(refs, cursor = refs[refs.length - 1] ?? null, { reveal = true } = {}) {
+    board.items = refs.filter(Boolean);
+    board.slot = null; board.week = null;
+    board.cursor = cursor;
+    board.reveal = reveal;
+    paint();
+  }
+  function selectSlot(slot) {
+    board.items = []; board.slot = slot; board.week = null; board.cursor = { ...slot, index: null }; board.reveal = true; paint();
+  }
+  function clearSelection() { board.items = []; board.slot = null; board.week = null; paint(); }
+  /** The whole week: its column outlined; copy, cut, paste, Delete and Shift+←/→ act on it. */
+  function selectWeek(weekIndex, { reveal = true } = {}) {
+    board.items = []; board.slot = null; board.week = weekIndex;
+    const day = board.cursor?.day ?? "monday";
+    board.cursor = stop(weekIndex, day, board.cursor?.index ?? 0);
+    board.reveal = reveal; paint();
+  }
+  /** After a change: select these objects wherever they now are. */
+  function follow(objects) {
+    const refs = objects.map(findRef).filter(Boolean);
+    board.items = refs; board.slot = null; board.week = null; board.cursor = refs[refs.length - 1] ?? board.cursor; board.reveal = true;
+  }
+  /** After undo or anything that broke identity: keep the refs that still point somewhere. */
+  function clampSelection() {
+    if (!state.file) return;
+    board.items = board.items.filter(r => rawAt(r));
+    if (board.cursor && board.cursor.index != null && !rawAt(board.cursor)) {
+      const len = rawList(board.cursor).length;
+      board.cursor = len ? { ...board.cursor, index: Math.min(board.cursor.index, len - 1) } : { ...board.cursor, index: null };
+    }
+    if (board.cursor && !state.file.weeks[board.cursor.week]) board.cursor = null;
+    if (board.week != null && !state.file.weeks[board.week]) board.week = null;
+  }
+
+  const cardEl = ref => document.querySelector(`.it[data-week="${ref.week}"][data-day="${ref.day}"][data-index="${ref.index}"]`);
+  const slotEl = s => document.querySelector(`.slot[data-week="${s.week}"][data-day="${s.day}"]`);
+  /** Marks the selection on the page without rebuilding it. */
+  function paint() {
+    document.querySelectorAll(".it.sel, .it.cur, .slot.sel, .slot.cur, .cell.wsel").forEach(el => el.classList.remove("sel", "cur", "wsel"));
+    if (board.week != null) document.querySelectorAll(`.cell[data-week="${board.week}"]`).forEach(el => el.classList.add("wsel"));
+    board.items.forEach(r => cardEl(r)?.classList.add("sel"));
+    if (board.slot) slotEl(board.slot)?.classList.add("sel");
+    const c = board.cursor;
+    const el = board.week != null ? document.querySelector(`.whead[data-week="${board.week}"]`)
+      : c ? (c.index != null ? cardEl(c) : slotEl(c)) : null;
+    if (board.week == null) el?.classList.add("cur");
+    if (el && board.reveal) { el.scrollIntoView({ block: "nearest", inline: "nearest" }); board.reveal = false; }
+    status();
+  }
+  function status() {
+    const bar = document.getElementById("selbar");
+    if (!bar) return;
+    const n = board.items.length;
+    if (board.week != null) {
+      bar.textContent = "Week selected · Shift+←/→ copy it to the previous / next week · Ctrl+C / X / V · Delete clears it · ? for keys";
+      return;
+    }
+    bar.textContent = n ? `${n} selected · Enter edit · Ctrl+arrows move · Shift+arrows copy · Delete · ? for keys`
+      : board.slot ? "Day selected · a add · p / Ctrl+V paste · Delete clears it · ? for keys"
+      : "Click a card or a day · ? for keys";
+  }
+
+  // ---------------------------------------------------------------- moving around
+
+  function stop(week, day, index) {
+    const len = (state.file.weeks[week]?.[day] ?? []).length;
+    if (!len) return { week, day, index: null };
+    return { week, day, index: Math.max(0, Math.min(index ?? 0, len - 1)) };
+  }
+  function step(c, dir) {
+    const len = rawList(c).length;
+    const s = SLOTS.indexOf(c.day);
+    if (dir === "down") {
+      if (c.index != null && c.index < len - 1) return { ...c, index: c.index + 1 };
+      return s < SLOTS.length - 1 ? stop(c.week, SLOTS[s + 1], 0) : c;
+    }
+    if (dir === "up") {
+      if (c.index != null && c.index > 0) return { ...c, index: c.index - 1 };
+      if (s === 0) return c;
+      const prev = SLOTS[s - 1];
+      return stop(c.week, prev, (state.file.weeks[c.week][prev] ?? []).length - 1);
+    }
+    const col = colOf(c.week) + (dir === "right" ? 1 : -1);
+    const w = columns()[col];
+    return w ? stop(w.index, c.day, c.index) : c;
+  }
+  function goTo(c) {
+    if (!c) return;
+    if (c.index == null) { selectSlot({ week: c.week, day: c.day }); return; }
+    board.anchor = c;
+    setSelection([c], c);
+  }
+  function startCursor() {
+    if (board.cursor && state.file.weeks[board.cursor.week]) return board.cursor;
+    const w = columns()[0];
+    return w ? stop(w.index, "monday", 0) : null;
+  }
+  /** Roughly one screen up or down, in the same week column. */
+  function page(dir) {
+    const c = startCursor(); if (!c) return;
+    const el = c.index != null ? cardEl(c) : slotEl(c);
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + (dir === "down" ? 1 : -1) * window.innerHeight * 0.8;
+    const candidates = [...document.querySelectorAll(`.it[data-week="${c.week}"], .slot[data-week="${c.week}"]`)]
+      .filter(e => e.classList.contains("it") || !rawList({ week: c.week, day: e.dataset.day }).length);
+    let best = null, dist = Infinity;
+    candidates.forEach(e => { const d = Math.abs(e.getBoundingClientRect().top - y); if (d < dist) { dist = d; best = e; } });
+    if (best) goTo({ week: +best.dataset.week, day: best.dataset.day, index: best.dataset.index != null ? +best.dataset.index : null });
+  }
+
+  // ---------------------------------------------------------------- changing the plan
+
+  function targetFor(c) {
+    // Where new things go: after the cursor's item, or at the end of a selected slot.
+    if (board.slot) return { week: board.slot.week, day: board.slot.day, index: rawList(board.slot).length };
+    if (c?.index != null) return { week: c.week, day: c.day, index: c.index + 1 };
+    if (c) return { week: c.week, day: c.day, index: 0 };
+    return null;
+  }
+  /** Inserts [objects] into a slot at [index], keeping their order. */
+  function insertAt(f, slot, index, objects) {
+    const list = rawList(slot, true);
+    list.splice(Math.min(index, list.length), 0, ...objects);
+  }
+  /** Removes [objects] from wherever they are. */
+  function removeAll(f, objects) {
+    (f.weeks ?? []).forEach(w => {
+      SLOTS.forEach(d => { if (w[d]) w[d] = w[d].filter(x => !objects.includes(x)); });
+      dropEmptySlots(w);
+    });
+  }
+  /** Moves [objects] to [slot] before the item now at [index], however many of them came from there. */
+  function moveTo(f, objects, slot, index) {
+    const list = rawList(slot);
+    const anchor = list.slice(index).find(x => !objects.includes(x)) ?? null;
+    removeAll(f, objects);
+    const after = rawList(slot, true);
+    insertAt(f, slot, anchor ? after.indexOf(anchor) : after.length, objects);
+  }
+  function edit(fn) { change(f => { const objs = fn(f); if (objs) follow(objs); }); }
+
+  /** Ctrl+arrow: the selection takes one step that way. */
+  function moveSelection(dir) {
+    const objs = selectedObjects(); if (!objs.length) return;
+    edit(f => {
+      if (dir === "left" || dir === "right") {
+        const moves = objs.map(o => {
+          const r = findRef(o);
+          const w = columns()[colOf(r.week) + (dir === "right" ? 1 : -1)];
+          return w ? { o, to: { week: w.index, day: r.day }, index: r.index } : null;
+        });
+        if (moves.some(m => !m)) return objs;          // at the edge: nothing moves
+        removeAll(f, objs);
+        moves.forEach(m => insertAt(f, m.to, m.index, [m.o]));
+        return objs;
+      }
+      const order = dir === "down" ? [...objs].reverse() : objs;
+      order.forEach(o => {
+        const r = findRef(o); const list = rawList(r); const s = SLOTS.indexOf(r.day);
+        const j = r.index + (dir === "down" ? 1 : -1);
+        if (j >= 0 && j < list.length) {
+          if (objs.includes(list[j])) return;           // blocked by its own group
+          [list[r.index], list[j]] = [list[j], list[r.index]];
+        } else {
+          const ns = s + (dir === "down" ? 1 : -1);
+          if (ns < 0 || ns >= SLOTS.length) return;
+          list.splice(r.index, 1);
+          const to = { week: r.week, day: SLOTS[ns] };
+          insertAt(f, to, dir === "down" ? 0 : rawList(to).length, [o]);
+          dropEmptySlots(f.weeks[r.week]);
+        }
+      });
+      return objs;
+    });
+  }
+  /** Shift+arrow: copies that way, and the selection follows the copies. */
+  function copySelection(dir) {
+    const objs = selectedObjects(); if (!objs.length) return;
+    edit(f => {
+      const copies = [];
+      if (dir === "left" || dir === "right") {
+        const plan = objs.map(o => {
+          const r = findRef(o);
+          const w = columns()[colOf(r.week) + (dir === "right" ? 1 : -1)];
+          return w ? { c: clone(o), to: { week: w.index, day: r.day }, index: r.index } : null;
+        });
+        if (plan.some(p => !p)) return objs;
+        plan.forEach(p => { insertAt(f, p.to, p.index, [p.c]); copies.push(p.c); });
+        return copies;
+      }
+      // Up or down: the copies go right before the first, or right after the last, of each day.
+      const bySlot = new Map();
+      objs.forEach(o => { const r = findRef(o); const k = r.week + "|" + r.day; (bySlot.get(k) ?? bySlot.set(k, []).get(k)).push(o); });
+      bySlot.forEach(group => {
+        const first = findRef(group[0]), last = findRef(group[group.length - 1]);
+        const cs = group.map(clone);
+        insertAt(f, first, dir === "down" ? last.index + 1 : first.index, cs);
+        copies.push(...cs);
+      });
+      return copies;
+    });
+  }
+  function deleteSelection() {
+    if (board.week != null) { clearWeek(); return; }
+    if (board.slot && !board.items.length) {
+      const s = board.slot;
+      if (!rawList(s).length) return;
+      change(f => { delete f.weeks[s.week][s.day]; });
+      selectSlot(s);
+      return;
+    }
+    const objs = selectedObjects(); if (!objs.length) return;
+    const first = ordered()[0];
+    change(f => removeAll(f, objs));
+    const len = rawList(first).length;
+    goTo(len ? { ...first, index: Math.min(first.index, len - 1) } : { ...first, index: null });
+  }
+  function copyToClipboard() {
+    if (board.week != null) return copyWeek();
+    const objs = selectedObjects(); if (!objs.length) return false;
+    board.clip = objs.map(o => JSON.stringify(o)); board.clipWeek = null;
+    try { navigator.clipboard?.writeText(JSON.stringify(objs, null, 2)); } catch (e) { /* not allowed here */ }
+    return true;
+  }
+  function cut() { if (copyToClipboard()) deleteSelection(); }
+  function paste(before = false) {
+    if (board.week != null) { pasteWeek(); return; }
+    if (!board.clip.length) return;
+    const c = board.cursor;
+    let at;
+    if (board.slot) at = { ...board.slot, index: before ? 0 : rawList(board.slot).length };
+    else if (c?.index != null) {
+      const sel = ordered().filter(r => r.week === c.week && r.day === c.day);
+      at = before ? { ...c, index: (sel[0] ?? c).index } : { ...c, index: (sel[sel.length - 1] ?? c).index + 1 };
+    } else if (c) at = { ...c, index: 0 };
+    else return;
+    edit(f => { const items = board.clip.map(t => JSON.parse(t)); insertAt(f, at, at.index, items); return items; });
+  }
+  function addHere() {
+    const c = startCursor(); if (!c) return;
+    const at = targetFor(c);
+    const week = columns().find(w => w.index === at.week);
+    const label = week?.slots.find(s => s.key === at.day)?.label ?? at.day;
+    itemDialog(`Add to ${label}, week of ${week ? dayMonth(week.start) : ""}`, { exercise: "" }, true, item => {
+      edit(f => { insertAt(f, at, at.index, [item]); return [item]; });
+    });
+  }
+
+  // ---------------------------------------------------------------- whole weeks
+
+  const DAY_KEYS = SLOTS;
+  const weekDays = w => JSON.stringify(Object.fromEntries(DAY_KEYS.filter(k => (w[k] ?? []).length).map(k => [k, w[k]])));
+  const hasWork = w => DAY_KEYS.some(k => (w?.[k] ?? []).length);
+  /** Asks how to put a week into one that already has workouts. */
+  function chooseFill(label, onChoice) {
+    const d = h("dialog", {}, h("h3", {}, `${label} already has workouts`),
+      h("p", { class: "muted" }, "Add the copied workouts after them, or replace them? The week's deload mark and note stay as they are."));
+    const bar = h("div", { class: "actions" });
+    [["Cancel", null], ["Append", "append"], ["Replace", "replace"]].forEach(([text, mode]) => {
+      const b = h("button", {}, text);
+      b.onclick = () => { d.close(); d.remove(); if (mode) onChoice(mode); else restoreFocus(); };
+      bar.append(b);
+    });
+    d.append(bar);
+    d.addEventListener("cancel", () => { d.remove(); restoreFocus(); });
+    document.body.append(d);
+    d.showModal();
+    bar.lastChild.previousSibling.focus();
+  }
+  /** Puts [days] into the week starting [startIso], creating the week when the plan lacks it. */
+  function fillWeek(startIso, days, mode) {
+    let target = null;
+    change(f => {
+      target = (f.weeks ??= []).find(w => w.weekStart === startIso);
+      if (!target) { target = { weekStart: startIso }; f.weeks.push(target); }
+      const copy = JSON.parse(days);
+      DAY_KEYS.forEach(k => {
+        const items = copy[k] ?? [];
+        if (mode === "replace") { if (items.length) target[k] = items; else delete target[k]; }
+        else if (items.length) target[k] = [...(target[k] ?? []), ...items];
+      });
+      f.weeks.sort((a, b) => String(a.weekStart).localeCompare(String(b.weekStart)));
+    });
+    selectWeek(state.file.weeks.indexOf(target));
+  }
+  function putWeek(startIso, days) {
+    const existing = (state.file.weeks ?? []).find(w => w.weekStart === startIso);
+    const label = `The week of ${dayMonth(parseDate(startIso))}`;
+    if (hasWork(existing)) chooseFill(label, mode => fillWeek(startIso, days, mode));
+    else fillWeek(startIso, days, "replace");
+  }
+  /** Shift+←/→ on a selected week: copies it into the calendar week before or after. */
+  function copyWeekTo(dir) {
+    const w = state.file.weeks[board.week]; if (!w) return;
+    const start = parseDate(w.weekStart);
+    putWeek(iso(addDays(start, dir === "right" ? 7 : -7)), weekDays(w));
+  }
+  function copyWeek() {
+    const w = state.file.weeks[board.week]; if (!w) return false;
+    board.clipWeek = weekDays(w); board.clip = [];
+    return true;
+  }
+  function clearWeek() {
+    const i = board.week;
+    if (!hasWork(state.file.weeks[i])) return;
+    change(f => { DAY_KEYS.forEach(k => delete f.weeks[i][k]); });
+    selectWeek(i);
+  }
+  function pasteWeek() {
+    const w = state.file.weeks[board.week];
+    if (!w || !board.clipWeek) return;
+    putWeek(w.weekStart, board.clipWeek);
+  }
+
+  // ---------------------------------------------------------------- jumps: deloads and phases
+
+  /** The week column [dir] of the cursor's that is a deload; the weekday is kept. Stops at the ends. */
+  function jumpDeload(dir) {
+    const c = startCursor(); if (!c) return;
+    const cols = columns(); const at = colOf(c.week);
+    const found = dir > 0 ? cols.slice(at + 1).find(w => w.deload) : cols.slice(0, at).reverse().find(w => w.deload);
+    if (found) goTo(stop(found.index, c.day, c.index ?? 0));
+  }
+  /** The first week of the previous or next phase, the weekday kept. Stops at the ends. */
+  function jumpPhase(dir) {
+    const c = startCursor(); if (!c) return;
+    const cols = columns(); const here = cols[colOf(c.week)];
+    const phases = [...(state.plan.phases ?? [])].sort((a, b) => a.from - b.from);
+    if (!phases.length || !here) return;
+    let target;
+    if (dir > 0) target = phases.find(ph => ph.from > (here.phase?.from ?? here.start));
+    else {
+      // Back: the start of this phase when inside it past its first week, else the phase before.
+      const firstOfHere = here.phase ? cols.find(w => w.phase === here.phase) : null;
+      target = firstOfHere && firstOfHere !== here ? here.phase
+        : [...phases].reverse().find(ph => ph.from < (here.phase?.from ?? here.start));
+    }
+    const first = target ? cols.find(w => w.phase === target) : null;
+    if (first) goTo(stop(first.index, c.day, c.index ?? 0));
+  }
+
+  // ---------------------------------------------------------------- editing a selection
+
+  /** The plan an exercise placement runs: its own, else its variation's, else the default. */
+  function effectivePlan(raw) {
+    if (raw.plan) return raw.plan;
+    const ex = (state.file.exercises ?? []).find(e => nameKey(e.name) === nameKey(raw.exercise));
+    if (raw.variation) {
+      const v = (ex?.variations ?? []).find(v => String(v.tag ?? "").toUpperCase() === String(raw.variation).toUpperCase());
+      if (v?.plan) return v.plan;
+    }
+    return ex?.plan ?? {};
+  }
+  const modeOf = raw => parseMode((state.file.exercises ?? []).find(e => nameKey(e.name) === nameKey(raw.exercise))?.mode);
+  const ESSENTIAL = {
+    REPETITIONS: ["sets", "reps", "restSeconds", "effort"],
+    DURATION: ["sets", "seconds", "restSeconds", "effort"],
+    REPEATERS: ["sets", "repeater.reps", "repeater.workSeconds", "repeater.restSeconds", "restSeconds", "effort"],
+    ACTIVITY: ["minutes", "effort"],
+  };
+  const ALL_FIELDS = ["sets", "reps", "seconds", "restSeconds", "repRestSeconds", "sideSwitchSeconds", "minutes",
+    "plannedMinutes", "effort", "repeater.reps", "repeater.workSeconds", "repeater.restSeconds"];
+  const LABEL = {
+    sets: "Sets", reps: "Reps", seconds: "Set length (s)", restSeconds: "Rest between sets (s)",
+    repRestSeconds: "Rest between reps (s)", sideSwitchSeconds: "Side switch (s)", minutes: "Minutes",
+    plannedMinutes: "Planned minutes", effort: "Effort", "repeater.reps": "Repeater reps",
+    "repeater.workSeconds": "Repeater on (s)", "repeater.restSeconds": "Repeater off (s)",
+  };
+  const getPath = (o, p) => p.split(".").reduce((x, k) => x?.[k], o);
+  function setPath(o, p, v) {
+    const ks = p.split("."); let x = o;
+    ks.slice(0, -1).forEach(k => { x[k] ??= {}; x = x[k]; });
+    if (v === undefined) delete x[ks[ks.length - 1]]; else x[ks[ks.length - 1]] = v;
+    if (ks.length > 1 && !Object.keys(o[ks[0]]).length) delete o[ks[0]];
+  }
+  /** One value across many: the value when they agree, else MIXED. */
+  const MIXED = Symbol("mixed");
+  function common(values) {
+    const s = new Set(values.map(v => JSON.stringify(v ?? null)));
+    return s.size === 1 ? values[0] : MIXED;
+  }
+  /** A control that knows whether it was changed, and shows "mixed" when the selection disagrees. */
+  function tracked(el, value) {
+    if (value === MIXED) {
+      if (el.type === "checkbox") el.indeterminate = true;
+      else { el.value = ""; el.placeholder = "mixed"; if (el.tagName === "SELECT") el.prepend(h("option", { value: "\u0000" }, "— mixed —")), el.value = "\u0000"; }
+    } else if (el.type === "checkbox") el.checked = !!value;
+    else el.value = value ?? "";
+    el.dataset.dirty = "";
+    const mark = () => { el.dataset.dirty = "1"; };
+    el.addEventListener("input", mark); el.addEventListener("change", mark);
+    return el;
+  }
+  const dirty = el => el.dataset.dirty === "1";
+
+  /** Edits what is selected: one item fully, several by the fields they share. */
+  function editSelection() {
+    const refs = ordered();
+    if (!refs.length) { if (board.slot || board.cursor) addHere(); return; }
+    const objs = refs.map(rawAt);
+    const kindOf = o => ["exercise", "circuit", "module", "activity"].find(k => o[k] != null) ?? "invalid";
+    const groups = { exercise: [], circuit: [], module: [], activity: [] };
+    objs.forEach(o => groups[kindOf(o)]?.push(o));
+    const single = objs.length === 1 ? objs[0] : null;
+    const apply = [];
+    const body = h("div", {});
+    const lists = h("div", {},
+      list("names-exercise", (state.file.exercises ?? []).map(e => e.name)),
+      list("names-circuit", (state.file.circuits ?? []).map(c => c.name)),
+      list("names-module", (state.file.modules ?? []).map(m => m.name)));
+    body.append(lists);
+
+    if (groups.exercise.length) {
+      const ex = groups.exercise;
+      const rows = [];
+      if (single) {
+        const name = tracked(input("", { list: "names-exercise" }), single.exercise);
+        rows.push(...field("Exercise", name));
+        apply.push(() => { if (dirty(name) && name.value.trim()) single.exercise = name.value.trim(); });
+      }
+      // A variation only means something when they are all the same exercise.
+      const sameExercise = new Set(ex.map(o => nameKey(o.exercise))).size === 1;
+      if (sameExercise) {
+        const def = (state.file.exercises ?? []).find(e => nameKey(e.name) === nameKey(ex[0].exercise));
+        const tags = (def?.variations ?? []).map(v => String(v.tag ?? "").toUpperCase());
+        const variation = tracked(select([["", "— default —"], ...tags.map(t => [t, t])]), common(ex.map(o => o.variation ? String(o.variation).toUpperCase() : "")));
+        rows.push(...field("Variation", variation));
+        apply.push(() => { if (dirty(variation) && variation.value !== "\u0000") ex.forEach(o => { if (variation.value) o.variation = variation.value; else delete o.variation; }); });
+      }
+      const optional = tracked(checkbox(false), common(ex.map(o => !!o.optional)));
+      rows.push(...field("Optional", optional));
+      apply.push(() => { if (dirty(optional)) ex.forEach(o => { if (optional.checked) o.optional = true; else delete o.optional; }); });
+
+      const modes = new Set(ex.map(modeOf).filter(Boolean));
+      const essential = [...new Set([...modes].flatMap(m => ESSENTIAL[m] ?? []))];
+      const fields = new Map();
+      const control = path => {
+        const plans = ex.map(effectivePlan);
+        const value = common(plans.map(p => path === "effort" && getPath(p, path) ? normEnum(getPath(p, path)) : getPath(p, path)));
+        const el = path === "effort" ? select(EFFORTS) : number();
+        fields.set(path, tracked(el, value));
+        return field(LABEL[path], el);
+      };
+      const own = ex.filter(o => o.plan).length;
+      rows.push(h("div", { class: "sub" }, "Plan" + (own ? ` (${own === ex.length ? "" : own + " of " + ex.length + " "}with their own plan this week)` : "")));
+      essential.forEach(p => rows.push(...control(p)));
+      const reset = checkbox(false);
+      rows.push(...field("Back to the default plan", reset));
+      body.append(form(...rows));
+      const more = h("details", {}, h("summary", {}, "More fields"),
+        form(...ALL_FIELDS.filter(p => !essential.includes(p)).flatMap(control)));
+      body.append(more);
+      apply.push(() => {
+        ex.forEach(o => {
+          if (reset.checked) { delete o.plan; return; }
+          const changed = [...fields].filter(([, el]) => dirty(el));
+          if (!changed.length) return;
+          const p = clone(effectivePlan(o));
+          changed.forEach(([path, el]) => {
+            if (el.value === "\u0000") return;
+            const v = path === "effort" ? (el.value || undefined) : num(el);
+            setPath(p, path, v);
+          });
+          o.plan = tidy(p);
+          if (!Object.keys(o.plan).length) delete o.plan;
+        });
+      });
+    }
+    if (groups.circuit.length) {
+      const cs = groups.circuit;
+      const rows = [h("div", { class: "sub" }, `Circuit${cs.length > 1 ? "s" : ""}`)];
+      if (single) {
+        const name = tracked(input("", { list: "names-circuit" }), single.circuit);
+        rows.push(...field("Circuit", name));
+        apply.push(() => { if (dirty(name) && name.value.trim()) single.circuit = name.value.trim(); });
+      }
+      const rounds = tracked(number(), common(cs.map(o => o.rounds)));
+      rounds.placeholder = rounds.placeholder || "its own";
+      rows.push(...field("Rounds this week", rounds));
+      apply.push(() => { if (dirty(rounds)) cs.forEach(o => { if (num(rounds) != null) o.rounds = num(rounds); else delete o.rounds; }); });
+      body.append(form(...rows));
+    }
+    if (groups.module.length) {
+      const ms = groups.module;
+      const rows = [h("div", { class: "sub" }, `Module${ms.length > 1 ? "s" : ""}`)];
+      if (new Set(ms.map(o => nameKey(o.module))).size === 1) {
+        if (single) {
+          const name = tracked(input("", { list: "names-module" }), single.module);
+          rows.push(...field("Module", name));
+          apply.push(() => { if (dirty(name) && name.value.trim()) single.module = name.value.trim(); });
+        }
+        const omit = tracked(input(""), common(ms.map(o => (o.omit ?? []).join(", "))));
+        rows.push(...field("Leave out (names)", omit));
+        const plans = tracked(textarea(""), common(ms.map(o => o.plans ? JSON.stringify(o.plans, null, 2) : "")));
+        rows.push(h("div", { class: "sub" }, "Plans this week, by exercise (JSON)"), h("div", { class: "span" }, plans));
+        apply.push(() => {
+          ms.forEach(o => {
+            if (dirty(omit)) { const l = omit.value.split(",").map(x => x.trim()).filter(Boolean); if (l.length) o.omit = l; else delete o.omit; }
+            if (dirty(plans)) { const p = jsonOf(plans, undefined); if (p && Object.keys(p).length) o.plans = p; else delete o.plans; }
+          });
+        });
+      } else {
+        rows.push(h("div", { class: "span muted" }, "Different modules: edit them one at a time to change what they leave out or plan."));
+      }
+      body.append(form(...rows));
+    }
+    if (groups.activity.length) {
+      const as = groups.activity;
+      const rows = [h("div", { class: "sub" }, `Activit${as.length > 1 ? "ies" : "y"}`)];
+      if (single) {
+        const name = tracked(input(""), single.activity);
+        rows.push(...field("Name", name));
+        apply.push(() => { if (dirty(name) && name.value.trim()) single.activity = name.value.trim(); });
+      }
+      const minutes = tracked(number(), common(as.map(o => o.minutes)));
+      rows.push(...field("Minutes", minutes));
+      apply.push(() => { if (dirty(minutes)) as.forEach(o => { if (num(minutes) != null) o.minutes = num(minutes); else delete o.minutes; }); });
+      body.append(form(...rows));
+    }
+    if (single) {
+      const extra = textarea(JSON.stringify(single, null, 2));
+      const before = extra.value;
+      body.append(h("details", {}, h("summary", {}, "The item as JSON"), form(h("div", { class: "span" }, extra))));
+      // Editing the JSON replaces the item outright; the fields above are then ignored.
+      apply.unshift(() => {
+        if (extra.value === before) return;
+        const replaced = jsonOf(extra, single);
+        Object.keys(single).forEach(k => delete single[k]);
+        Object.assign(single, replaced);
+        apply.length = 1;
+      });
+    }
+    const title = single ? "Edit" : `Edit ${objs.length} items`;
+    dialog(title, body, () => {
+      // The edit happens on the live objects inside one change, so it undoes as one.
+      const snapshot = JSON.stringify(state.file);
+      try {
+        state.past.push(snapshot); state.future = [];
+        for (let i = 0; i < apply.length; i++) apply[i]();
+      } catch (e) { state.file = JSON.parse(state.past.pop()); return e.message; }
+      follow(objs);
+      refresh();
+    });
+  }
+
+  // ---------------------------------------------------------------- menus and help
+
+  function closeMenu() { document.getElementById("ctxmenu")?.remove(); }
+  function menu(x, y, entries) {
+    closeMenu();
+    const m = h("div", { id: "ctxmenu", class: "ctxmenu", role: "menu" },
+      entries.filter(Boolean).map(e => e === "-" ? h("hr", {}) : (() => {
+        const b = h("button", { role: "menuitem" }, h("span", {}, e[0]), h("span", { class: "kbd" }, e[1] ?? ""));
+        b.disabled = !!e[3];
+        b.onclick = () => { closeMenu(); e[2](); };
+        return b;
+      })()));
+    document.body.append(m);
+    const r = m.getBoundingClientRect();
+    m.style.left = Math.min(x, innerWidth - r.width - 8) + "px";
+    m.style.top = Math.min(y, innerHeight - r.height - 8) + "px";
+    m.querySelector("button:not(:disabled)")?.focus();
+  }
+  function itemMenu(x, y) {
+    const n = board.items.length;
+    menu(x, y, [
+      [n > 1 ? `Edit ${n} items` : "Edit", "Enter", editSelection],
+      "-",
+      ["Cut", "Ctrl+X", cut], ["Copy", "Ctrl+C", copyToClipboard],
+      ["Paste after", "Ctrl+V", () => paste(false), !board.clip.length], ["Paste before", "P", () => paste(true), !board.clip.length],
+      "-",
+      ["Copy to next week", "Shift+→", () => copySelection("right")],
+      ["Move to next week", "Ctrl+→", () => moveSelection("right")],
+      ["Move to…", "", moveDialog],
+      "-",
+      ["Delete", "Del", deleteSelection],
+    ]);
+  }
+  function slotMenu(x, y) {
+    const empty = !rawList(board.slot).length;
+    menu(x, y, [
+      ["Add…", "a", addHere],
+      ["Paste", "Ctrl+V", () => paste(false), !board.clip.length],
+      "-",
+      ["Clear this day", "Del", deleteSelection, empty],
+    ]);
+  }
+  /** Moves the selection to any day of any week, in order, at the end. */
+  function moveDialog() {
+    const objs = selectedObjects(); if (!objs.length) return;
+    const r = ordered()[0];
+    const week = select(columns().map(w => [String(w.index), `Week of ${dayMonth(w.start)} ${w.start.getUTCFullYear()}`]), String(r.week));
+    const day = select([["unscheduled", "Unscheduled"], ...DAYS.map((d, n) => [d, DAY_LABEL[n]])], r.day);
+    dialog("Move to", form(...field("Week", week), ...field("Day", day)), () => {
+      const to = { week: Number(week.value), day: day.value };
+      edit(f => { moveTo(f, objs, to, rawList(to).length); return objs; });
+    }, "Move");
+  }
+  const KEYS = [
+    ["Arrows / hjkl", "Move between cards and empty days"],
+    ["Ctrl+arrow", "Move the selection that way"],
+    ["Shift+arrow", "Copy the selection that way; the selection follows the copies"],
+    ["Page Up / Down", "About one screen up or down"],
+    ["Home / End", "First / last week, same day"],
+    ["Ctrl+Home / End", "First / last day of the week"],
+    ["[ / ]", "Previous / next deload week, same day"],
+    ["{ / }", "Previous / next phase (its first week), same day"],
+    ["w, or click a week heading", "Select the whole week"],
+    ["Shift+← / → on a week", "Copy the week into the previous / next week (append or replace if it has workouts)"],
+    ["Enter / e / double-click", "Edit the selection"],
+    ["a", "Add to the selected day (after the selected card)"],
+    ["Delete", "Remove the selection; on a selected day or week, its workouts"],
+    ["Ctrl+X / C / V", "Cut / copy / paste (after the selection, or into the selected day)"],
+    ["dd / yy / p / P", "Cut / copy / paste after / paste before"],
+    ["Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y", "Undo, redo"],
+    ["Click, Ctrl+click, Shift+click", "Select, add to the selection, select a range"],
+    ["Drag the ⠿ handle", "Move; hold Shift while dragging to copy"],
+    ["Right-click", "The menu for what is under the pointer"],
+    ["Escape", "Cancel a drag, close the editor, or clear the selection"],
+    ["?", "This help"],
+  ];
+  function help() {
+    dialog("Keys", h("table", { class: "keys" }, KEYS.map(([k, v]) => h("tr", {}, h("td", {}, h("kbd", {}, k)), h("td", {}, v)))), () => {}, "Close");
+  }
+
+  // ---------------------------------------------------------------- the page's events
+
+  /** Marks a rendered card as a selectable item and gives it a drag handle. */
+  function wrap(item, week, slot) {
+    const node = itemNode(item);
+    const ref = item.ref;
+    node.classList.add("it");
+    node.dataset.week = ref.week; node.dataset.day = ref.day; node.dataset.index = ref.index;
+    node.tabIndex = -1;
+    const grip = h("span", { class: "grip", title: "Drag to move, Shift+drag to copy" }, "⠿");
+    (node.querySelector(".top") ?? node.querySelector(".mname") ?? node).prepend(grip);
+    return node;
+  }
+  function refFromEl(el) {
+    const it = el.closest?.(".it");
+    if (it) return { week: +it.dataset.week, day: it.dataset.day, index: +it.dataset.index };
+    return null;
+  }
+  function slotFromEl(el) {
+    const s = el.closest?.(".slot");
+    return s ? { week: +s.dataset.week, day: s.dataset.day } : null;
+  }
+  function onClick(e) {
+    if (!state.editing || state.view !== "week") return;
+    if (e.target.closest("button, input, select, textarea, a, .ctxmenu")) return;
+    const ref = refFromEl(e.target);
+    if (ref) {
+      if (e.ctrlKey || e.metaKey) {
+        const i = board.items.findIndex(r => sameRef(r, ref));
+        const items = i >= 0 ? board.items.filter((_, k) => k !== i) : [...board.items, ref];
+        board.anchor = ref; setSelection(items, ref, { reveal: false });
+      } else if (e.shiftKey && board.anchor) {
+        setSelection(rangeBetween(board.anchor, ref), ref, { reveal: false });
+      } else {
+        board.anchor = ref; setSelection([ref], ref, { reveal: false });
+      }
+      return;
+    }
+    const slot = slotFromEl(e.target);
+    if (slot) { board.reveal = false; selectSlot(slot); return; }
+    const head = e.target.closest(".whead[data-week]");
+    if (head) selectWeek(+head.dataset.week, { reveal: false });
+  }
+  /** Every item between two refs, in plan order. */
+  function rangeBetween(a, b) {
+    const all = [];
+    columns().forEach(w => SLOTS.forEach(day => (state.file.weeks[w.index][day] ?? []).forEach((_, index) => all.push({ week: w.index, day, index }))));
+    const i = all.findIndex(r => sameRef(r, a)), j = all.findIndex(r => sameRef(r, b));
+    if (i < 0 || j < 0) return [b];
+    return all.slice(Math.min(i, j), Math.max(i, j) + 1);
+  }
+  function onDblClick(e) {
+    if (!state.editing || state.view !== "week") return;
+    const ref = refFromEl(e.target);
+    if (ref) { if (!board.items.some(r => sameRef(r, ref))) setSelection([ref], ref); editSelection(); }
+    else if (slotFromEl(e.target)) { selectSlot(slotFromEl(e.target)); addHere(); }
+  }
+  function onContextMenu(e) {
+    if (!state.editing || state.view !== "week") return;
+    const ref = refFromEl(e.target);
+    const slot = slotFromEl(e.target);
+    if (!ref && !slot) return;
+    e.preventDefault();
+    if (ref) {
+      if (!board.items.some(r => sameRef(r, ref))) { board.anchor = ref; setSelection([ref], ref, { reveal: false }); }
+      itemMenu(e.clientX, e.clientY);
+    } else {
+      selectSlot(slot); slotMenu(e.clientX, e.clientY);
+    }
+  }
+
+  const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  function onKey(e) {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (e.key === "Escape") {
+      if (board.drag) { cancelDrag(); e.preventDefault(); return; }
+      if (document.getElementById("ctxmenu")) { closeMenu(); return; }
+      if (!document.querySelector("dialog[open]") && !typing(e.target) && board.items.length + (board.slot ? 1 : 0)) { clearSelection(); return; }
+      return;
+    }
+    if (document.querySelector("dialog[open]") || typing(e.target)) return;
+    // History and saving work in every view.
+    if (ctrl && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
+    if (ctrl && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
+    if (ctrl && e.key.toLowerCase() === "s") { e.preventDefault(); save(); return; }
+    if (!state.editing || state.view !== "week" || !state.file) return;
+    if (document.getElementById("ctxmenu")) return;
+
+    const arrows = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", k: "up", j: "down", h: "left", l: "right" };
+    const dir = arrows[e.key] ?? (e.shiftKey && arrows[e.key.toLowerCase()]);
+    if (dir && !e.altKey && board.week != null) {
+      // A selected week: Shift copies it across, plain ←/→ select the neighbouring week, ↑/↓ go into it.
+      e.preventDefault();
+      if (e.shiftKey && (dir === "left" || dir === "right")) copyWeekTo(dir);
+      else if (!ctrl && (dir === "left" || dir === "right")) {
+        const w = columns()[colOf(board.week) + (dir === "right" ? 1 : -1)];
+        if (w) selectWeek(w.index);
+      } else if (!ctrl && !e.shiftKey) goTo(stop(board.week, dir === "down" ? "monday" : "sunday", 0));
+      return;
+    }
+    if (dir && !e.altKey) {
+      e.preventDefault();
+      if (ctrl) moveSelection(dir);
+      else if (e.shiftKey) copySelection(dir);
+      else { const c = startCursor(); if (c) goTo(board.cursor ? step(c, dir) : c); }
+      return;
+    }
+    const pendingPair = (k, run) => {
+      if (board.pendingKey === k && Date.now() - board.pendingAt < 800) { board.pendingKey = null; run(); }
+      else { board.pendingKey = k; board.pendingAt = Date.now(); }
+    };
+    switch (e.key) {
+      case "PageDown": e.preventDefault(); page("down"); return;
+      case "PageUp": e.preventDefault(); page("up"); return;
+      case "Home": case "End": {
+        e.preventDefault();
+        const c = startCursor(); if (!c) return;
+        if (ctrl) { const day = e.key === "Home" ? "monday" : "sunday"; goTo(stop(c.week, day, e.key === "Home" ? 0 : 1e9)); }
+        else { const w = e.key === "Home" ? columns()[0] : columns()[columns().length - 1]; goTo(stop(w.index, c.day, c.index ?? 0)); }
+        return;
+      }
+      case "Enter": case "e": e.preventDefault(); editSelection(); return;
+      case "a": e.preventDefault(); addHere(); return;
+      case "Delete": case "Backspace": e.preventDefault(); deleteSelection(); return;
+      case "?": e.preventDefault(); help(); return;
+      case "w": e.preventDefault(); { const c = startCursor(); if (c) selectWeek(c.week); } return;
+      case "[": e.preventDefault(); jumpDeload(-1); return;
+      case "]": e.preventDefault(); jumpDeload(1); return;
+      case "{": e.preventDefault(); jumpPhase(-1); return;
+      case "}": e.preventDefault(); jumpPhase(1); return;
+      case "p": if (!ctrl) { e.preventDefault(); paste(false); } return;
+      case "P": if (!ctrl) { e.preventDefault(); paste(true); } return;
+      case "d": if (!ctrl) pendingPair("d", cut); return;
+      case "y": if (!ctrl) pendingPair("y", copyToClipboard); return;
+    }
+    if (ctrl && e.key.toLowerCase() === "x") { e.preventDefault(); cut(); }
+    else if (ctrl && e.key.toLowerCase() === "c") { e.preventDefault(); copyToClipboard(); }
+    else if (ctrl && e.key.toLowerCase() === "v") { e.preventDefault(); paste(false); }
+  }
+
+  // ---------------------------------------------------------------- dragging
+
+  function onPointerDown(e) {
+    if (!state.editing || e.button !== 0) return;
+    const grip = e.target.closest(".grip"); if (!grip) return;
+    const ref = refFromEl(grip); if (!ref) return;
+    e.preventDefault();
+    if (!board.items.some(r => sameRef(r, ref))) { board.anchor = ref; setSelection([ref], ref, { reveal: false }); }
+    board.drag = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, started: false, copy: e.shiftKey, target: null, pointer: e.pointerId };
+    try { grip.setPointerCapture(e.pointerId); } catch (x) { /* not a real pointer */ }
+    grip.addEventListener("pointermove", onPointerMove);
+    grip.addEventListener("pointerup", onPointerUp, { once: true });
+    grip.addEventListener("pointercancel", cancelDrag, { once: true });
+  }
+  function onPointerMove(e) {
+    const d = board.drag; if (!d) return;
+    d.x = e.clientX; d.y = e.clientY; d.copy = e.shiftKey;
+    if (!d.started) {
+      if (Math.hypot(d.x - d.x0, d.y - d.y0) < 5) return;
+      d.started = true;
+      const n = board.items.length;
+      const first = rawAt(ordered()[0]);
+      const name = first ? (first.exercise ?? first.circuit ?? first.module ?? first.activity) : "";
+      d.ghost = h("div", { class: "ghost" }, h("span", { class: "plus" }, "+"), n > 1 ? `${n} items` : name);
+      document.body.append(d.ghost);
+      d.line = h("div", { class: "dropline" });
+      document.body.append(d.line);
+      board.items.forEach(r => cardEl(r)?.classList.add("dragsrc"));
+      d.loop = requestAnimationFrame(autoScroll);
+    }
+    trackTarget();
+  }
+  function trackTarget() {
+    const d = board.drag; if (!d?.started) return;
+    d.ghost.style.left = d.x + 14 + "px"; d.ghost.style.top = d.y + 10 + "px";
+    d.ghost.classList.toggle("copy", d.copy);
+    document.querySelectorAll(".slot.droptarget").forEach(el => el.classList.remove("droptarget"));
+    const under = document.elementFromPoint(d.x, d.y);
+    const slotNode = under?.closest(".slot");
+    if (!slotNode) { d.target = null; d.line.style.display = "none"; return; }
+    slotNode.classList.add("droptarget");
+    const cards = [...slotNode.querySelectorAll(":scope > .it")];
+    let index = cards.length;
+    for (let i = 0; i < cards.length; i++) {
+      const r = cards[i].getBoundingClientRect();
+      if (d.y < r.top + r.height / 2) { index = i; break; }
+    }
+    d.target = { week: +slotNode.dataset.week, day: slotNode.dataset.day, index };
+    const box = slotNode.getBoundingClientRect();
+    const y = cards.length ? (index < cards.length ? cards[index].getBoundingClientRect().top - 3 : cards[cards.length - 1].getBoundingClientRect().bottom + 2)
+      : box.top + 34;
+    Object.assign(d.line.style, { display: "block", left: box.left + 8 + "px", width: box.width - 16 + "px", top: y + "px" });
+  }
+  function autoScroll() {
+    const d = board.drag; if (!d?.started) return;
+    const wrapEl = document.querySelector(".weeks");
+    const edge = 48, speed = 18;
+    let moved = false;
+    if (wrapEl) {
+      const r = wrapEl.getBoundingClientRect();
+      if (d.x < r.left + edge) { wrapEl.scrollLeft -= speed; moved = true; }
+      else if (d.x > r.right - edge) { wrapEl.scrollLeft += speed; moved = true; }
+    }
+    if (d.y < edge) { window.scrollBy(0, -speed); moved = true; }
+    else if (d.y > innerHeight - edge) { window.scrollBy(0, speed); moved = true; }
+    if (moved) trackTarget();
+    d.loop = requestAnimationFrame(autoScroll);
+  }
+  function endDrag() {
+    const d = board.drag; if (!d) return;
+    cancelAnimationFrame(d.loop);
+    d.ghost?.remove(); d.line?.remove();
+    document.querySelectorAll(".dragsrc, .droptarget").forEach(el => el.classList.remove("dragsrc", "droptarget"));
+    board.drag = null;
+  }
+  function cancelDrag() { endDrag(); }
+  function onPointerUp(e) {
+    const d = board.drag;
+    e.currentTarget.removeEventListener("pointermove", onPointerMove);
+    if (!d?.started || !d.target) { endDrag(); return; }
+    const copy = d.copy || e.shiftKey;
+    const target = d.target;
+    const objs = selectedObjects();
+    endDrag();
+    edit(f => {
+      if (copy) { const cs = objs.map(clone); insertAt(f, target, target.index, cs); return cs; }
+      moveTo(f, objs, target, target.index);
+      return objs;
+    });
+  }
+  document.addEventListener("keydown", e => {
+    if (board.drag?.started && e.key === "Shift") { board.drag.copy = true; trackTarget(); }
+  });
+  document.addEventListener("keyup", e => {
+    if (board.drag?.started && e.key === "Shift") { board.drag.copy = false; trackTarget(); }
+  });
+
+  function restoreFocus() {
+    if (!state.editing || state.view !== "week") return;
+    board.reveal = false;
+    paint();
+    const c = board.cursor;
+    const el = c ? (c.index != null ? cardEl(c) : slotEl(c)) : null;
+    el?.focus?.({ preventScroll: true });
+  }
+
+  /** After the weeks are drawn: the selection back on the page. */
+  function afterRender() { clampSelection(); paint(); }
+
+  document.addEventListener("click", onClick);
+  document.addEventListener("dblclick", onDblClick);
+  document.addEventListener("contextmenu", onContextMenu);
+  document.addEventListener("pointerdown", onPointerDown);
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("mousedown", e => { if (!e.target.closest(".ctxmenu")) closeMenu(); });
+  document.addEventListener("scroll", closeMenu, true);
+
   // ---------------------------------------------------------------- wiring
 
   document.getElementById("e-edit").onclick = () => { state.editing = !state.editing; render(); };
@@ -1276,13 +2223,6 @@ const Editor = (() => {
   document.getElementById("e-redo").onclick = redo;
   document.getElementById("e-save").onclick = save;
   document.getElementById("e-new").onclick = newPlan;
-  document.addEventListener("keydown", e => {
-    if (document.querySelector("dialog[open]")) return;
-    if (!(e.ctrlKey || e.metaKey)) return;
-    if (e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-    else if (e.key === "y" || (e.key === "z" && e.shiftKey)) { e.preventDefault(); redo(); }
-    else if (e.key === "s") { e.preventDefault(); save(); }
-  });
 
   /** On an empty page, offers the draft left from last time. */
   function offerDraft(zone) {
@@ -1292,7 +2232,7 @@ const Editor = (() => {
       button(`Restore the unsaved draft (${d.name || "plan"}, ${new Date(d.at).toLocaleString()})`, restoreDraft)));
   }
 
-  return { button, wrap, addItem, weekTools, addWeek, editPhases, renderLibrary, updateHeader, offerDraft };
+  return { button, wrap, addItem, weekTools, addWeek, editPhases, renderLibrary, updateHeader, offerDraft, afterRender, restoreFocus };
 })();
 
 const dropZone = document.getElementById("drop");

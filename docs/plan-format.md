@@ -9,14 +9,30 @@ To look at a plan file before importing it, or to write one, open `tools/plan-vi
 in a browser and pick the file (or **New** for an empty plan): a weekly view like the app's, a
 global table of exercises by week, the library, and the problems the importer would report.
 
-**Edit** turns on editing. In the weekly view, **+** on a day adds an exercise, circuit, module or
-one-off activity; each item can be edited (variation, optional, its own plan; a circuit's rounds; a
-module's omit and plans), moved up or down, moved to any day of any week, duplicated or deleted. A
-week can be copied onto the following weeks, cleared or deleted, and weeks added. The **Library**
-view adds, edits and deletes exercises, circuits and modules; renaming one renames every reference
-to it. Every change re-runs the checks, **Undo**/**Redo** (Ctrl+Z / Ctrl+Y) step through them, and
-**Save** (Ctrl+S) downloads the file, its leading comment lines kept. An unsaved draft stays in the
-browser and is offered again on an empty page. Nothing is uploaded.
+**Edit** turns on editing. In the weekly view, a card (exercise, circuit, module or one-off — all
+treated alike) is selected by a click, Ctrl+click adds to the selection, Shift+click selects a
+range; a click on a day selects the day as the place to add or paste. Double-click, Enter or `e`
+edits the selection: the essential fields of the plan first, the rest under *More fields*; with
+several selected, fields that differ show *mixed* and only the fields changed are applied. A right
+click opens the menu for what is under the pointer. Cards are dragged by their ⠿ handle (Shift while
+dragging copies, shown by a + on the preview), with the day highlighted and a line where they will
+land; the page scrolls near its edges and Escape cancels.
+
+Keys (they give way to typing in any field): arrows or hjkl move between cards and empty days
+(↑↓ through a day and on into the next, ←→ the same day a week earlier or later); **Ctrl+arrow**
+moves the selection; **Shift+arrow** copies it that way and follows the copies; Page Up/Down,
+Home/End (first / last week), Ctrl+Home/End (first / last day of the week); Enter/`e` edit, `a`
+add, Delete remove (a selected day: its workouts); Ctrl+X/C/V and `dd`/`yy`/`p`/`P`; Ctrl+Z,
+Ctrl+Shift+Z or Ctrl+Y; Escape; `?` lists them all. `[` / `]` jump to the previous / next deload
+week and `{` / `}` to the first week of the previous / next phase, keeping the weekday and stopping
+at the ends. `w`, or a click on a week's heading, selects the whole week: copy, cut, paste and
+Delete then act on the week, and Shift+←/→ copies it into the week before or after (created if the
+plan lacks it; *Append*, *Replace* or *Cancel* if it already has workouts). Weeks are added, copied onto the following
+weeks, cleared or deleted from their headers, where *Deload* and *Note* mark them; *Phases…* above
+the weeks edits the phases. The **Library** view adds, edits and deletes exercises, circuits and
+modules; renaming one renames every reference to it. Every change re-runs the checks and can be
+undone; **Save** (Ctrl+S) downloads the file, its leading comment lines kept. An unsaved draft stays
+in the browser and is offered again on an empty page. Nothing is uploaded.
 
 The test library, `app/src/androidTest/assets/test-library.json`, is a complete example. Version
 1 files stay readable in every later version of the app; the test library is the check.
