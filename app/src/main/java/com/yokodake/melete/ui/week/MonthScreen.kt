@@ -474,8 +474,8 @@ fun MonthScreen(
 }
 
 /**
- * "This week ▾" / "Month ▾": the calendar's title, and the one place to switch between the two.
- * The chevron says it opens something; the subtitle is the period shown.
+ * The calendar's title: what is shown, and the period as a button that switches straight to the
+ * other view — the week's dates open the month, the month's name goes back to the week.
  */
 @Composable
 internal fun CalendarTitle(
@@ -485,24 +485,21 @@ internal fun CalendarTitle(
     onWeek: () -> Unit,
     onMonth: () -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        Column(
-            modifier = Modifier
-                .clickable { open = true }
-                .semantics { contentDescription = "$title, $subtitle. Switch between week and month" },
+    Column {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        androidx.compose.material3.Surface(
+            onClick = { if (month) onWeek() else onMonth() },
+            shape = MaterialTheme.shapes.small,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.semantics {
+                contentDescription = "$subtitle. Show the ${if (month) "week" else "month"}"
+            },
         ) {
-            Text("$title ▾", style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall)
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("Week", fontWeight = if (!month) FontWeight.SemiBold else FontWeight.Normal) },
-                onClick = { open = false; if (month) onWeek() },
-            )
-            DropdownMenuItem(
-                text = { Text("Month", fontWeight = if (month) FontWeight.SemiBold else FontWeight.Normal) },
-                onClick = { open = false; if (!month) onMonth() },
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
             )
         }
     }
