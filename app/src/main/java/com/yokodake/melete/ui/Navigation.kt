@@ -333,6 +333,7 @@ private fun MeleteNavHost(navController: NavHostController, bottomBar: @Composab
                 onOpenExercise = { exerciseId, from, to ->
                     navController.navigate(ExerciseHistoryDestination(exerciseId, from.toEpochDay(), to.toEpochDay()))
                 },
+                onOpenCircuit = { navController.navigate(RoutineDetailDestination(it)) },
             )
         }
         composable<RecordsDestination> {

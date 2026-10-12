@@ -111,6 +111,11 @@ class ReminderRulesTest {
             emptyList(),
         )
         assertEquals("2 of 3 done", ReminderRules.weekSummary(plan))
+        // A circuit is one, done when every station is.
+        val withCircuit = plan.copy(
+            occurrences = plan.occurrences + occurrence("s1", OccurrenceState.COMPLETED, circuit = "c1") + occurrence("s2", circuit = "c1"),
+        )
+        assertEquals("2 of 4 done", ReminderRules.weekSummary(withCircuit))
         assertEquals("Nothing was planned.", ReminderRules.weekSummary(WeekPlan(emptyList(), emptyList(), emptyList())))
     }
 

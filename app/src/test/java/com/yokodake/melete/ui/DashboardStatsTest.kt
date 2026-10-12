@@ -1,5 +1,6 @@
 package com.yokodake.melete.ui
 
+import com.yokodake.melete.data.CompletedCircuit
 import com.yokodake.melete.data.CompletedExercise
 import com.yokodake.melete.data.model.ExerciseCategory
 import com.yokodake.melete.ui.dashboard.DashboardMetric
@@ -93,7 +94,7 @@ class DashboardStatsTest {
         val stats = DashboardStats.build(
             listOf(
                 done("squat", today, 3600),
-                // Circuit stations are exercises in their own right, each with its share.
+                // Exercises done the same day count one each.
                 done("pull-up", today.minusDays(2), 300, manual = false),
                 done("plank", today.minusDays(2), 300, manual = false),
                 // Completed with no duration recorded: counted, but no invented time.
@@ -112,6 +113,38 @@ class DashboardStatsTest {
         assertEquals(600, stats.bars[2].totalSeconds)
         assertEquals(1, stats.bars[1].totalCount)
         assertEquals(0, stats.bars[1].totalSeconds)
+    }
+
+    @Test
+    fun `a circuit counts as one, with its stations' time, under its own name and category`() {
+        val (from, to) = DashboardStats.span(DashboardRange.FOUR_WEEKS, today, null)
+        fun station(id: String, circuit: CompletedCircuit, date: LocalDate, category: ExerciseCategory) =
+            done(id, date, 300, category = category).copy(occurrenceId = "$id-${circuit.id}", circuit = circuit)
+        val monday = CompletedCircuit("c1", "cooldown", "Cooldown", ExerciseCategory.FLEXIBILITY)
+        val friday = CompletedCircuit("c2", "cooldown", "Cooldown", null)
+        val stats = DashboardStats.build(
+            listOf(
+                station("butterfly", monday, today, ExerciseCategory.FLEXIBILITY),
+                station("fly", monday, today, ExerciseCategory.STRENGTH_CONDITIONING),
+                station("straddle", monday, today, ExerciseCategory.FLEXIBILITY),
+                // No category of its own: its stations' most common one.
+                station("butterfly", friday, today.minusDays(3), ExerciseCategory.STRENGTH_CONDITIONING),
+                station("fly", friday, today.minusDays(3), ExerciseCategory.STRENGTH_CONDITIONING),
+                done("squat", today, 600).copy(occurrenceId = "squat-1"),
+            ),
+            from, to, DashboardMetric.EXERCISES,
+        )
+        assertEquals(3, stats.totalCount)
+        assertEquals(2100, stats.totalSeconds)
+        assertEquals(2, stats.bars[3].totalCount)
+        assertEquals(1, stats.bars[3].counts[ExerciseCategory.FLEXIBILITY])
+        assertEquals(900, stats.bars[3].seconds[ExerciseCategory.FLEXIBILITY])
+        assertEquals(1, stats.bars[2].counts[ExerciseCategory.STRENGTH_CONDITIONING])
+        val cooldown = stats.exercises.single { it.routineId != null }
+        assertEquals("Cooldown", cooldown.name)
+        assertEquals(2, cooldown.count)
+        assertEquals(1500, cooldown.seconds)
+        assertEquals(listOf("Cooldown", "squat"), stats.exercises.map { it.name })
     }
 
     @Test

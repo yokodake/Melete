@@ -110,6 +110,17 @@ interface TrainingDao {
     )
     fun observeCircuitsInWeek(weekStartEpochDay: Long): Flow<List<CircuitInstanceEntity>>
 
+    /** The circuits that have any completed station between two dates: what the dashboard counts as one each. */
+    @Query(
+        """
+        SELECT * FROM circuit_instances WHERE id IN (
+            SELECT circuitInstanceId FROM exercise_occurrences
+            WHERE state = 'COMPLETED' AND trainingDateEpochDay BETWEEN :from AND :to
+        )
+        """
+    )
+    fun observeCompletedCircuitsBetween(from: Long, to: Long): Flow<List<CircuitInstanceEntity>>
+
     @Query("SELECT * FROM circuit_instances WHERE id = :id")
     suspend fun getCircuit(id: String): CircuitInstanceEntity?
 

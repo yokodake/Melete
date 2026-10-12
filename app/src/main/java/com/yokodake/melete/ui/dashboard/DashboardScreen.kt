@@ -155,13 +155,14 @@ fun DashboardRoute(
     bottomBar: @Composable () -> Unit,
     onOpenRecords: (from: LocalDate, to: LocalDate, category: ExerciseCategory?, uncategorised: Boolean) -> Unit = { _, _, _, _ -> },
     onOpenExercise: (exerciseId: String, from: LocalDate, to: LocalDate) -> Unit = { _, _, _ -> },
+    onOpenCircuit: (routineId: String) -> Unit = {},
     viewModel: DashboardViewModel = viewModel(factory = DashboardViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     DashboardScreen(
         state, viewModel::setRange, viewModel::setMetric, bottomBar,
         onEarlier = viewModel::earlier, onLater = viewModel::later, onCurrent = viewModel::current,
-        onOpenRecords = onOpenRecords, onOpenExercise = onOpenExercise,
+        onOpenRecords = onOpenRecords, onOpenExercise = onOpenExercise, onOpenCircuit = onOpenCircuit,
     )
 }
 
@@ -177,6 +178,7 @@ fun DashboardScreen(
     onCurrent: () -> Unit = {},
     onOpenRecords: (from: LocalDate, to: LocalDate, category: ExerciseCategory?, uncategorised: Boolean) -> Unit = { _, _, _, _ -> },
     onOpenExercise: (exerciseId: String, from: LocalDate, to: LocalDate) -> Unit = { _, _, _ -> },
+    onOpenCircuit: (routineId: String) -> Unit = {},
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -207,7 +209,7 @@ fun DashboardScreen(
                     // The headline opens what it counts.
                     Text(
                         text = "${DashboardStats.hours(stats.totalSeconds)} · ${stats.totalCount} " +
-                            (if (stats.totalCount == 1) "exercise" else "exercises") + " ›",
+                            (if (stats.totalCount == 1) "workout" else "workouts") + " ›",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
@@ -257,10 +259,13 @@ fun DashboardScreen(
                 }
             }
             if (stats.exercises.isNotEmpty()) {
-                item { DetailSection("Exercises") }
-                items(items = stats.exercises, key = { "ex-${it.exerciseId}" }) { total ->
+                item { DetailSection("Workouts") }
+                items(items = stats.exercises, key = { "ex-${it.routineId != null}-${it.exerciseId}" }) { total ->
                     TotalRow(
-                        onClick = { onOpenExercise(total.exerciseId, stats.from, stats.to) },
+                        // A circuit opens its page; an exercise its history over the range.
+                        onClick = {
+                            total.routineId?.let(onOpenCircuit) ?: onOpenExercise(total.exerciseId, stats.from, stats.to)
+                        },
                         category = total.category,
                         name = total.name,
                         values = valuesText(total.seconds, total.count, state.metric, total.includesInferred),

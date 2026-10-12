@@ -428,6 +428,17 @@ data class CompletedExercise(
     val durationSeconds: Int?,
     /** Typed (true) or worked out from the plan (false). */
     val durationManual: Boolean,
+    val occurrenceId: String = "",
+    /** The circuit it was a station of, which is what counts. */
+    val circuit: CompletedCircuit? = null,
+)
+
+/** A scheduled circuit, as the dashboard counts it: one, under its own name and category. */
+data class CompletedCircuit(
+    val id: String,
+    val routineId: String,
+    val name: String,
+    val category: ExerciseCategory?,
 )
 
 /** Sets performed for one exercise on one earlier training date. */
@@ -476,24 +487,31 @@ class TrainingRepository(private val database: MeleteDatabase) {
     }
 
     /**
-     * Completed exercises trained between two dates, inclusive: what the dashboard counts. One
-     * occurrence is one count, circuit stations included; containers, benchmarks and the diary are
-     * other tables and never reach it. The duration is what was saved — absent stays absent.
+     * Completed exercises trained between two dates, inclusive: what the dashboard counts. A
+     * circuit station carries its circuit, which counts as one ([Counting]); benchmarks and the
+     * diary are other tables and never reach it. The duration is what was saved — absent stays absent.
      */
-    fun observeCompleted(from: LocalDate, to: LocalDate): Flow<List<CompletedExercise>> =
-        dao.observeCompletedBetween(from.toEpochDay(), to.toEpochDay()).map { rows ->
-            rows.mapNotNull { row ->
-                val date = row.trainingDateEpochDay ?: return@mapNotNull null
-                CompletedExercise(
-                    exerciseId = row.exerciseId,
-                    name = row.exerciseNameSnapshot,
-                    category = row.categorySnapshot,
-                    date = LocalDate.ofEpochDay(date),
-                    durationSeconds = row.loggedDurationSeconds,
-                    durationManual = row.loggedDurationManual,
-                )
-            }
+    fun observeCompleted(from: LocalDate, to: LocalDate): Flow<List<CompletedExercise>> = combine(
+        dao.observeCompletedBetween(from.toEpochDay(), to.toEpochDay()),
+        dao.observeCompletedCircuitsBetween(from.toEpochDay(), to.toEpochDay()),
+    ) { rows, circuitRows ->
+        val circuits = circuitRows.associate {
+            it.id to CompletedCircuit(it.id, it.routineId, it.routineNameSnapshot, it.categorySnapshot)
         }
+        rows.mapNotNull { row ->
+            val date = row.trainingDateEpochDay ?: return@mapNotNull null
+            CompletedExercise(
+                exerciseId = row.exerciseId,
+                name = row.exerciseNameSnapshot,
+                category = row.categorySnapshot,
+                date = LocalDate.ofEpochDay(date),
+                durationSeconds = row.loggedDurationSeconds,
+                durationManual = row.loggedDurationManual,
+                occurrenceId = row.id,
+                circuit = row.circuitInstanceId?.let(circuits::get),
+            )
+        }
+    }
 
     /**
      * Whether anything is still planned: an unstarted exercise dated [today] or later, or an

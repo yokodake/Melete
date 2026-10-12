@@ -1,6 +1,7 @@
 package com.yokodake.melete.data.reminders
 
 import com.yokodake.melete.core.WeekMath
+import com.yokodake.melete.data.Counting
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.Tracker
 import com.yokodake.melete.data.DiaryDay
@@ -82,12 +83,9 @@ object ReminderRules {
      * work leaves the target, optional work joins it only once done.
      */
     fun weekSummary(plan: WeekPlan): String {
-        val counted = plan.occurrences.filter {
-            it.state != OccurrenceState.SKIPPED && (!it.optional || it.state == OccurrenceState.COMPLETED)
-        }
-        if (counted.isEmpty()) return "Nothing was planned."
-        val done = counted.count { it.state == OccurrenceState.COMPLETED }
-        return "$done of ${counted.size} done"
+        val units = Counting.units(plan.occurrences)
+        if (units.isEmpty()) return "Nothing was planned."
+        return "${units.count(Counting::done)} of ${units.size} done"
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.yokodake.melete.ui.home
 
 import com.yokodake.melete.data.BenchmarkStanding
+import com.yokodake.melete.data.Counting
 import com.yokodake.melete.data.PlannedOccurrence
 import com.yokodake.melete.data.WeekCircuit
 import com.yokodake.melete.data.entity.OccurrenceState
@@ -10,18 +11,18 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /**
- * Today at a glance: how many of today's exercises are done, how many are left to do, and — only
+ * Today at a glance: how many of today's workouts are done, how many are left to do, and — only
  * when every one of them has an estimate — how long they will take.
  *
- * Exercises are the unit, exactly as the dashboard counts: each exercise occurrence dated today,
- * circuit stations and module members included; the circuit and module containers are not
- * occurrences and add nothing. Skipped work leaves the target. Undated work in the week's
- * unscheduled area is not today's until it is given the date; logging it files it under today.
- * Optional work is left out until it is done, and counts like the rest once it is.
+ * Counted as the dashboard counts ([Counting]): a circuit is one, done when all its stations are;
+ * every other exercise is one, module members included — the module container adds nothing.
+ * Skipped work leaves the target. Undated work in the week's unscheduled area is not today's until
+ * it is given the date; logging it files it under today. Optional work is left out until it is
+ * done, and counts like the rest once it is.
  */
 data class TodaySummary(
     val completed: Int,
-    /** Exercises today that are not skipped: what "all done" is measured against. */
+    /** Workouts today that are not skipped: what "all done" is measured against. */
     val target: Int,
     val skipped: Int,
     /** Null when anything left has no estimate, and when nothing is left. */
@@ -33,11 +34,8 @@ data class TodaySummary(
     companion object {
         fun build(today: LocalDate, occurrences: List<PlannedOccurrence>, circuits: List<WeekCircuit>): TodaySummary {
             val todays = occurrences.filter { it.trainingDate == today }
-            val skipped = todays.count { it.state == OccurrenceState.SKIPPED }
-            val counted = todays.filter {
-                it.state != OccurrenceState.SKIPPED && (!it.optional || it.state == OccurrenceState.COMPLETED)
-            }
-            val completed = counted.count { it.state == OccurrenceState.COMPLETED }
+            val units = Counting.units(todays)
+            val counted = units.flatten()
             val remaining = counted.filter { it.state == OccurrenceState.PLANNED }
 
             // A circuit station's time is its share of the circuit's one clock, not what its own
@@ -62,7 +60,7 @@ data class TodaySummary(
             } else {
                 estimates.sumOf { it ?: 0 }
             }
-            return TodaySummary(completed, counted.size, skipped, remainingSeconds)
+            return TodaySummary(units.count(Counting::done), units.size, Counting.skipped(todays), remainingSeconds)
         }
     }
 }

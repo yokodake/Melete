@@ -70,11 +70,12 @@ Choosing another length returns to the current range; all time does not page.
   true height (`DashboardStats.segmentHeights`); a
   tap names a bar's period and totals above the plot (the latest by default).
 - **Categories**: dot, name, hours · count · share of the chosen metric; "No category" is a row.
-- **Exercises**: each exercise's hours and count, "≈" when some of its time was worked out.
+- **Workouts**: each exercise's or circuit's hours and count, "≈" when some of its time was worked
+  out. A circuit's row opens the circuit.
 
 What counts is `CompletedExercise` from `TrainingRepository.observeCompleted`: completed exercise
-occurrences by training date, circuit stations included (their saved shares of the circuit's time),
-never containers, modules, planned or skipped work, benchmarks or the diary. The arithmetic is
+occurrences by training date. A circuit's completed stations count as one, under the circuit's name
+and category (or its stations' most common one), with all their time; never modules, planned or skipped work, benchmarks or the diary. The arithmetic is
 `DashboardStats` (unit-tested). The category palette was not run through the dataviz validator —
 no Node on this machine — and stays the user's; the category rows name every colour. Filtering by
 category and a doughnut are deferred, as agreed.
@@ -505,8 +506,10 @@ week's days, since a plan file holds no logs.
 
 ## Counting
 
-One completed exercise occurrence is one count. A circuit exercise counts once however many rounds
-it took; the circuit container counts nothing; a duration-only activity counts once with no sets.
+A circuit counts as one; every other completed exercise occurrence is one, module members
+included, a duration-only activity once with no sets. On Home and in the weekly review a circuit is
+done when all its stations are; on the dashboard it counts once any station is logged. One rule,
+`Counting` (2026-10-07; before, each station counted).
 The daily session table is an implementation detail and is not a count of anything.
 
 ## Architecture as built
@@ -1745,6 +1748,9 @@ Agreed with the user (2026-10-06), in order:
 
 Recorded, not scheduled: the running-timer polish and the week menu UX (both waiting on the
 user's thinking). Notifications are built — see *Reminders*; not yet checked on the phone.
+
+Recorded 2026-10-12, not scheduled: **daily/weekly trackers** — a tracker with a goal over a
+period rather than a value per day, e.g. "4 dry days / week". The user will explain the details.
 
 Small follow-ups, recorded 2026-09-28 (not scheduled):
 

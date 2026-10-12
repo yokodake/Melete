@@ -3,6 +3,7 @@ package com.yokodake.melete.ui.dashboard
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.CompletedExercise
 import com.yokodake.melete.data.model.ExerciseCategory
+import com.yokodake.melete.ui.components.dominantCategory
 import java.time.LocalDate
 
 /** The ranges the dashboard offers, each ending today and including the current partial period. */
@@ -17,7 +18,7 @@ enum class DashboardRange(val label: String) {
 /** What the bars, the shares and the exercise rows measure. */
 enum class DashboardMetric(val label: String) {
     HOURS("Hours"),
-    EXERCISES("Exercises"),
+    EXERCISES("Workouts"),
 }
 
 /** One bar: a week or a month, and what each category contributed to it. */
@@ -40,6 +41,7 @@ data class CategoryTotal(
     val share: Double,
 )
 
+/** A row of the dashboard's list: an exercise, or a circuit counted as one ([routineId] set). */
 data class ExerciseTotal(
     val exerciseId: String,
     val name: String,
@@ -48,6 +50,22 @@ data class ExerciseTotal(
     val count: Int,
     /** Some of its time was worked out from the plan rather than typed. */
     val includesInferred: Boolean,
+    /** The saved circuit, when this row is one. */
+    val routineId: String? = null,
+)
+
+/**
+ * One counted thing: an exercise, or a circuit's completed stations together — one, under the
+ * circuit's name and category (or its stations' most common one), with all their time.
+ */
+private class CountedWork(
+    val date: LocalDate,
+    val category: ExerciseCategory?,
+    val seconds: Int,
+    val inferred: Boolean,
+    val name: String,
+    val exerciseId: String,
+    val routineId: String?,
 )
 
 data class DashboardStats(
@@ -103,6 +121,22 @@ data class DashboardStats(
             metric: DashboardMetric,
         ): DashboardStats {
             val inRange = completed.filter { it.date in from..to }
+            val work = inRange.withIndex()
+                .groupBy { (i, it) -> it.circuit?.let { c -> "c:${c.id}" } ?: "o:${it.occurrenceId.ifEmpty { "#$i" }}" }
+                .values.map { indexed ->
+                    val items = indexed.map { it.value }
+                    val first = items.first()
+                    val circuit = first.circuit
+                    CountedWork(
+                        date = items.minOf { it.date },
+                        category = if (circuit == null) first.category else circuit.category ?: dominantCategory(items.map { it.category }),
+                        seconds = items.sumOf { it.durationSeconds ?: 0 },
+                        inferred = items.any { it.durationSeconds != null && !it.durationManual },
+                        name = circuit?.name ?: first.name,
+                        exerciseId = circuit?.routineId ?: first.exerciseId,
+                        routineId = circuit?.routineId,
+                    )
+                }
             val monthly = monthly(from, to)
 
             // Every period from the first to today, empty ones included: a week off is part of
@@ -111,45 +145,46 @@ data class DashboardStats(
                 if (monthly) it.plusMonths(1) else it.plusWeeks(1)
             }.takeWhile { it <= to }.toList()
             fun periodOf(date: LocalDate) = if (monthly) date.withDayOfMonth(1) else WeekMath.weekStartOf(date)
-            val byPeriod = inRange.groupBy { periodOf(it.date) }
+            val byPeriod = work.groupBy { periodOf(it.date) }
             val bars = starts.map { start ->
                 val items = byPeriod[start].orEmpty()
                 DashboardBar(
                     start = start,
                     monthly = monthly,
                     seconds = items.groupBy { it.category }
-                        .mapValues { (_, list) -> list.sumOf { it.durationSeconds ?: 0 } }
+                        .mapValues { (_, list) -> list.sumOf { it.seconds } }
                         .filterValues { it > 0 },
                     counts = items.groupingBy { it.category }.eachCount(),
                 )
             }
 
-            val totalSeconds = inRange.sumOf { it.durationSeconds ?: 0 }
-            val totalCount = inRange.size
+            val totalSeconds = work.sumOf { it.seconds }
+            val totalCount = work.size
             fun share(seconds: Int, count: Int): Double = when (metric) {
                 DashboardMetric.HOURS -> if (totalSeconds == 0) 0.0 else seconds.toDouble() / totalSeconds
                 DashboardMetric.EXERCISES -> if (totalCount == 0) 0.0 else count.toDouble() / totalCount
             }
             fun key(seconds: Int, count: Int): Int = if (metric == DashboardMetric.HOURS) seconds else count
 
-            val categories = inRange.groupBy { it.category }.map { (category, list) ->
-                val seconds = list.sumOf { it.durationSeconds ?: 0 }
+            val categories = work.groupBy { it.category }.map { (category, list) ->
+                val seconds = list.sumOf { it.seconds }
                 CategoryTotal(category, seconds, list.size, share(seconds, list.size))
             }.sortedWith(
                 compareByDescending<CategoryTotal> { key(it.seconds, it.count) }
                     .thenBy { it.category?.ordinal ?: Int.MAX_VALUE }
             )
 
-            val exercises = inRange.groupBy { it.exerciseId }.map { (id, list) ->
+            val exercises = work.groupBy { (it.routineId != null) to it.exerciseId }.map { (key, list) ->
                 // The name as most recently trained, which is what the week showed last.
                 val latest = list.maxBy { it.date }
                 ExerciseTotal(
-                    exerciseId = id,
+                    exerciseId = key.second,
                     name = latest.name,
                     category = latest.category,
-                    seconds = list.sumOf { it.durationSeconds ?: 0 },
+                    seconds = list.sumOf { it.seconds },
                     count = list.size,
-                    includesInferred = list.any { it.durationSeconds != null && !it.durationManual },
+                    includesInferred = list.any { it.inferred },
+                    routineId = latest.routineId,
                 )
             }.sortedWith(
                 compareByDescending<ExerciseTotal> { key(it.seconds, it.count) }

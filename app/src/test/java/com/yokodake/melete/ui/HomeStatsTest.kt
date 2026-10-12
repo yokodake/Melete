@@ -77,7 +77,7 @@ class HomeStatsTest {
     }
 
     @Test
-    fun `nothing planned is its own state, and a circuit counts its exercises, not itself`() {
+    fun `nothing planned is its own state, and a circuit counts as one`() {
         assertTrue(TodaySummary.build(today, emptyList(), emptyList()).nothingPlanned)
 
         val circuit = WeekCircuit(
@@ -89,7 +89,15 @@ class HomeStatsTest {
             occurrence("plank", circuit = "c1", position = 1),
         )
         val summary = TodaySummary.build(today, stations, listOf(circuit))
-        assertEquals(2, summary.target)
+        assertEquals(1, summary.target)
+        assertEquals(0, summary.completed)
+        // Done only when every station is.
+        val half = listOf(stations[0].copy(state = OccurrenceState.COMPLETED), stations[1])
+        assertEquals(0, TodaySummary.build(today, half, listOf(circuit)).completed)
+        val all = stations.map { it.copy(state = OccurrenceState.COMPLETED) }
+        assertTrue(TodaySummary.build(today, all, listOf(circuit)).allDone)
+        val skipped = stations.map { it.copy(state = OccurrenceState.SKIPPED) }
+        assertEquals(1, TodaySummary.build(today, skipped, listOf(circuit)).skipped)
         // The stations share the circuit's one clock, rests included, rather than each estimating
         // its own standalone plan.
         val whole = com.yokodake.melete.data.timer.PrescriptionProgram.circuit(
