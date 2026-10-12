@@ -19,3 +19,8 @@ local.properties
 
 # This machine's shared build counter (see app/build.gradle.kts)
 /build-number.properties
+
+# Kept on this machine, out of the public repo: screenshots, notes, and the IDE device choice (holds the phone serial)
+/docs/ui-reference/
+/src/
+/.idea/deploymentTargetSelector.xml
