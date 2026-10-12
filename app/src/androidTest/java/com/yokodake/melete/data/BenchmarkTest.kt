@@ -144,7 +144,7 @@ class BenchmarkTest {
 
         val service = BackupService(database)
         val exported = service.export()
-        assertEquals(2, exported.formatVersion)
+        assertEquals(com.yokodake.melete.data.backup.BACKUP_FORMAT_VERSION, exported.formatVersion)
 
         service.restore(exported)
         val again = service.export()
