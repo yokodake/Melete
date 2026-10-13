@@ -20,6 +20,7 @@ class SchemaBaselineTest {
         10 to "668aea72f58ec32158d5f564e4c1390c",
         11 to "52918ff1c14aa854f8cf79b686f3c4c6",
         12 to "cef608ff081aaa06dcca0eb847c80e0d",
+        13 to "0d9c5a1e02fde2d6a2a53642cb5f93aa",
     )
 
     private fun identityOf(version: Int): String? =

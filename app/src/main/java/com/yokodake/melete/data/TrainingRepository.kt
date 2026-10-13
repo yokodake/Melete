@@ -97,6 +97,8 @@ data class PlannedOccurrence(
     val modulePosition: Int? = null,
     /** Nice to do: left out of Home's target and remaining time until it is done. */
     val optional: Boolean = false,
+    /** The plan's note on this copy; not [comment], which is what logging it said. */
+    val note: String? = null,
 ) {
     /**
      * How long the plan says this should take, worked out from its shape. Null when there is
@@ -298,6 +300,8 @@ data class ScheduledCircuit(
     val orderIndex: Int,
     val stations: List<PlannedOccurrence>,
     val category: ExerciseCategory? = null,
+    /** The plan's note on this copy of the circuit. */
+    val note: String? = null,
 ) {
     /** A circuit is done when every station of it is. It counts nothing of its own. */
     val completed: Boolean get() = stations.isNotEmpty() && stations.all { it.hasRecord }
@@ -320,6 +324,8 @@ data class WeekCircuit(
     val moduleInstanceId: String? = null,
     val modulePosition: Int? = null,
     val category: ExerciseCategory? = null,
+    /** The plan's note on this copy of the circuit. */
+    val note: String? = null,
 )
 
 /** What removing a routine would cost. */
@@ -383,6 +389,8 @@ data class WeekModule(
     val weekStart: LocalDate,
     val trainingDate: LocalDate?,
     val orderIndex: Int,
+    /** The plan's note on this copy of the module. */
+    val note: String? = null,
 )
 
 /** What removing a module template would cost. Scheduled copies are never touched either way. */
@@ -950,6 +958,71 @@ class TrainingRepository(private val database: MeleteDatabase) {
             dao.updateOccurrence(occurrence.copy(optional = optional))
         }
     }
+
+    /**
+     * Marks a whole scheduled circuit optional, or not: every station, since the circuit is one
+     * piece of work and counts once, when all of it is done.
+     */
+    suspend fun setCircuitOptional(circuitInstanceId: String, optional: Boolean) {
+        database.withTransaction {
+            dao.circuitStations(circuitInstanceId).forEach { dao.updateOccurrence(it.copy(optional = optional)) }
+        }
+    }
+
+    /** Marks everything a scheduled module holds optional, or not, its circuits' stations included. */
+    suspend fun setModuleOptional(moduleInstanceId: String, optional: Boolean) {
+        database.withTransaction {
+            modules.occurrencesIn(moduleInstanceId).forEach { dao.updateOccurrence(it.copy(optional = optional)) }
+        }
+    }
+
+    /**
+     * The plan's note on one scheduled exercise; blank clears it. A plan note, so it can change
+     * whatever has been logged — it is not the log's comment.
+     */
+    suspend fun setOccurrenceNote(occurrenceId: String, note: String?) {
+        database.withTransaction {
+            val occurrence = dao.getOccurrence(occurrenceId) ?: return@withTransaction
+            dao.updateOccurrence(occurrence.copy(note = note.cleaned()))
+        }
+    }
+
+    /** The plan's note on one scheduled circuit; blank clears it. */
+    suspend fun setCircuitNote(circuitInstanceId: String, note: String?) {
+        database.withTransaction {
+            val circuit = dao.getCircuit(circuitInstanceId) ?: return@withTransaction
+            dao.updateCircuit(circuit.copy(note = note.cleaned()))
+        }
+    }
+
+    /** The plan's note on one scheduled module; blank clears it. */
+    suspend fun setModuleNote(moduleInstanceId: String, note: String?) {
+        database.withTransaction {
+            val module = modules.getInstance(moduleInstanceId) ?: return@withTransaction
+            modules.updateInstance(module.copy(note = note.cleaned()))
+        }
+    }
+
+    /**
+     * A note on the exercises of one scheduled module cut from [exerciseId] — its own, not those
+     * inside its circuits, as [overrideModulePlan] reaches them. Returns how many were noted.
+     */
+    suspend fun noteModuleExercise(moduleInstanceId: String, exerciseId: String, note: String?): Int =
+        database.withTransaction {
+            val members = modules.occurrencesIn(moduleInstanceId).filter {
+                it.exerciseId == exerciseId && it.circuitInstanceId == null
+            }
+            members.forEach { dao.updateOccurrence(it.copy(note = note.cleaned())) }
+            members.size
+        }
+
+    /** A note on the stations of one scheduled circuit cut from [exerciseId]. Returns how many. */
+    suspend fun noteCircuitStation(circuitInstanceId: String, exerciseId: String, note: String?): Int =
+        database.withTransaction {
+            val stations = dao.circuitStations(circuitInstanceId).filter { it.exerciseId == exerciseId }
+            stations.forEach { dao.updateOccurrence(it.copy(note = note.cleaned())) }
+            stations.size
+        }
 
     /** Edits this week's copy only; nothing else holds it, so nothing else is touched. */
     suspend fun updateOccurrencePrescription(occurrenceId: String, payload: PrescriptionPayload) {
@@ -1643,6 +1716,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
         moduleInstanceId = moduleInstanceId,
         modulePosition = modulePosition,
         category = categorySnapshot,
+        note = note,
     )
 
     /** One scheduled circuit and the occurrences that are its stations. */
@@ -1857,6 +1931,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
             orderIndex = orderIndex,
             stations = stations,
             category = categorySnapshot,
+            note = note,
         )
 
     // ------------------------------------------------------------- modules
@@ -2044,6 +2119,7 @@ class TrainingRepository(private val database: MeleteDatabase) {
                     weekStart = LocalDate.ofEpochDay(it.weekStartEpochDay),
                     trainingDate = it.trainingDateEpochDay?.let(LocalDate::ofEpochDay),
                     orderIndex = it.orderIndex,
+                    note = it.note,
                 )
             }
         }
@@ -2275,6 +2351,7 @@ private fun ExerciseOccurrenceEntity.toPlanned(
         moduleInstanceId = occurrence.moduleInstanceId,
         modulePosition = occurrence.modulePosition,
         optional = occurrence.optional,
+        note = occurrence.note,
     )
 }
 

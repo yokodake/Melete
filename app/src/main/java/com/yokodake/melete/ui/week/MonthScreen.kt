@@ -663,7 +663,7 @@ private fun MonthItem(
                 item.stations.isNotEmpty() && item.stations.all { it.state == OccurrenceState.SKIPPED } -> OccurrenceState.SKIPPED
                 else -> OccurrenceState.PLANNED
             },
-            optional = false,
+            optional = item.optional,
             summary = circuitSummary(item),
             indent = indent,
             onClick = { actions.onOpenCircuit(item.circuit.id) },

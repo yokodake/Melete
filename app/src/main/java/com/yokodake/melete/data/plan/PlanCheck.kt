@@ -60,6 +60,8 @@ data class ResolvedPick(
     val variationTag: String?,
     val plan: PrescriptionPayload?,
     val optional: Boolean = false,
+    /** The plan's note on this placement; only ever set for one in a week. */
+    val note: String? = null,
 )
 
 data class ResolvedCircuit(
@@ -89,19 +91,32 @@ data class ResolvedModule(
 sealed interface ResolvedItem {
     data class Exercise(val pick: ResolvedPick) : ResolvedItem
 
-    /** A circuit placed in a week, with its own rounds there when the file gives them. */
-    data class Circuit(val key: String, val rounds: Int? = null) : ResolvedItem
+    /**
+     * A circuit placed in a week, with its own rounds there when the file gives them, its note,
+     * notes for some stations by exercise key, and whether the whole of it is optional.
+     */
+    data class Circuit(
+        val key: String,
+        val rounds: Int? = null,
+        val note: String? = null,
+        val notes: Map<String, String> = emptyMap(),
+        val optional: Boolean = false,
+    ) : ResolvedItem
 
     /**
      * A module placed in a week, with plans for some of its exercises there and some left out,
-     * both by exercise key.
+     * both by exercise key; its note, notes for some of its exercises, and whether all of it is
+     * optional.
      */
     data class Module(
         val key: String,
         val plans: Map<String, PrescriptionPayload> = emptyMap(),
         val omit: Set<String> = emptySet(),
+        val note: String? = null,
+        val notes: Map<String, String> = emptyMap(),
+        val optional: Boolean = false,
     ) : ResolvedItem
-    data class Activity(val name: String, val minutes: Int?) : ResolvedItem
+    data class Activity(val name: String, val minutes: Int?, val note: String? = null) : ResolvedItem
 }
 
 /** One slot of one week: a day, or the week's undated area when [date] is null. */
@@ -323,7 +338,17 @@ object PlanCheck {
             if (!overridable && plan != null) warnings += "$where: a plan here is not used."
             // A station is one part of one circuit's clock: it cannot be left for later.
             if (station && item.optional != null) problems += "$where: a circuit's station cannot be optional."
-            return ResolvedPick(nameKey(name), tag, plan, optional = !station && item.optional == true)
+            return ResolvedPick(nameKey(name), tag, plan, optional = !station && item.optional == true, note = noteOf(item.note))
+        }
+
+        /**
+         * Notes belong to the plan: a circuit's stations and a module's entries are the library's,
+         * so a note there is in the wrong place rather than quietly dropped.
+         */
+        fun noNotesInDefinition(item: PlanItem, name: String, what: String) {
+            if (item.note != null || item.notes != null) {
+                problems += "$name: notes go where the $what is placed in a week, not in the $what itself."
+            }
         }
 
         /** Exactly one kind per item, and only the kinds [allowed] where it stands. */
@@ -349,8 +374,11 @@ object PlanCheck {
                     if (kind != "module" && item.plans != null) {
                         problems += "$where: \"plans\" only goes with a module placed in a week."
                     }
-                    if (kind != "exercise" && item.optional != null) {
-                        problems += "$where: \"optional\" only goes with an exercise."
+                    if (kind == "activity" && item.optional != null) {
+                        problems += "$where: \"optional\" does not go with an activity."
+                    }
+                    if (kind != "circuit" && kind != "module" && item.notes != null) {
+                        problems += "$where: \"notes\" only goes with a circuit or module placed in a week; use \"note\" here."
                     }
                     if (kind != "module" && item.omit != null) {
                         problems += "$where: \"omit\" only goes with a module placed in a week."
@@ -391,6 +419,7 @@ object PlanCheck {
                 if (item.plans != null || item.rounds != null || item.omit != null) {
                     problems += "$name: \"plans\", \"omit\" and \"rounds\" go where it is placed in a week."
                 }
+                noNotesInDefinition(item, name, "circuit")
                 pick(item, name, station = true, overridable = true)
             }
             ResolvedCircuit(
@@ -422,6 +451,10 @@ object PlanCheck {
             val entries = source.entries.mapNotNull { item ->
                 if (item.plans != null || item.rounds != null || item.omit != null) {
                     problems += "$name: \"plans\", \"omit\" and \"rounds\" go where it is placed in a week."
+                }
+                noNotesInDefinition(item, name, "module")
+                if (item.circuit != null && item.optional != null) {
+                    problems += "$name: a circuit in a module cannot be optional; make the module optional where it is placed."
                 }
                 when (kindOf(item, name, setOf("exercise", "circuit"))) {
                     "exercise" -> pick(item, name, station = false, overridable = true)?.let(ResolvedEntry::Exercise)
@@ -506,6 +539,45 @@ object PlanCheck {
             }.toSet()
         }
 
+        /**
+         * A placement's notes for some of what it holds, by exercise key: a module's own exercises
+         * (as for [modulePlans]) or a circuit's stations. Checked against the file's definition when
+         * it has one; one from the library is matched when it is written. Blank notes are none.
+         */
+        fun placementNotes(kind: String, name: String, notes: Map<String, String>?, omit: List<String>?, where: String): Map<String, String> {
+            if (notes.isNullOrEmpty()) return emptyMap()
+            val holds = when (kind) {
+                "module" -> modules.firstOrNull { it.key == nameKey(name) }
+                    ?.entries?.filterIsInstance<ResolvedEntry.Exercise>()?.map { it.pick.exerciseKey }?.toSet()
+                else -> circuits.firstOrNull { it.key == nameKey(name) }?.stations?.map { it.exerciseKey }?.toSet()
+            }
+            val left = omit.orEmpty().map(::nameKey).toSet()
+            return notes.mapNotNull { (exercise, text) ->
+                val found = target(exercise)
+                val note = noteOf(text)
+                when {
+                    found == null -> {
+                        problems += "$where: no exercise called \"$exercise\" in the file or the library."
+                        null
+                    }
+                    holds != null && nameKey(exercise) !in holds -> {
+                        problems += if (kind == "module") {
+                            "$where: ${name.trim()} has no exercise ${found.name} of its own to note."
+                        } else {
+                            "$where: ${name.trim()} has no station ${found.name} to note."
+                        }
+                        null
+                    }
+                    nameKey(exercise) in left -> {
+                        warnings += "$where: ${found.name} is left out of ${name.trim()}, so its note is not used."
+                        null
+                    }
+                    note == null -> null
+                    else -> nameKey(exercise) to note
+                }
+            }.toMap()
+        }
+
         // ---------------------------------------------------------- phases
 
         // Planning metadata: nothing is imported, but a phase that cannot mean anything is a
@@ -577,7 +649,13 @@ object PlanCheck {
                                     problems += "$where: $circuit needs at least 1 round."
                                 }
                                 if (circuitKnown(circuit)) {
-                                    ResolvedItem.Circuit(nameKey(circuit), item.rounds?.takeIf { it >= 1 })
+                                    ResolvedItem.Circuit(
+                                        key = nameKey(circuit),
+                                        rounds = item.rounds?.takeIf { it >= 1 },
+                                        note = noteOf(item.note),
+                                        notes = placementNotes("circuit", circuit, item.notes, null, where),
+                                        optional = item.optional == true,
+                                    )
                                 } else {
                                     problems += "$where: no circuit called \"$circuit\" in the file or the library."
                                     null
@@ -586,9 +664,12 @@ object PlanCheck {
                             "module" -> item.module!!.trim().let { module ->
                                 if (moduleKnown(module)) {
                                     ResolvedItem.Module(
-                                        nameKey(module),
-                                        modulePlans(module, item.plans, where),
-                                        moduleOmits(module, item.omit, item.plans, where),
+                                        key = nameKey(module),
+                                        plans = modulePlans(module, item.plans, where),
+                                        omit = moduleOmits(module, item.omit, item.plans, where),
+                                        note = noteOf(item.note),
+                                        notes = placementNotes("module", module, item.notes, item.omit, where),
+                                        optional = item.optional == true,
                                     )
                                 } else {
                                     problems += "$where: no module called \"$module\" in the file or the library."
@@ -599,7 +680,7 @@ object PlanCheck {
                                 val name = item.activity!!.trim()
                                 if (name.isEmpty()) problems += "$where: an activity needs a name."
                                 if (item.minutes != null && item.minutes < 0) problems += "$where: $name has negative minutes."
-                                ResolvedItem.Activity(name, item.minutes?.takeIf { it > 0 })
+                                ResolvedItem.Activity(name, item.minutes?.takeIf { it > 0 }, noteOf(item.note))
                             }
                             else -> null
                         }
@@ -728,6 +809,9 @@ object PlanCheck {
             restSecondsBetweenReps = spec.repRestSeconds?.takeIf { it > 0 && mode == ExerciseMode.REPETITIONS },
         )
     }
+
+    /** A note as it is kept: trimmed, and none when blank. */
+    private fun noteOf(raw: String?): String? = raw?.trim()?.takeIf { it.isNotEmpty() }
 
     private fun parseMode(raw: String): ExerciseMode? = when (normaliseEnum(raw)) {
         "REPS" -> ExerciseMode.REPETITIONS

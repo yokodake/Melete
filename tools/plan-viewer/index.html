@@ -76,6 +76,10 @@
   .module { border: 1px solid var(--line); border-radius: 12px; padding: 4px 8px 6px; margin: 8px 0; }
   .module > .mname { font-weight: 600; padding: 4px 4px 2px; }
   .module > .mdesc { color: var(--muted); font-size: 12px; padding: 0 4px 2px; }
+  /* The plan's note on one placement: italic, so it reads as advice rather than as the library's text. */
+  .pnote { font-style: italic; color: var(--muted); font-size: 12px; margin-top: 2px; white-space: pre-wrap; }
+  .module > .pnote { padding: 0 4px 2px; margin-top: 0; }
+  .stations .pnote { margin-top: 0; }
   .stations { margin: 4px 0 0 18px; padding: 0; color: var(--muted); font-size: 13px; }
 
   /* global view */
@@ -363,6 +367,19 @@ function resolve(file) {
   const circuits = index(file.circuits, "Circuit");
   const modules = index(file.modules, "Module");
 
+  // Notes are the plan's: a circuit's stations and a module's entries are the library's.
+  circuits.forEach(c => (c.stations ?? []).forEach(s => {
+    if (s.note != null || s.notes != null) problems.push(`${c.name}: notes go where the circuit is placed in a week, not in the circuit itself.`);
+  }));
+  modules.forEach(m => (m.entries ?? []).forEach(e => {
+    if (e.note != null || e.notes != null) problems.push(`${m.name}: notes go where the module is placed in a week, not in the module itself.`);
+    if (e.circuit && e.optional != null) problems.push(`${m.name}: a circuit in a module cannot be optional; make the module optional where it is placed.`);
+  }));
+  /** A note as the app keeps it: trimmed, and none when blank. */
+  const noteOf = v => typeof v === "string" && v.trim() ? v.trim() : null;
+  /** A placement's notes for what it holds, by name key. */
+  const notesOf = item => new Map(Object.entries(item.notes ?? {}).map(([k, v]) => [nameKey(k), noteOf(v)]));
+
   exercises.forEach(ex => {
     if (!parseMode(ex.mode)) problems.push(`${ex.name}: ${ex.mode ? `unknown mode "${ex.mode}"` : "no mode"}.`);
     if (ex.category && !CATEGORY_VAR[normEnum(ex.category)]) problems.push(`${ex.name}: unknown category "${ex.category}".`);
@@ -407,20 +424,33 @@ function resolve(file) {
         const resolved = (() => {
         const kinds = ["exercise", "circuit", "module", "activity"].filter(k => item[k] != null);
         if (kinds.length !== 1) { problems.push(`${where(slot)}: an item must be exactly one of exercise, circuit, module, activity.`); return null; }
+        if (item.notes != null && !item.circuit && !item.module) problems.push(`${where(slot)}: "notes" only goes with a circuit or module; use "note" here.`);
         if (item.exercise) {
           const ex = exerciseOf(item.exercise, where(slot));
-          return { kind: "exercise", ex, variation: item.variation ?? null, optional: !!item.optional, plan: planOf(ex, item.variation, item.plan, where(slot)) };
+          return { kind: "exercise", ex, variation: item.variation ?? null, optional: !!item.optional, note: noteOf(item.note),
+            plan: planOf(ex, item.variation, item.plan, where(slot)) };
         }
         if (item.circuit) {
           if (item.rounds != null && item.rounds < 1) problems.push(`${where(slot)}: ${item.circuit} needs at least 1 round.`);
           const c = circuitItem(item.circuit, where(slot));
           // This week's rounds, when the placement gives them.
           if (item.rounds != null) { c.rounds = item.rounds; c.overridden = true; }
+          // Whether all of it is optional, its note, and notes for its stations, this week only.
+          c.optional = !!item.optional;
+          c.note = noteOf(item.note);
+          const notes = notesOf(item);
+          if (c.stations.length) notes.forEach((_, k) => {
+            if (!c.stations.some(s => nameKey(s.ex.name) === k)) problems.push(`${where(slot)}: ${c.name} has no station "${k}" to note.`);
+          });
+          c.stations.forEach(s => { s.note = notes.get(nameKey(s.ex.name)) ?? null; });
           return c;
         }
         if (item.module) {
           const mod = modules.get(nameKey(item.module));
-          if (!mod) { missing.add(`Module "${item.module}" (${where(slot)}) is not defined in this file.`); return { kind: "module", name: item.module, entries: [] }; }
+          if (!mod) {
+            missing.add(`Module "${item.module}" (${where(slot)}) is not defined in this file.`);
+            return { kind: "module", name: item.module, entries: [], optional: !!item.optional, note: noteOf(item.note) };
+          }
           // This week's plans for some of its exercises, by name, when the placement gives them.
           const own = new Map(Object.entries(item.plans ?? {}).map(([k, v]) => [nameKey(k), v]));
           const held = new Set((mod.entries ?? []).filter(e => e.exercise).map(e => nameKey(e.exercise)));
@@ -431,16 +461,26 @@ function resolve(file) {
             if (!held.has(k)) problems.push(`${where(slot)}: ${mod.name} has no exercise "${k}" of its own to leave out.`);
             if (own.has(k)) problems.push(`${where(slot)}: "${k}" is both planned and left out.`);
           });
+          // And notes for its own exercises.
+          const notes = notesOf(item);
+          notes.forEach((_, k) => {
+            if (!held.has(k)) problems.push(`${where(slot)}: ${mod.name} has no exercise "${k}" of its own to note.`);
+            else if (omitted.has(k)) problems.push(`${where(slot)}: "${k}" is left out, so its note is not used (a warning in the app).`);
+          });
+          const whole = !!item.optional;
           return {
-            kind: "module", name: mod.name, description: mod.description,
+            kind: "module", name: mod.name, description: mod.description, optional: whole, note: noteOf(item.note),
             entries: (mod.entries ?? []).filter(e => !(e.exercise && omitted.has(nameKey(e.exercise)))).map(e => e.circuit ? circuitItem(e.circuit, `module ${mod.name}`)
               : (() => { const ex = exerciseOf(e.exercise, `module ${mod.name}`);
                 const override = own.get(nameKey(e.exercise));
-                return { kind: "exercise", ex, variation: e.variation ?? null, overridden: !!override, optional: !!e.optional,
+                return { kind: "exercise", ex, variation: e.variation ?? null, overridden: !!override, // The module says it when all of it is; an entry says only its own.
+                  optional: !whole && !!e.optional,
+                  note: notes.get(nameKey(e.exercise)) ?? null,
                   plan: override ?? planOf(ex, e.variation, e.plan, `module ${mod.name}`) }; })()),
           };
         }
-        return { kind: "activity", name: item.activity, minutes: item.minutes ?? null };
+        if (item.optional != null) problems.push(`${where(slot)}: "optional" does not go with an activity.`);
+        return { kind: "activity", name: item.activity, minutes: item.minutes ?? null, note: noteOf(item.note) };
         })();
         return resolved ? Object.assign(resolved, { ref }) : { kind: "invalid", ref, raw: item };
       });
@@ -570,22 +610,28 @@ function exerciseDetail(ex, plan, variation) {
   return lines.join("\n");
 }
 
+/** The plan's note on one placement, under its card's plan. */
+const noteNode = note => note ? h("div", { class: "pnote" }, note) : null;
+
 function exerciseCard(item) {
-  return h("div", { class: "card", title: exerciseDetail(item.ex, item.plan, item.variation) },
+  return h("div", { class: "card", title: exerciseDetail(item.ex, item.plan, item.variation) + (item.note ? `\nNote: ${item.note}` : "") },
     h("div", { class: "top" }, dot(item.ex.category), h("span", { class: "name" }, item.ex.name),
       item.variation ? h("span", { class: "chip" }, String(item.variation).toUpperCase()) : null,
       item.optional ? h("span", { class: "chip" }, "optional") : null),
-    h("div", { class: "sub" }, planSummary(item.ex, item.plan, false) + (item.overridden ? " · this week" : "")));
+    h("div", { class: "sub" }, planSummary(item.ex, item.plan, false) + (item.overridden ? " · this week" : "")),
+    noteNode(item.note));
 }
 function circuitCard(item) {
   const shape = [`${item.rounds} ${item.rounds === 1 ? "round" : "rounds"}${item.overridden ? " this week" : ""}`,
     item.transitionSeconds ? `switch ${fmtSeconds(item.transitionSeconds)}` : null,
     item.roundRestSeconds ? `rest ${fmtSeconds(item.roundRestSeconds)}` : null].filter(Boolean).join(" · ");
   return h("div", { class: "card" },
-    h("div", { class: "top" }, dot(item.category), h("span", { class: "name" }, item.name), h("span", { class: "muted" }, "circuit")),
+    h("div", { class: "top" }, dot(item.category), h("span", { class: "name" }, item.name), h("span", { class: "muted" }, "circuit"),
+      item.optional ? h("span", { class: "chip" }, "optional") : null),
     h("div", { class: "sub" }, shape),
-    h("ol", { class: "stations" }, item.stations.map(s => h("li", { title: exerciseDetail(s.ex, s.plan, s.variation) },
-      `${s.ex.name}${s.variation ? " [" + s.variation + "]" : ""} — ${planSummary(s.ex, s.plan, true)}`))));
+    noteNode(item.note),
+    h("ol", { class: "stations" }, item.stations.map(s => h("li", { title: exerciseDetail(s.ex, s.plan, s.variation) + (s.note ? `\nNote: ${s.note}` : "") },
+      `${s.ex.name}${s.variation ? " [" + s.variation + "]" : ""} — ${planSummary(s.ex, s.plan, true)}`, noteNode(s.note)))));
 }
 function itemNode(item) {
   if (item.kind === "invalid") return h("div", { class: "card bad" },
@@ -598,9 +644,12 @@ function itemNode(item) {
       title: `${item.name}\none-off activity, no library entry\n${item.minutes != null ? `Length: ${item.minutes} m` : "No length"}`,
     },
     h("div", { class: "top" }, dot(null), h("span", { class: "name" }, item.name), h("span", { class: "muted" }, "activity")),
-    h("div", { class: "sub" }, item.minutes ? `${item.minutes} m` : "no length"));
-  return h("div", { class: "module" }, h("div", { class: "mname", title: item.description ? `${item.name}\n${item.description}` : item.name }, item.name),
+    h("div", { class: "sub" }, item.minutes ? `${item.minutes} m` : "no length"),
+    noteNode(item.note));
+  return h("div", { class: "module" }, h("div", { class: "mname", title: item.description ? `${item.name}\n${item.description}` : item.name }, item.name,
+      item.optional ? h("span", { class: "chip" }, "optional") : null),
     item.description ? h("div", { class: "mdesc" }, item.description) : null,
+    noteNode(item.note),
     item.entries.length ? item.entries.map(itemNode) : h("div", { class: "empty" }, "No entries."));
 }
 
@@ -639,7 +688,7 @@ function renderWeek(main) {
     });
   });
   main.append(h("div", { class: "weeks" }, grid));
-  if (state.editing) { main.append(h("div", { id: "selbar", class: "selbar" })); Editor.afterRender(); }
+  if (state.editing) main.append(h("div", { id: "selbar", class: "selbar" }));
 }
 
 // ------------------------------------------------------------------ global view
@@ -791,11 +840,6 @@ function render() {
   // Redrawing keeps the place: the weeks' sideways scroll and the page's.
   const keepX = document.querySelector(".weeks")?.scrollLeft ?? 0, keepY = window.scrollY;
   main.replaceChildren();
-  requestAnimationFrame(() => {
-    const weeks = document.querySelector(".weeks");
-    if (weeks) weeks.scrollLeft = keepX;
-    window.scrollTo(window.scrollX, keepY);
-  });
   if (!state.plan) { main.append(dropZone); Editor.updateHeader(); return; }
   const { problems, counts } = state.plan;
   main.append(h("p", { class: "muted", style: "margin-top:0" },
@@ -813,6 +857,12 @@ function render() {
   document.getElementById("v-global").setAttribute("aria-pressed", state.view === "global");
   document.getElementById("v-library").setAttribute("aria-pressed", state.view === "library");
   Editor.updateHeader();
+  // Back to the same place, now the page is whole again; then the selection, which may scroll to
+  // what it follows. In this order, in this task: deferred, the restore could land after it.
+  const weeks = document.querySelector(".weeks");
+  if (weeks) weeks.scrollLeft = keepX;
+  window.scrollTo(window.scrollX, keepY);
+  if (state.view === "week" && state.editing) Editor.afterRender();
 }
 
 function load(name, text) {
@@ -1093,8 +1143,10 @@ const Editor = (() => {
     const omit = input((raw.omit ?? []).join(", "));
     const plans = textarea(raw.plans ? JSON.stringify(raw.plans, null, 2) : "");
     const minutes = number(raw.minutes);
+    const note = textarea(raw.note ?? "");
+    note.placeholder = "What the plan says about this one: optional today, focus on the stretch";
     const extra = textarea(JSON.stringify(Object.fromEntries(Object.entries(raw).filter(([k]) =>
-      !["exercise", "circuit", "module", "activity", "variation", "optional", "plan", "rounds", "omit", "plans", "minutes"].includes(k))), null, 2));
+      !["exercise", "circuit", "module", "activity", "variation", "optional", "plan", "rounds", "omit", "plans", "minutes", "note"].includes(k))), null, 2));
 
     function fillVariations() {
       const ex = (file.exercises ?? []).find(e => nameKey(e.name) === nameKey(name.value));
@@ -1108,8 +1160,8 @@ const Editor = (() => {
     const groups = {
       exercise: [...field("Variation", variation), ...field("Optional", optional), ...field("Own plan this week", ownPlan),
         h("div", { class: "sub" }, "Plan (used when “own plan” is ticked)"), ...plan.nodes],
-      circuit: [...field("Rounds this week", rounds)],
-      module: [...field("Omit (names, comma-separated)", omit),
+      circuit: [...field("Rounds this week", rounds), ...field("Optional (all of it)", optional)],
+      module: [...field("Optional (all of it)", optional), ...field("Omit (names, comma-separated)", omit),
         h("div", { class: "sub" }, "Plans this week, by exercise name (JSON object)"), h("div", { class: "span" }, plans)],
       activity: [...field("Minutes", minutes)],
     };
@@ -1121,6 +1173,7 @@ const Editor = (() => {
         ...(adding ? field("Kind", kind) : []),
         ...field(kind.value === "activity" ? "Name" : "Name", name),
         ...groups[kind.value],
+        h("div", { class: "sub" }, "Note"), h("div", { class: "span" }, note),
         h("div", { class: "sub" }, "Other fields (JSON, rarely needed)"), h("div", { class: "span" }, extra),
       ));
     }
@@ -1137,7 +1190,9 @@ const Editor = (() => {
         if (optional.checked) item.optional = true;
       } else if (kind.value === "circuit") {
         if (num(rounds) != null) item.rounds = num(rounds);
+        if (optional.checked) item.optional = true;
       } else if (kind.value === "module") {
+        if (optional.checked) item.optional = true;
         const o = omit.value.split(",").map(x => x.trim()).filter(Boolean);
         if (o.length) item.omit = o;
         const p = jsonOf(plans, undefined);
@@ -1145,6 +1200,7 @@ const Editor = (() => {
       } else if (num(minutes) != null) {
         item.minutes = num(minutes);
       }
+      if (note.value.trim()) item.note = note.value.trim();
       Object.assign(item, jsonOf(extra, {}));
       onDone(item);
     });
@@ -1818,11 +1874,7 @@ const Editor = (() => {
     const el = board.week != null ? document.querySelector(`.whead[data-week="${board.week}"]`)
       : c ? (c.index != null ? cardEl(c) : slotEl(c)) : null;
     if (board.week == null) el?.classList.add("cur");
-    if (el && board.reveal) {
-      // A frame later: a redraw puts the old scroll back in the next frame, which would undo this.
-      requestAnimationFrame(() => el.isConnected && el.scrollIntoView({ block: "nearest", inline: "nearest" }));
-      board.reveal = false;
-    }
+    if (el && board.reveal) { el.scrollIntoView({ block: "nearest", inline: "nearest" }); board.reveal = false; }
     status();
   }
   function status() {
@@ -2219,6 +2271,21 @@ const Editor = (() => {
     return el;
   }
   const dirty = el => el.dataset.dirty === "1";
+  /** A placement's note for one exercise it holds, whatever case its key was written in. */
+  const heldNote = (o, name) => Object.entries(o.notes ?? {}).find(([k]) => nameKey(k) === nameKey(name))?.[1] ?? "";
+  function setHeldNote(o, name, text) {
+    const notes = Object.fromEntries(Object.entries(o.notes ?? {}).filter(([k]) => nameKey(k) !== nameKey(name)));
+    if (text) notes[name] = text;
+    if (Object.keys(notes).length) o.notes = notes; else delete o.notes;
+  }
+  /** One note field per exercise a circuit or module holds, applied to every selected placement of it. */
+  function heldNoteFields(objs, names, rows, apply) {
+    [...new Map(names.map(n => [nameKey(n), n])).values()].forEach(name => {
+      const el = tracked(input(""), common(objs.map(o => heldNote(o, name))));
+      rows.push(...field(`Note: ${name}`, el));
+      apply.push(() => { if (dirty(el)) objs.forEach(o => setHeldNote(o, name, el.value.trim())); });
+    });
+  }
 
   /** Edits what is selected: one item fully, several by the fields they share. */
   function editSelection() {
@@ -2236,6 +2303,15 @@ const Editor = (() => {
       list("names-circuit", (state.file.circuits ?? []).map(c => c.name)),
       list("names-module", (state.file.modules ?? []).map(m => m.name)));
     body.append(lists);
+
+    // The plan's note, for whatever is selected: typed once, it lands on every one of them.
+    {
+      const note = tracked(textarea(""), common(objs.map(o => o.note ?? "")));
+      note.rows = 2;
+      if (!note.placeholder) note.placeholder = "What the plan says about this one: optional today, focus on the stretch";
+      body.append(form(h("div", { class: "sub" }, objs.length > 1 ? `Note (on each of the ${objs.length})` : "Note"), h("div", { class: "span" }, note)));
+      apply.push(() => { if (dirty(note)) objs.forEach(o => { const t = note.value.trim(); if (t) o.note = t; else delete o.note; }); });
+    }
 
     if (groups.exercise.length) {
       const ex = groups.exercise;
@@ -2305,11 +2381,21 @@ const Editor = (() => {
       rounds.placeholder = rounds.placeholder || "its own";
       rows.push(...field("Rounds this week", rounds));
       apply.push(() => { if (dirty(rounds)) cs.forEach(o => { if (num(rounds) != null) o.rounds = num(rounds); else delete o.rounds; }); });
+      const optional = tracked(checkbox(false), common(cs.map(o => !!o.optional)));
+      rows.push(...field("Optional (all of it)", optional));
+      apply.push(() => { if (dirty(optional)) cs.forEach(o => { if (optional.checked) o.optional = true; else delete o.optional; }); });
+      if (new Set(cs.map(o => nameKey(o.circuit))).size === 1) {
+        const def = (state.file.circuits ?? []).find(c => nameKey(c.name) === nameKey(cs[0].circuit));
+        heldNoteFields(cs, (def?.stations ?? []).map(s => s.exercise).filter(Boolean), rows, apply);
+      }
       body.append(form(...rows));
     }
     if (groups.module.length) {
       const ms = groups.module;
       const rows = [h("div", { class: "sub" }, `Module${ms.length > 1 ? "s" : ""}`)];
+      const optional = tracked(checkbox(false), common(ms.map(o => !!o.optional)));
+      rows.push(...field("Optional (all of it)", optional));
+      apply.push(() => { if (dirty(optional)) ms.forEach(o => { if (optional.checked) o.optional = true; else delete o.optional; }); });
       if (new Set(ms.map(o => nameKey(o.module))).size === 1) {
         if (single) {
           const name = tracked(input("", { list: "names-module" }), single.module);
@@ -2320,6 +2406,8 @@ const Editor = (() => {
         rows.push(...field("Leave out (names)", omit));
         const plans = tracked(textarea(""), common(ms.map(o => o.plans ? JSON.stringify(o.plans, null, 2) : "")));
         rows.push(h("div", { class: "sub" }, "Plans this week, by exercise (JSON)"), h("div", { class: "span" }, plans));
+        const def = (state.file.modules ?? []).find(m => nameKey(m.name) === nameKey(ms[0].module));
+        heldNoteFields(ms, (def?.entries ?? []).map(e => e.exercise).filter(Boolean), rows, apply);
         apply.push(() => {
           ms.forEach(o => {
             if (dirty(omit)) { const l = omit.value.split(",").map(x => x.trim()).filter(Boolean); if (l.length) o.omit = l; else delete o.omit; }
@@ -2327,7 +2415,7 @@ const Editor = (() => {
           });
         });
       } else {
-        rows.push(h("div", { class: "span muted" }, "Different modules: edit them one at a time to change what they leave out or plan."));
+        rows.push(h("div", { class: "span muted" }, "Different modules: edit them one at a time to change what they leave out, plan or note."));
       }
       body.append(form(...rows));
     }
@@ -2372,6 +2460,29 @@ const Editor = (() => {
     });
   }
 
+  /**
+   * s / S: every card like the one at the cursor — the same exercise (any variation), circuit,
+   * module or activity — in its phase, or in the whole plan. The way to change them all at once:
+   * select, then edit, and only what is changed is applied.
+   */
+  function alikeAtCursor() {
+    const c = board.cursor;
+    const obj = c?.index != null ? rawAt(c) : null;
+    const kind = obj && ["exercise", "circuit", "module", "activity"].find(k => obj[k] != null);
+    return kind ? { c, kind, name: obj[kind], phase: weekAt(c.week)?.phase ?? null } : null;
+  }
+  function selectAlike(scope) {
+    const at = alikeAtCursor(); if (!at) return;
+    if (scope === "phase" && !at.phase) { alert("This week is in no phase. Set phases with Phases… first."); return; }
+    const refs = [];
+    state.plan.weeks.filter(w => scope === "plan" || w.phase === at.phase).forEach(w =>
+      SLOTS.forEach(day => (state.file.weeks[w.index][day] ?? []).forEach((it, index) => {
+        if (it[at.kind] != null && nameKey(it[at.kind]) === nameKey(at.name)) refs.push({ week: w.index, day, index });
+      })));
+    board.anchor = at.c;
+    setSelection(refs, at.c, { reveal: false });
+  }
+
   // ---------------------------------------------------------------- menus and help
 
   function closeMenu() { document.getElementById("ctxmenu")?.remove(); }
@@ -2392,8 +2503,11 @@ const Editor = (() => {
   }
   function itemMenu(x, y) {
     const n = board.items.length;
+    const alike = alikeAtCursor();
     menu(x, y, [
       [n > 1 ? `Edit ${n} items` : "Edit", "Enter", editSelection],
+      alike ? [`Select every “${alike.name}” in ${alike.phase ? alike.phase.name : "the phase"}`, "s", () => selectAlike("phase"), !alike.phase] : null,
+      alike ? [`Select every “${alike.name}” in the plan`, "S", () => selectAlike("plan")] : null,
       "-",
       ["Cut", "Ctrl+X", cut], ["Copy", "Ctrl+C", copyToClipboard],
       ["Paste after", "Ctrl+V", () => paste(false), !board.clip.length], ["Paste before", "P", () => paste(true), !board.clip.length],
@@ -2437,7 +2551,8 @@ const Editor = (() => {
       ["[ / ]", "Previous / next deload week, same day"],
       ["{ / }", "Previous / next phase (its first week), same day"],
       ["Ctrl+{ / Ctrl+}", "First / last day of the current phase"],
-      ["Enter / e", "Edit the selection"],
+      ["Enter / e", "Edit the selection: its plan, note, optional; several at once by what they share"],
+      ["s / S", "Select every card like this one (same exercise, circuit, module) in its phase / in the whole plan"],
       ["a", "Add to the selected day (after the selected card): pick from the library, or New…"],
       ["Shift+A", "The same, on that day of every week in the phase (deloads included)"],
       ["Ctrl / Shift+click a day", "Add that day's cards to the selection / select through to that day"],
@@ -2664,6 +2779,8 @@ const Editor = (() => {
         return;
       }
       case "Enter": case "e": e.preventDefault(); editSelection(); return;
+      case "s": if (!ctrl) { e.preventDefault(); selectAlike("phase"); } return;
+      case "S": if (!ctrl) { e.preventDefault(); selectAlike("plan"); } return;
       case "a": e.preventDefault(); addHere(); return;
       case "A": e.preventDefault(); addToPhase(); return;
       case "Delete": case "Backspace":

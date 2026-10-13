@@ -38,6 +38,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.ui.components.ContentsLine
 import com.yokodake.melete.ui.components.DetailSection
+import com.yokodake.melete.ui.components.PlanNoteText
 import com.yokodake.melete.ui.components.circuitShapeLine
 import com.yokodake.melete.ui.theme.doneColors
 import com.yokodake.melete.ui.week.PrescriptionSummary
@@ -167,6 +168,7 @@ fun CircuitDetailScreen(
                     ""
                 }
             )
+            circuit.note?.let { PlanNoteText(it) }
             state.stations.forEachIndexed { index, station ->
                 ContentsLine(
                     position = index + 1,
@@ -178,6 +180,7 @@ fun CircuitDetailScreen(
                         station.occurrence.unilateral,
                     ),
                     tag = station.occurrence.variationTag,
+                    note = station.occurrence.note,
                     trailing = if (station.occurrence.hasRecord) {
                         {
                             Text(

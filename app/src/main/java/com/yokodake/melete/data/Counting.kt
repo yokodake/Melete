@@ -15,12 +15,18 @@ object Counting {
     /**
      * The units planned work makes, each with the occurrences that count in it. Skipped work is
      * out, optional work counts only once done; a circuit with nothing left counting is no unit.
+     * A circuit that is optional as a whole counts once all of it is done, not station by station.
      */
     fun units(occurrences: List<PlannedOccurrence>): List<List<PlannedOccurrence>> =
         occurrences
-            .filter { it.state != OccurrenceState.SKIPPED && (!it.optional || it.state == OccurrenceState.COMPLETED) }
+            .filter { it.state != OccurrenceState.SKIPPED }
             .groupBy { unitKey(it.circuitInstanceId, it.id) }
-            .values.toList()
+            .values.mapNotNull { unit ->
+                when {
+                    unit.all { it.optional } -> unit.takeIf { done(it) }
+                    else -> unit.filter { !it.optional || it.state == OccurrenceState.COMPLETED }.takeIf { it.isNotEmpty() }
+                }
+            }
 
     /** A unit is done when everything counting in it is. */
     fun done(unit: List<PlannedOccurrence>): Boolean = unit.all { it.state == OccurrenceState.COMPLETED }

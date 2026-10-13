@@ -39,6 +39,9 @@ sealed interface WeekItem {
         val completed: Boolean get() = stations.isNotEmpty() && stations.all { it.hasRecord }
 
         val recordedStations: Int get() = stations.count { it.hasRecord }
+
+        /** Optional as a whole: every station is, so it counts once, when all of it is done. */
+        val optional: Boolean get() = stations.isNotEmpty() && stations.all { it.optional }
     }
 
     /**
@@ -82,6 +85,9 @@ sealed interface WeekItem {
             )
 
         val completed: Boolean get() = exercises.isNotEmpty() && exercises.all { it.hasRecord }
+
+        /** Everything in it is optional: the group reads as optional, and marking it does all of it. */
+        val optional: Boolean get() = exercises.isNotEmpty() && exercises.all { it.optional }
     }
 }
 

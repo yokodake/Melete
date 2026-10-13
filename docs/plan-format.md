@@ -14,7 +14,12 @@ treated alike) is selected by a click, Ctrl+click adds to the selection, Shift+c
 range; a click on a day selects the day as the place to add or paste, and Ctrl+click or
 Shift+click on days takes their cards into the selection (to clear or move several days at once). Double-click, Enter or `e`
 edits the selection: the essential fields of the plan first, the rest under *More fields*; with
-several selected, fields that differ show *mixed* and only the fields changed are applied. A right
+several selected, fields that differ show *mixed* and only the fields changed are applied. The
+same dialog writes the plan's **note** on each selected card, makes a circuit or module optional as
+a whole, and notes the exercises a circuit or module holds (one field each, when all the selected
+are the same circuit or module). To change every copy at once, `s` selects every card like the one
+at the cursor — the same exercise (any variation), circuit, module or activity — in its phase, and
+`S` in the whole plan; the right-click menu offers both. A right
 click opens the menu for what is under the pointer. Cards are dragged by their ⠿ handle (Shift while
 dragging copies, shown by a + on the preview), with the day highlighted and a line where they will
 land; the page scrolls near its edges and Escape cancels. Adding to a day (its + or `a`) opens a
@@ -27,8 +32,8 @@ others at the same position (or at the end of a shorter day).
 Keys (they give way to typing in any field): arrows or hjkl move between cards and empty days
 (↑↓ through a day and on into the next, ←→ the same day a week earlier or later); **Ctrl+arrow**
 moves the selection; **Shift+arrow** copies it that way and follows the copies; Page Up/Down,
-Home/End (first / last day of the week), Ctrl+[ / Ctrl+] (first / last week of the plan); Enter/`e` edit, `a`
-add, Delete remove (a selected day: its workouts); Ctrl+X/C/V and `dd`/`yy`/`p`/`P`; Ctrl+Z,
+Home/End (first / last day of the week), Ctrl+[ / Ctrl+] (first / last week of the plan); Enter/`e` edit, `s` / `S`
+select alike in the phase / plan, `a` add, Delete remove (a selected day: its workouts); Ctrl+X/C/V and `dd`/`yy`/`p`/`P`; Ctrl+Z,
 Ctrl+Shift+Z or Ctrl+Y; Escape; `` ` `` or `~` switches between the weekly view and the global table;
 `?` lists them all. `[` / `]` jump to the previous / next deload
 week and `{` / `}` to the first week of the previous / next phase, keeping the weekday and stopping
@@ -134,7 +139,8 @@ has the same fields, in the units you type them in:
 
 An exercise placed in a week or entered in a module can also say `"optional": true` (beside
 `exercise`, not inside `plan`): nice to do, left out of Home's target and time left until it is
-done. Not on a circuit's station, a circuit or a module.
+done. A circuit or module placed in a week can be optional as a whole (see *Weeks*). Not on a
+circuit's station, nor on a circuit entered in a module.
 
 A field the mode does not read is dropped, and the preview lists it under *left out*, so a file
 cannot hold a plan the editor could not have made. There is deliberately no load: a plan fixes the
@@ -198,6 +204,27 @@ at least one.
   - `{ "module": "…" }`
   - `{ "activity": "…", "minutes": 90 }`: a one-off, with no library entry; `minutes` optional
 - Items go in the order written, after anything the day already holds.
+
+**Notes and optional, for one placement.** Notes are part of the plan, not the library: the same
+exercise can say something else next week, so a note goes where something is placed in a week and
+never in an exercise, circuit or module definition (the library's `notes` and `description` are for
+what is true everywhere).
+
+```jsonc
+{ "exercise": "HoG (GG)", "note": "half crimp only" },                      // any placement
+{ "module": "FA", "optional": true, "note": "Optional on Mondays",
+  "notes": { "Frog PAILs/RAILs": "adductor, not knee" } },                  // its own exercises
+{ "circuit": "Cooldown", "notes": { "Butterfly": "breathe out" } },         // its stations
+{ "activity": "Run", "note": "easy pace" }
+```
+
+- `note` goes on any item placed in a week. Blank is none. The app shows it on the card and on the
+  exercise's or circuit's page.
+- `notes` goes on a circuit or module placed in a week: notes for some of what it holds, by
+  exercise name — a module's own exercises (as for `plans`), a circuit's stations. A note for an
+  exercise the module leaves out that week is a warning, not used.
+- `"optional": true` on a circuit or module placed in a week makes all of it optional: a circuit
+  counts once, when every station is done; a module's exercises and circuits each count once done.
 
 **Changing a module or a circuit for one week.** A placement can override what it copies, for that
 week only — the saved module or circuit keeps its own:

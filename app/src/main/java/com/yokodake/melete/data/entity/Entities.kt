@@ -162,6 +162,12 @@ data class ExerciseOccurrenceEntity(
      */
     @ColumnInfo(defaultValue = "0")
     val optional: Boolean = false,
+    /**
+     * Schema 13. The plan's word on this copy — "optional today", "focus on the stretch, not the
+     * knee" — written when it was planned. Not the [comment], which is what logging it said. Part
+     * of the plan rather than the library, so the same exercise can say something else next week.
+     */
+    val note: String? = null,
 )
 
 /**
@@ -261,6 +267,8 @@ data class CircuitInstanceEntity(
     val modulePosition: Int? = null,
     /** The routine's category when this copy was placed, snapshotted like an occurrence's. */
     val categorySnapshot: ExerciseCategory? = null,
+    /** Schema 13. The plan's word on this copy of the circuit, as on an occurrence. */
+    val note: String? = null,
 )
 
 /**
@@ -381,6 +389,8 @@ data class ModuleInstanceEntity(
     val trainingDateEpochDay: Long?,
     val orderIndex: Int,
     val createdAtEpochMs: Long,
+    /** Schema 13. The plan's word on this copy of the module, as on an occurrence. */
+    val note: String? = null,
 )
 
 /**

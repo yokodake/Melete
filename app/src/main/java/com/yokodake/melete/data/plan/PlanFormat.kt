@@ -136,12 +136,22 @@ data class PlanItem(
      */
     val omit: List<String>? = null,
     /**
-     * An exercise placed in a week or entered in a module: nice to do, left out of the day's
-     * target until done. Not for a circuit's stations.
+     * Nice to do, left out of the day's target until done: an exercise placed in a week or entered
+     * in a module, or a whole circuit or module placed in a week. Not for a circuit's stations.
      */
     val optional: Boolean? = null,
     /** Where a circuit is placed in a week: its rounds this time only. */
     val rounds: Int? = null,
+    /**
+     * Anything placed in a week: the plan's note on that copy ("optional today", "focus on the
+     * stretch"). The plan's, not the library's, so it never goes in a circuit or module definition.
+     */
+    val note: String? = null,
+    /**
+     * Where a circuit or module is placed in a week: notes for some of its exercises this time
+     * only, by exercise name — a module's own exercises, a circuit's stations.
+     */
+    val notes: Map<String, String>? = null,
 )
 
 @Serializable

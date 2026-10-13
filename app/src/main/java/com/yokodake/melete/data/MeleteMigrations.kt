@@ -24,7 +24,7 @@ object MeleteMigrations {
     const val BASELINE = 10
 
     /** The schema the app is built for; [MeleteDatabase] declares it from here. */
-    const val CURRENT = 12
+    const val CURRENT = 13
 
     /**
      * 10 → 11, phase 7A: benchmarks and their results, two new tables. Nothing existing changes,
@@ -71,5 +71,17 @@ object MeleteMigrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_10_11, MIGRATION_11_12)
+    /**
+     * 12 → 13: plan notes. A note on a scheduled exercise, circuit and module — what the plan says
+     * about that one copy. Empty for everything that already exists.
+     */
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `exercise_occurrences` ADD COLUMN `note` TEXT")
+            db.execSQL("ALTER TABLE `circuit_instances` ADD COLUMN `note` TEXT")
+            db.execSQL("ALTER TABLE `module_instances` ADD COLUMN `note` TEXT")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
 }

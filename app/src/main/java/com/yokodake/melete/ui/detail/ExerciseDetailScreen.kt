@@ -220,6 +220,13 @@ fun ExerciseDetailScreen(
                 return@Column
             }
 
+            // The plan's word on this one comes first: it is about today, the rest is about the
+            // exercise in general.
+            state.note?.let {
+                Section("Note")
+                Text(it, style = MaterialTheme.typography.bodyLarge)
+            }
+
             val description = state.description?.takeIf { it.isNotBlank() }
             val notes = state.notes?.takeIf { it.isNotBlank() }
             // Why there is no explanation, when that needs saying. A missing description with

@@ -98,6 +98,14 @@ class HomeStatsTest {
         assertTrue(TodaySummary.build(today, all, listOf(circuit)).allDone)
         val skipped = stations.map { it.copy(state = OccurrenceState.SKIPPED) }
         assertEquals(1, TodaySummary.build(today, skipped, listOf(circuit)).skipped)
+        // Optional as a whole: out of the target, and of the time left, until all of it is done —
+        // one station done is not one optional exercise done.
+        val optional = stations.map { it.copy(optional = true) }
+        assertTrue(TodaySummary.build(today, optional, listOf(circuit)).nothingPlanned)
+        val optionalHalf = listOf(optional[0].copy(state = OccurrenceState.COMPLETED), optional[1])
+        assertEquals(0, TodaySummary.build(today, optionalHalf, listOf(circuit)).target)
+        val optionalDone = optional.map { it.copy(state = OccurrenceState.COMPLETED) }
+        assertTrue(TodaySummary.build(today, optionalDone, listOf(circuit)).allDone)
         // The stations share the circuit's one clock, rests included, rather than each estimating
         // its own standalone plan.
         val whole = com.yokodake.melete.data.timer.PrescriptionProgram.circuit(

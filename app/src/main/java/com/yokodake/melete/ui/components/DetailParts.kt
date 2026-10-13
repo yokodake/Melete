@@ -57,6 +57,8 @@ fun ContentsLine(
     summary: String?,
     tag: String? = null,
     trailing: (@Composable () -> Unit)? = null,
+    /** The plan's note on this one, under its plan. */
+    note: String? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -88,6 +90,7 @@ fun ContentsLine(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            note?.let { PlanNoteText(it) }
         }
         trailing?.invoke()
     }

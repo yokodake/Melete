@@ -1,7 +1,8 @@
 # Build status
 
-Last updated: 2026-10-06: **version 1.1** (schema 12, backup format 3, plan format 1), after 6C
-(month view), optional exercises and the plan editor. The tentative 1.0 was 6B. A schema change
+Last updated: 2026-10-13: **version 1.2** (schema 13, backup format 4, plan format 1), for plan
+notes and optional circuits and modules; 1.1 (schema 12) was 6C (month view), optional exercises
+and the plan editor. The tentative 1.0 was 6B. A schema change
 raises at least the minor version. Separate debug and release apps. See [the side-by-side build guide](debug-release.md).
 
 This file has two halves. **Current state** describes the app as it is today and is the part to
@@ -36,17 +37,19 @@ the two ever disagree, the code and the first half win.
 | 6C — month view | ✅ built 2026-10-05; log/unlog and skip from a line; unit tests pass; checked by hand on debug |
 | Optional exercises and `omit` (follow-ups) | ✅ built 2026-10-05; unit tests pass; schema 12 upgrade checked on debug's database |
 | Plan editor (`tools/plan-viewer`) | ✅ basic version 2026-10-05; smoke-tested headless; UX to refine with use |
+| Plan notes; optional circuits and modules | ✅ built 2026-10-13; unit tests pass; planner smoke-tested headless; import test written, device suite not run; screens to check by hand |
 | Week long-press menu UX | to be rethought by the user before changes |
 | 7B — profile and settings (bodyweight tracking) | not started; lower priority |
 | 8 — progression analysis | not started; waits for more logged data |
 | 9 — remote and web | not started; needs a web server |
 | 10 — appearance | not started; large, later |
 
-Schema version **12** (10 was the **baseline**; `MIGRATION_10_11` added the benchmark tables,
-`MIGRATION_11_12` the `optional` flag on scheduled exercises and module entries): every schema
+Schema version **13** (10 was the **baseline**; `MIGRATION_10_11` added the benchmark tables,
+`MIGRATION_11_12` the `optional` flag on scheduled exercises and module entries,
+`MIGRATION_12_13` the plan's `note` on scheduled exercises, circuits and modules): every schema
 change comes with a migration and a test, and neither build has a destructive fallback — see
-*Upgrades preserve the record* below. Backup format **3** (2 plus `optional`); backup formats
-**1** and **2** and plan format **1** stay readable in every later version.
+*Upgrades preserve the record* below. Backup format **4** (3 plus plan notes); backup formats
+**1** to **3** and plan format **1** stay readable in every later version.
 Prescription payload version **4**, actual-set payload version **2**, circuit
 structure snapshot version **1**.
 
@@ -246,6 +249,23 @@ on its own takes it out of the group, and a member that ends up on another day �
 Removing is refused once anything has been recorded, where "recorded" means a logged set **or** a
 completed occurrence — a duration-only activity writes no sets and is still a workout that
 happened. The stronger answer exists and names what it would destroy.
+
+**Plan notes** (schema 13). Any card — an exercise, a circuit, a module, an activity — can carry
+the plan's note on that one copy: "optional on Mondays", "half crimp only". It is the plan's, not
+the library's (the library's notes and description are for what is true everywhere) and not the
+log's comment (what logging it said). Shown in italics on the card under its plan, on the
+exercise's page as **Note** above the description, and on the circuit's page under its shape and
+under each station. Long-press *Add note* / *Edit note* on an exercise or circuit card, or the
+module's ⋮ menu; saving it empty removes it. Plan files set it with `note` on anything placed in a
+week and `notes` for what a placed circuit or module holds; the planner edits it for many cards at
+once (`s` / `S` select every card like this one in the phase / plan). Copies made by duplicating
+keep the note: it is part of the plan they copy.
+
+**A whole circuit or module can be optional**: *Make optional* on a circuit's long press, *Make
+all optional* in a module's menu, or `"optional": true` where a plan file places one. It marks
+every exercise inside optional — no column of its own. A circuit optional as a whole counts once,
+when every station is done (`Counting.units`); a wholly optional module shows one *Optional* chip
+on itself rather than one per member.
 
 ## Exercises, activities and circuits
 
@@ -460,7 +480,8 @@ kept apart. Recovery copies are listed by date, "27 Sep · 19:33", with the year
 this one; the stamp in the file name is local time and is read back as such, and the files are
 never renamed. **Export** writes the whole record to a file chosen
 with Android's picker: one human-readable JSON document (`format: "melete-backup"`,
-`formatVersion: 2`; version 1 files still read, with no benchmarks) holding every table with its
+`formatVersion: 4`; versions 1 to 3 still read — no benchmarks before 2, nothing optional
+before 3, no plan notes before 4) holding every table with its
 stable ids — library, variations, circuits,
 modules, everything scheduled with its snapshots, every set, sessions, trackers and the diary.
 Tombstoned definitions are included, because history hangs from them. Dates are `2026-09-21`,
@@ -482,7 +503,9 @@ spec in [`plan-format.md`](plan-format.md)): exercises with variations, circuits
 written out literally, everything referred to by name. A module or circuit placed in a week can
 override what it copies for that week only — `"plans"` for a module's own exercise entries,
 `"rounds"` for a circuit (`setCircuitRounds`, `overrideModulePlan`) — so one FA module or one
-intervals circuit serves every week of a ramp. **An import never deletes a record of
+intervals circuit serves every week of a ramp. Anything placed can carry a `"note"`, a circuit or
+module `"notes"` for what it holds and `"optional": true` for all of it (`setCircuitNote`,
+`noteModuleExercise`, `setModuleOptional` and the like); notes in a definition are refused. **An import never deletes a record of
 training**: anything logged, done or skipped stays (a circuit or module holding any of it is kept
 whole), and so does the diary. Picking a file shows a preview before anything is written, with
 two choices:
@@ -509,7 +532,8 @@ week's days, since a plan file holds no logs.
 A circuit counts as one; every other completed exercise occurrence is one, module members
 included, a duration-only activity once with no sets. On Home and in the weekly review a circuit is
 done when all its stations are; on the dashboard it counts once any station is logged. One rule,
-`Counting` (2026-10-07; before, each station counted).
+`Counting` (2026-10-07; before, each station counted). Optional work joins the target only once
+done; a circuit optional as a whole (every station optional) only once all of it is.
 The daily session table is an implementation detail and is not a count of anything.
 
 ## Architecture as built
@@ -1769,6 +1793,15 @@ Small follow-ups, recorded 2026-09-28 (not scheduled):
   `HomeStatsTest`, `PlanCheckTest`, `BackupFormatTest`, `SchemaBaselineTest` (12 pinned).
   `MigrationTest` (device) not run. Module variations were considered and set aside: `omit` covers
   the case for far less.
+- ✅ Plan notes, and optional circuits and modules (asked for 2026-10-13: "a note on that type of
+  sensation for that exercise", "this is optional" on Monday's FA only). Notes live in the plan,
+  per placement, not the library; the planner does the bulk work (select alike, then edit the note
+  once) rather than a phase-wide rule in the file, which would leave the importer guessing when a
+  day is edited by hand. Built 2026-10-13: schema 13 (`MIGRATION_12_13`, three `ALTER TABLE … ADD
+  COLUMN note TEXT`), backup format 4, app version 1.2. Unit tests: `PlanCheckTest` (three new),
+  `HomeStatsTest` (an optional circuit), `BackupFormatTest`, `SchemaBaselineTest` (13 pinned).
+  `PlanImportTest.notesAndOptionalGroupsLandOnThatPlacement` and `MigrationTest` written / covering
+  13, not run on the device.
 
 **Phase 6A — the overview** is built. Before the real plan goes into release: walk the hand
 checklist above and tick what is confirmed, and follow *Starting from nothing* in

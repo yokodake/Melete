@@ -11,6 +11,7 @@ import com.yokodake.melete.core.WeekMath
 import com.yokodake.melete.data.BenchmarkRepository
 import com.yokodake.melete.data.DiaryRepository
 import com.yokodake.melete.data.NudgeResult
+import com.yokodake.melete.data.PlanItemKind
 import com.yokodake.melete.data.PlanItemRef
 import com.yokodake.melete.data.TrainingRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -167,6 +168,28 @@ class WeekViewModel(
     /** Marks a scheduled exercise optional, or required again. */
     fun setOptional(occurrenceId: String, optional: Boolean) {
         viewModelScope.launch { repository.setOccurrenceOptional(occurrenceId, optional) }
+    }
+
+    /** Marks a whole circuit or module optional, or required again: everything it holds. */
+    fun setGroupOptional(item: PlanItemRef, optional: Boolean) {
+        viewModelScope.launch {
+            when (item.kind) {
+                PlanItemKind.EXERCISE -> repository.setOccurrenceOptional(item.id, optional)
+                PlanItemKind.CIRCUIT -> repository.setCircuitOptional(item.id, optional)
+                PlanItemKind.MODULE -> repository.setModuleOptional(item.id, optional)
+            }
+        }
+    }
+
+    /** The plan's note on one card, an exercise, circuit or module; null removes it. */
+    fun setNote(item: PlanItemRef, note: String?) {
+        viewModelScope.launch {
+            when (item.kind) {
+                PlanItemKind.EXERCISE -> repository.setOccurrenceNote(item.id, note)
+                PlanItemKind.CIRCUIT -> repository.setCircuitNote(item.id, note)
+                PlanItemKind.MODULE -> repository.setModuleNote(item.id, note)
+            }
+        }
     }
 
     /** Makes another copy of a placement, waiting in this week's unscheduled area. */

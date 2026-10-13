@@ -21,6 +21,7 @@ import com.yokodake.melete.data.entity.ExerciseEntity
 import com.yokodake.melete.data.entity.ExerciseOccurrenceEntity
 import com.yokodake.melete.data.entity.ExerciseVariationEntity
 import com.yokodake.melete.data.entity.ModuleEntity
+import com.yokodake.melete.data.entity.ModuleInstanceEntity
 import com.yokodake.melete.data.entity.ModuleEntryEntity
 import com.yokodake.melete.data.entity.OccurrenceState
 import com.yokodake.melete.data.entity.RoutineEntity
@@ -76,7 +77,7 @@ class BackupFormatTest {
         loggedDurationManual = true, loggedEffort = EffortLevel.VERY_HARD, isOneOff = false,
         circuitInstanceId = "circ-1", circuitPosition = 1, variationId = "var-1",
         variationTagSnapshot = "PWR", moduleInstanceId = "mod-i-1", modulePosition = 0,
-        optional = true,
+        optional = true, note = "Focus on the drive",
     )
 
     private val set = ActualSetEntity(
@@ -127,9 +128,12 @@ class BackupFormatTest {
             weekStartEpochDay = monday, trainingDateEpochDay = null, orderIndex = 0, rounds = 3,
             transitionSeconds = 30, roundRestSeconds = 120, createdAtEpochMs = 1_000,
             moduleInstanceId = "mod-i-1", modulePosition = 1,
-            categorySnapshot = ExerciseCategory.FINGER_TRAINING,
+            categorySnapshot = ExerciseCategory.FINGER_TRAINING, note = "After climbing",
         )
         assertEquals(circuit, circuit.toRecord().toEntity())
+
+        val moduleInstance = ModuleInstanceEntity("mod-i-1", "m-1", "Fingers", monday, monday + 1, 3, 1_000, "Optional today")
+        assertEquals(moduleInstance, moduleInstance.toRecord().toEntity())
 
         val session = TrainingSessionEntity("ses-1", monday + 1, 0, 3_000)
         assertEquals(session, session.toRecord().toEntity())

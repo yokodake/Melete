@@ -344,10 +344,72 @@ class PlanCheckTest {
             overrideLibrary.replace("""{ "exercise": "Attempt" } ] } ]""", """{ "exercise": "Attempt", "optional": true } ] } ]""")
         )
         assertTrue(station.hasProblem("a circuit's station cannot be optional"))
-        val onModule = resolve(
-            overrideLibrary + """ "weeks": [ { "weekStart": "2026-10-05", "monday": [ { "module": "FA", "optional": true } ] } ] """
+        val inModule = resolve(
+            overrideLibrary.replace("""{ "circuit": "Intervals" } ]""", """{ "circuit": "Intervals", "optional": true } ]""")
         )
-        assertTrue(onModule.hasProblem("\"optional\" only goes with an exercise"))
+        assertTrue(inModule.hasProblem("a circuit in a module cannot be optional"))
+    }
+
+    @Test
+    fun `a whole circuit or module can be optional where it is placed, an activity cannot`() {
+        val resolution = resolve(
+            overrideLibrary + """ "weeks": [ { "weekStart": "2026-10-05", "monday": [
+              { "module": "FA", "optional": true }, { "circuit": "Intervals", "optional": true }, { "circuit": "Intervals" }
+            ] } ] """
+        )
+        assertEquals(emptyList<String>(), resolution.problems)
+        val items = resolution.plan!!.slots.single().items
+        assertTrue((items[0] as ResolvedItem.Module).optional)
+        assertTrue((items[1] as ResolvedItem.Circuit).optional)
+        assertEquals(false, (items[2] as ResolvedItem.Circuit).optional)
+
+        val activity = resolve(""" "weeks": [ { "weekStart": "2026-10-05", "monday": [ { "activity": "Run", "optional": true } ] } ] """)
+        assertTrue(activity.hasProblem("\"optional\" does not go with an activity"))
+    }
+
+    @Test
+    fun `a note goes on anything placed in a week, and notes on what a circuit or module holds`() {
+        val resolution = resolve(
+            overrideLibrary + """
+            "weeks": [ { "weekStart": "2026-10-05", "monday": [
+              { "exercise": "Cossack", "note": "  slow on the way down " },
+              { "module": "FA", "note": "Optional today", "notes": { "clamshell": "pelvis stacked", "Cossack": "  " } },
+              { "circuit": "Intervals", "note": "after climbing", "notes": { "Attempt": "flash or nothing" } },
+              { "activity": "Run", "note": "easy" },
+              { "exercise": "Clamshell", "note": "" }
+            ] } ]
+            """
+        )
+        assertEquals(emptyList<String>(), resolution.problems)
+        val items = resolution.plan!!.slots.single().items
+        assertEquals("slow on the way down", (items[0] as ResolvedItem.Exercise).pick.note)
+        val module = items[1] as ResolvedItem.Module
+        assertEquals("Optional today", module.note)
+        // A blank note is none, here and on its own.
+        assertEquals(mapOf("clamshell" to "pelvis stacked"), module.notes)
+        val circuit = items[2] as ResolvedItem.Circuit
+        assertEquals("after climbing", circuit.note)
+        assertEquals(mapOf("attempt" to "flash or nothing"), circuit.notes)
+        assertEquals("easy", (items[3] as ResolvedItem.Activity).note)
+        assertNull((items[4] as ResolvedItem.Exercise).pick.note)
+    }
+
+    @Test
+    fun `notes belong to the plan - never in a definition, and only on what a placement holds`() {
+        fun weekWith(item: String) = resolve(overrideLibrary + """ "weeks": [ { "weekStart": "2026-10-05", "monday": [ $item ] } ] """)
+        assertTrue(weekWith("""{ "module": "FA", "notes": { "Attempt": "x" } }""").hasProblem("has no exercise Attempt of its own to note"))
+        assertTrue(weekWith("""{ "circuit": "Intervals", "notes": { "Cossack": "x" } }""").hasProblem("has no station Cossack to note"))
+        assertTrue(weekWith("""{ "module": "FA", "notes": { "Nope": "x" } }""").hasProblem("no exercise called \"Nope\""))
+        assertTrue(weekWith("""{ "exercise": "Cossack", "notes": { "Cossack": "x" } }""").hasProblem("use \"note\" here"))
+        val omitted = weekWith("""{ "module": "FA", "omit": [ "Clamshell" ], "notes": { "Clamshell": "x" } }""")
+        assertEquals(emptyList<String>(), omitted.problems)
+        assertTrue(omitted.warnings.any { "left out of FA, so its note is not used" in it })
+        assertEquals(emptyMap<String, String>(), (omitted.plan!!.slots.single().items.single() as ResolvedItem.Module).notes)
+
+        val inCircuit = resolve(overrideLibrary.replace("""{ "exercise": "Attempt" } ] } ]""", """{ "exercise": "Attempt", "note": "x" } ] } ]"""))
+        assertTrue(inCircuit.hasProblem("notes go where the circuit is placed in a week"))
+        val inModule = resolve(overrideLibrary.replace("""{ "exercise": "Clamshell" }""", """{ "exercise": "Clamshell", "note": "x" }"""))
+        assertTrue(inModule.hasProblem("notes go where the module is placed in a week"))
     }
 
     @Test

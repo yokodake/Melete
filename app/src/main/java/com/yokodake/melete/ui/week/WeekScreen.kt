@@ -79,6 +79,8 @@ import com.yokodake.melete.data.model.MeasurementMeaning
 import com.yokodake.melete.data.model.PrescriptionPayload
 import com.yokodake.melete.ui.components.CategoryDot
 import com.yokodake.melete.ui.components.CategoryChip
+import com.yokodake.melete.ui.components.PlanNoteDialog
+import com.yokodake.melete.ui.components.PlanNoteText
 import com.yokodake.melete.ui.components.VariationChip
 import com.yokodake.melete.ui.theme.MeleteTheme
 import com.yokodake.melete.ui.theme.progressColor
@@ -149,6 +151,8 @@ fun WeekRoute(
         onSetCircuitSkipped = viewModel::setCircuitSkipped,
         onUnlog = viewModel::unlog,
         onSetOptional = viewModel::setOptional,
+        onSetGroupOptional = viewModel::setGroupOptional,
+        onSetNote = viewModel::setNote,
         onNudge = viewModel::nudge,
         onPreviousWeek = viewModel::showPreviousWeek,
         onNextWeek = viewModel::showNextWeek,
@@ -194,6 +198,10 @@ fun WeekScreen(
     onSetCircuitSkipped: (List<PlannedOccurrence>, Boolean) -> Unit = { _, _ -> },
     onUnlog: (List<PlannedOccurrence>) -> Unit = {},
     onSetOptional: (String, Boolean) -> Unit = { _, _ -> },
+    /** A whole circuit or module made optional, or required again. */
+    onSetGroupOptional: (PlanItemRef, Boolean) -> Unit = { _, _ -> },
+    /** The plan's note on one card; null removes it. */
+    onSetNote: (PlanItemRef, String?) -> Unit = { _, _ -> },
     /** Moves a card one place, crossing into the next day at an edge. Offered in edit mode. */
     onNudge: (PlanItemRef, Int) -> Unit = { _, _ -> },
     onOpenDiary: (LocalDate) -> Unit = {},
@@ -234,16 +242,20 @@ fun WeekScreen(
     var removingModuleRecorded by remember { mutableIntStateOf(0) }
     // What "Unlog" would take the log off, and what to call it, while that is being confirmed.
     var unlogging by remember { mutableStateOf<Pair<String, List<PlannedOccurrence>>?>(null) }
+    // The card whose plan note is being written.
+    var noting by remember { mutableStateOf<NoteTarget?>(null) }
 
     /**
      * One card for one item, wherever it sits. A module draws its members with exactly this, so a
      * member keeps every action it would have on its own, plus the one way out of the group.
      */
     @Composable
-    fun ItemCard(item: WeekItem, inModule: Boolean) {
+    fun ItemCard(item: WeekItem, inModule: Boolean, inOptionalModule: Boolean = false) {
         when (item) {
             is WeekItem.Single -> OccurrenceCard(
                 occurrence = item.occurrence,
+                // A module optional as a whole says so once, on itself.
+                optionalChip = !inOptionalModule,
                 onClick = { onOpenOccurrence(item.occurrence.id) },
                 // A duplicate is a fresh plan and never inherits what was logged.
                 onDuplicate = { onDuplicateOccurrence(item.occurrence.id) },
@@ -251,6 +263,7 @@ fun WeekScreen(
                 onUnlog = { unlogging = item.occurrence.name to listOf(item.occurrence) },
                 onSkip = { skipped -> onSetSkipped(item.occurrence, skipped) },
                 onOptional = { optional -> onSetOptional(item.occurrence.id, optional) },
+                onNote = { noting = NoteTarget(item.ref(), item.occurrence.name, item.occurrence.note) },
                 onRemove = {
                     // Ask the record what a deletion would cost before offering one.
                     scope.launch {
@@ -263,10 +276,13 @@ fun WeekScreen(
 
             is WeekItem.Circuit -> CircuitCard(
                 item = item,
+                optionalChip = !inOptionalModule,
                 onClick = { onOpenCircuit(item.circuit.id) },
                 onLog = { onReviewCircuit(item.circuit.id) },
                 onUnlog = { unlogging = item.circuit.name to item.stations },
                 onSkip = { skipped -> onSetCircuitSkipped(item.stations, skipped) },
+                onOptional = { optional -> onSetGroupOptional(item.ref(), optional) },
+                onNote = { noting = NoteTarget(item.ref(), item.circuit.name, item.circuit.note) },
                 onRemove = {
                     scope.launch {
                         removingCircuitStations = onCircuitRecordedStations(item.circuit.id)
@@ -282,13 +298,15 @@ fun WeekScreen(
                     ?: moduleStartsExpanded(item.module.trainingDate, state.today),
                 onToggle = { expanded -> onModuleExpanded(item.module.id, expanded) },
                 onUngroup = { onUngroupModule(item.module.id) },
+                onOptional = { optional -> onSetGroupOptional(item.ref(), optional) },
+                onNote = { noting = NoteTarget(item.ref(), item.module.name, item.module.note) },
                 onRemove = {
                     scope.launch {
                         removingModuleRecorded = onModuleRecordedExercises(item.module.id)
                         removingModule = item
                     }
                 },
-                member = { ItemCard(it, inModule = true) },
+                member = { ItemCard(it, inModule = true, inOptionalModule = item.optional) },
             )
         }
     }
@@ -538,7 +556,22 @@ fun WeekScreen(
             },
         )
     }
+
+    noting?.let { target ->
+        PlanNoteDialog(
+            name = target.name,
+            note = target.note,
+            onDismiss = { noting = null },
+            onSave = { note ->
+                noting = null
+                onSetNote(target.ref, note)
+            },
+        )
+    }
 }
+
+/** A card whose plan note is being written: which one, what to call it, and what it says now. */
+private data class NoteTarget(val ref: PlanItemRef, val name: String, val note: String?)
 
 /**
  * The stand-in for "the week's undated area" in a nullable-date dialog slot.
@@ -755,6 +788,9 @@ private fun OccurrenceCard(
     /** True skips it, false puts a skipped one back to planned. */
     onSkip: (Boolean) -> Unit = {},
     onOptional: (Boolean) -> Unit = {},
+    onNote: () -> Unit = {},
+    /** False inside a module that is optional as a whole, which says it once for all. */
+    optionalChip: Boolean = true,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val logged = occurrence.state == OccurrenceState.COMPLETED || occurrence.loggedSets > 0
@@ -790,7 +826,7 @@ private fun OccurrenceCard(
                         modifier = Modifier.weight(1f),
                     )
                     occurrence.variationTag?.let { VariationChip(it) }
-                    if (occurrence.optional && occurrence.state == OccurrenceState.PLANNED) {
+                    if (optionalChip && occurrence.optional && occurrence.state == OccurrenceState.PLANNED) {
                         Chip(
                             text = "Optional",
                             container = MaterialTheme.colorScheme.surfaceVariant,
@@ -837,6 +873,8 @@ private fun OccurrenceCard(
                         )
                     }
                 }
+                // What the plan says about this one, then what logging it said.
+                occurrence.note?.let { PlanNoteText(it) }
                 occurrence.comment?.let {
                     Text(
                         text = it,
@@ -867,6 +905,10 @@ private fun OccurrenceCard(
             DropdownMenuItem(
                 text = { Text(if (occurrence.optional) "Make required" else "Make optional") },
                 onClick = { menuExpanded = false; onOptional(!occurrence.optional) },
+            )
+            DropdownMenuItem(
+                text = { Text(if (occurrence.note == null) "Add note" else "Edit note") },
+                onClick = { menuExpanded = false; onNote() },
             )
             HorizontalDivider()
             DropdownMenuItem(
@@ -921,6 +963,10 @@ private fun CircuitCard(
     onUnlog: () -> Unit = {},
     /** True skips its untouched stations, false puts skipped ones back to planned. */
     onSkip: (Boolean) -> Unit = {},
+    /** True makes every station optional, so the circuit counts only once it is all done. */
+    onOptional: (Boolean) -> Unit = {},
+    onNote: () -> Unit = {},
+    optionalChip: Boolean = true,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val logged = item.stations.any { it.state == OccurrenceState.COMPLETED || it.loggedSets > 0 }
@@ -964,6 +1010,12 @@ private fun CircuitCard(
                             container = MaterialTheme.colorScheme.surfaceVariant,
                             content = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    } else if (optionalChip && item.optional) {
+                        Chip(
+                            text = "Optional",
+                            container = MaterialTheme.colorScheme.surfaceVariant,
+                            content = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 Text(
@@ -971,6 +1023,7 @@ private fun CircuitCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                item.circuit.note?.let { PlanNoteText(it) }
             }
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -988,6 +1041,14 @@ private fun CircuitCard(
                     onClick = { menuOpen = false; onSkip(true) },
                 )
             }
+            DropdownMenuItem(
+                text = { Text(if (item.optional) "Make required" else "Make optional") },
+                onClick = { menuOpen = false; onOptional(!item.optional) },
+            )
+            DropdownMenuItem(
+                text = { Text(if (item.circuit.note == null) "Add note" else "Edit note") },
+                onClick = { menuOpen = false; onNote() },
+            )
             HorizontalDivider()
             onTakeOut?.let { takeOut ->
                 DropdownMenuItem(
@@ -1024,6 +1085,9 @@ private fun ModuleCard(
     onUngroup: () -> Unit,
     onRemove: () -> Unit,
     member: @Composable (WeekItem) -> Unit,
+    /** True makes everything in it optional. */
+    onOptional: (Boolean) -> Unit = {},
+    onNote: () -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Surface(
@@ -1068,11 +1132,19 @@ private fun ModuleCard(
                             )
                         }
                     }
+                    // Folded or not: the plan's word on the group is what it is planned with.
+                    item.module.note?.let { PlanNoteText(it) }
                 }
                 CategoryChip(item.category, modifier = Modifier.padding(start = 8.dp))
                 if (item.completed) {
                     val colors = doneColors()
                     Chip("Done", colors.first, colors.second)
+                } else if (item.optional) {
+                    Chip(
+                        text = "Optional",
+                        container = MaterialTheme.colorScheme.surfaceVariant,
+                        content = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 Box {
                     IconButton(
@@ -1080,6 +1152,15 @@ private fun ModuleCard(
                         modifier = Modifier.semantics { contentDescription = "Module actions" },
                     ) { Text("⋮", style = MaterialTheme.typography.titleMedium) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (item.optional) "Make all required" else "Make all optional") },
+                            onClick = { menuOpen = false; onOptional(!item.optional) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (item.module.note == null) "Add note" else "Edit note") },
+                            onClick = { menuOpen = false; onNote() },
+                        )
+                        HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("Ungroup") },
                             onClick = { menuOpen = false; onUngroup() },

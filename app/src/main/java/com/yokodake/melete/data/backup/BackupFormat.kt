@@ -43,8 +43,11 @@ const val BACKUP_FORMAT = "melete-backup"
  *
  * 3 (schema 12) adds `optional` to scheduled exercises and module entries. An older file reads as
  * nothing optional; the number went up so an older app refuses a file it would quietly flatten.
+ *
+ * 4 (schema 13) adds the plan's `note` to scheduled exercises, circuits and modules. An older file
+ * reads as having none; the number went up so an older app refuses a file it would lose them from.
  */
-const val BACKUP_FORMAT_VERSION = 3
+const val BACKUP_FORMAT_VERSION = 4
 
 /**
  * The whole training record, as one human-readable file.
@@ -205,6 +208,7 @@ data class CircuitInstanceRecord(
     val createdAtEpochMs: Long,
     val moduleInstanceId: String? = null,
     val modulePosition: Int? = null,
+    val note: String? = null,
 )
 
 @Serializable
@@ -216,6 +220,7 @@ data class ModuleInstanceRecord(
     val trainingDate: String? = null,
     val orderIndex: Int,
     val createdAtEpochMs: Long,
+    val note: String? = null,
 )
 
 @Serializable
@@ -247,6 +252,7 @@ data class OccurrenceRecord(
     val moduleInstanceId: String? = null,
     val modulePosition: Int? = null,
     val optional: Boolean = false,
+    val note: String? = null,
 )
 
 @Serializable
@@ -354,12 +360,12 @@ internal fun CircuitInstanceEntity.toRecord() = CircuitInstanceRecord(
     id, routineId, routineNameSnapshot, categorySnapshot, structureVersion,
     BackupJson.parseToJsonElement(structureSnapshotJson), weekStartEpochDay.date(),
     trainingDateEpochDay?.date(), orderIndex, rounds, transitionSeconds, roundRestSeconds,
-    createdAtEpochMs, moduleInstanceId, modulePosition,
+    createdAtEpochMs, moduleInstanceId, modulePosition, note,
 )
 
 internal fun ModuleInstanceEntity.toRecord() = ModuleInstanceRecord(
     id, moduleId, moduleNameSnapshot, weekStartEpochDay.date(), trainingDateEpochDay?.date(),
-    orderIndex, createdAtEpochMs,
+    orderIndex, createdAtEpochMs, note,
 )
 
 internal fun ExerciseOccurrenceEntity.toRecord() = OccurrenceRecord(
@@ -389,6 +395,7 @@ internal fun ExerciseOccurrenceEntity.toRecord() = OccurrenceRecord(
     moduleInstanceId = moduleInstanceId,
     modulePosition = modulePosition,
     optional = optional,
+    note = note,
 )
 
 internal fun TrainingSessionEntity.toRecord() =
@@ -473,12 +480,12 @@ internal fun CircuitInstanceRecord.toEntity() = CircuitInstanceEntity(
     orderIndex = orderIndex, rounds = rounds, transitionSeconds = transitionSeconds,
     roundRestSeconds = roundRestSeconds, createdAtEpochMs = createdAtEpochMs,
     moduleInstanceId = moduleInstanceId, modulePosition = modulePosition,
-    categorySnapshot = categorySnapshot,
+    categorySnapshot = categorySnapshot, note = note,
 )
 
 internal fun ModuleInstanceRecord.toEntity() = ModuleInstanceEntity(
     id, moduleId, moduleNameSnapshot, weekStart.epochDay(), trainingDate?.epochDay(), orderIndex,
-    createdAtEpochMs,
+    createdAtEpochMs, note,
 )
 
 internal fun OccurrenceRecord.toEntity() = ExerciseOccurrenceEntity(
@@ -508,6 +515,7 @@ internal fun OccurrenceRecord.toEntity() = ExerciseOccurrenceEntity(
     moduleInstanceId = moduleInstanceId,
     modulePosition = modulePosition,
     optional = optional,
+    note = note,
 )
 
 internal fun SessionRecord.toEntity() =

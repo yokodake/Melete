@@ -322,13 +322,22 @@ class PlanImporter(
                         )
                         item.pick.plan?.let { repository.updateOccurrencePrescription(occurrence, it) }
                         if (item.pick.optional) repository.setOccurrenceOptional(occurrence, true)
+                        item.pick.note?.let { repository.setOccurrenceNote(occurrence, it) }
                     }
                     is ResolvedItem.Circuit -> {
                         val circuit = repository.scheduleRoutine(
                             circuitIds[item.key] ?: error("unresolved circuit ${item.key}"), slot.weekStart, slot.date,
                         )
-                        // This week's rounds, on this copy only; the saved circuit keeps its own.
-                        if (circuit != null && item.rounds != null) repository.setCircuitRounds(circuit, item.rounds)
+                        // This week's rounds, notes and whether it is optional, on this copy only; the
+                        // saved circuit keeps its own.
+                        if (circuit != null) {
+                            if (item.rounds != null) repository.setCircuitRounds(circuit, item.rounds)
+                            item.note?.let { repository.setCircuitNote(circuit, it) }
+                            item.notes.forEach { (exercise, note) ->
+                                repository.noteCircuitStation(circuit, exerciseId(exercise), note)
+                            }
+                            if (item.optional) repository.setCircuitOptional(circuit, true)
+                        }
                     }
                     is ResolvedItem.Module -> {
                         val module = repository.scheduleModule(
@@ -343,11 +352,19 @@ class PlanImporter(
                             item.omit.forEach { exercise ->
                                 repository.omitFromModule(module, exerciseId(exercise))
                             }
+                            item.note?.let { repository.setModuleNote(module, it) }
+                            item.notes.forEach { (exercise, note) ->
+                                repository.noteModuleExercise(module, exerciseId(exercise), note)
+                            }
+                            if (item.optional) repository.setModuleOptional(module, true)
                         }
                     }
-                    is ResolvedItem.Activity -> repository.createOneOffActivity(
-                        item.name, slot.weekStart, slot.date, item.minutes?.let { it * 60 },
-                    )
+                    is ResolvedItem.Activity -> {
+                        val activity = repository.createOneOffActivity(
+                            item.name, slot.weekStart, slot.date, item.minutes?.let { it * 60 },
+                        )
+                        item.note?.let { repository.setOccurrenceNote(activity, it) }
+                    }
                 }
             }
         }

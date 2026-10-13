@@ -80,6 +80,8 @@ data class ExerciseDetailUiState(
     val prescriptionSummary: String = "",
     val occurrenceState: OccurrenceState? = null,
     val comment: String? = null,
+    /** On a planned copy: what the plan says about this one. */
+    val note: String? = null,
     /** The library entry this copy came from is gone, so there is no explanation to show. */
     val definitionMissing: Boolean = false,
     /** An activity typed in by name, which never had a library entry to begin with. */
@@ -296,6 +298,7 @@ class ExerciseDetailViewModel(
             prescriptionSummary = summary,
             occurrenceState = occurrence?.state,
             comment = occurrence?.comment,
+            note = occurrence?.note,
             // A one-off never had a definition, which is a different thing from having lost one.
             definitionMissing = library == null && occurrence?.isOneOff != true,
             isOneOff = occurrence?.isOneOff == true,

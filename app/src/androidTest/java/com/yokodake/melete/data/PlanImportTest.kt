@@ -129,6 +129,58 @@ class PlanImportTest {
         assertEquals(2, repository.observeModules().first().single().entries.first { it.name == "Cossack" }.prescription?.sets)
     }
 
+    /** Notes, and a whole circuit or module made optional, land on that placement's copies only. */
+    @Test
+    fun notesAndOptionalGroupsLandOnThatPlacement() = runBlocking {
+        import(
+            """
+            { "format": "melete-plan", "version": 1,
+              "exercises": [
+                { "name": "Cossack", "mode": "reps", "plan": { "sets": 2, "reps": 6 } },
+                { "name": "Clamshell", "mode": "reps", "plan": { "sets": 2, "reps": 10 } },
+                { "name": "Attempt", "mode": "reps", "plan": { "reps": 1 } }
+              ],
+              "circuits": [ { "name": "Intervals", "rounds": 2, "stations": [ { "exercise": "Attempt" }, { "exercise": "Attempt" } ] } ],
+              "modules": [ { "name": "FA", "entries": [ { "exercise": "Cossack" }, { "exercise": "Clamshell" } ] } ],
+              "weeks": [ { "weekStart": "2026-10-05",
+                "monday": [
+                  { "module": "FA", "optional": true, "note": "Optional today", "notes": { "Cossack": "slow on the way down" } },
+                  { "circuit": "Intervals", "optional": true, "note": "after climbing", "notes": { "Attempt": "flash it" } },
+                  { "exercise": "Clamshell", "note": "pelvis stacked" },
+                  { "activity": "Run", "note": "easy" }
+                ],
+                "wednesday": [ { "module": "FA" }, { "circuit": "Intervals" } ] } ]
+            }
+            """
+        )
+        val wednesday = monday.plusDays(2)
+        val week = repository.observeWeek(monday).first()
+        val modules = repository.observeWeekModules(monday).first().associateBy { it.trainingDate }
+        val circuits = repository.observeWeekCircuits(monday).first().associateBy { it.trainingDate }
+
+        assertEquals("Optional today", modules.getValue(monday).note)
+        assertEquals(null, modules.getValue(wednesday).note)
+        val mondayModule = week.filter { it.moduleInstanceId == modules.getValue(monday).id }
+        assertTrue(mondayModule.all { it.optional })
+        assertEquals("slow on the way down", mondayModule.single { it.name == "Cossack" }.note)
+        assertEquals(null, mondayModule.single { it.name == "Clamshell" }.note)
+
+        assertEquals("after climbing", circuits.getValue(monday).note)
+        val mondayStations = week.filter { it.circuitInstanceId == circuits.getValue(monday).id }
+        assertEquals(2, mondayStations.size)
+        assertTrue(mondayStations.all { it.optional && it.note == "flash it" })
+
+        val standalone = week.single { it.name == "Clamshell" && it.moduleInstanceId == null }
+        assertEquals("pelvis stacked", standalone.note)
+        assertEquals(false, standalone.optional)
+        assertEquals("easy", week.single { it.name == "Run" }.note)
+
+        // Wednesday's copies are their own: nothing optional, nothing noted.
+        val wednesdays = week.filter { it.trainingDate == wednesday }
+        assertTrue(wednesdays.none { it.optional || it.note != null })
+        assertEquals(null, circuits.getValue(wednesday).note)
+    }
+
     @Test
     fun everythingTheFileNamesLandsWhereItSays() = runBlocking {
         import(plan)
