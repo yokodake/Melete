@@ -11,12 +11,18 @@ global table of exercises by week, the library, and the problems the importer wo
 
 **Edit** turns on editing. In the weekly view, a card (exercise, circuit, module or one-off — all
 treated alike) is selected by a click, Ctrl+click adds to the selection, Shift+click selects a
-range; a click on a day selects the day as the place to add or paste. Double-click, Enter or `e`
+range; a click on a day selects the day as the place to add or paste, and Ctrl+click or
+Shift+click on days takes their cards into the selection (to clear or move several days at once). Double-click, Enter or `e`
 edits the selection: the essential fields of the plan first, the rest under *More fields*; with
 several selected, fields that differ show *mixed* and only the fields changed are applied. A right
 click opens the menu for what is under the pointer. Cards are dragged by their ⠿ handle (Shift while
 dragging copies, shown by a + on the preview), with the day highlighted and a line where they will
-land; the page scrolls near its edges and Escape cancels.
+land; the page scrolls near its edges and Escape cancels. Adding to a day (its + or `a`) opens a
+filterable list of the library's exercises, circuits and modules: a click or Enter places one with
+its library plan, ↑↓ move through the list, and *New…* opens the full form for a new exercise, an
+activity or an item with its own plan. **Shift+A** does the same on that day of every week in the
+selected week's phase, deloads included: the selected week gets it where `a` would put it, the
+others at the same position (or at the end of a shorter day).
 
 Keys (they give way to typing in any field): arrows or hjkl move between cards and empty days
 (↑↓ through a day and on into the next, ←→ the same day a week earlier or later); **Ctrl+arrow**

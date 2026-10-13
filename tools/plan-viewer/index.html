@@ -142,6 +142,8 @@
   .ctxmenu button:hover:not(:disabled), .ctxmenu button:focus { background: var(--surface-2); outline: none; }
   .ctxmenu .kbd { color: var(--muted); font-size: 12px; }
   .ctxmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+  /* Scrolling to the selection keeps it clear of the sticky header and the bar below, with room to spare. */
+  .it, .slot, .whead { scroll-margin: 90px 32px 70px; }
   .selbar { position: sticky; bottom: 0; margin-top: 8px; padding: 6px 10px; background: var(--surface-2);
     border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; }
   table.keys td { padding: 3px 8px; border-bottom: 1px solid var(--line); white-space: normal; }
@@ -169,6 +171,9 @@
   .librow:hover { background: var(--surface-2); }
   .librow.on { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
   .librow .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pickerlist { height: min(50vh, 420px); margin: 8px 0 6px; }
+  dialog:has(.picker) { max-width: min(540px, 94vw); }
+  .picker .libtools { margin-top: 8px; }
   .libpanel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
   .panelform { display: flex; flex-direction: column; gap: 8px; }
   .panelform h3 { margin: 0 0 4px; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
@@ -1016,10 +1021,59 @@ const Editor = (() => {
     ["unscheduled", ...DAYS].forEach(k => { if (Array.isArray(week[k]) && !week[k].length) delete week[k]; });
   }
 
+  /**
+   * Adding to a day picks from the library first: a filterable list, one kind at a time, where a
+   * click or Enter places the item as it is. "New…" opens the full form for anything else.
+   */
   function addItem(week, slot) {
-    itemDialog(`Add to ${slot.label}, week of ${dayMonth(week.start)}`, { exercise: "" }, true, item => {
-      change(f => slotList(f, { week: week.index, day: slot.key }, true).push(item));
+    pickItem(`Add to ${slot.label}, week of ${dayMonth(week.start)}`,
+      item => change(f => slotList(f, { week: week.index, day: slot.key }, true).push(item)));
+  }
+  function pickItem(title, place) {
+    const pick = { kind: "exercise", at: 0 };
+    const filter = input("", { placeholder: "Filter" });
+    const tabs = h("div", { class: "seg libcats" });
+    const listNode = h("div", { class: "liblist pickerlist" });
+    let shown = [];
+    function fill() {
+      tabs.replaceChildren(...Object.entries(KINDS).map(([k, v]) => {
+        const b = h("button", { "aria-pressed": String(pick.kind === k) }, `${v.title} (${(state.file[v.list] ?? []).length})`);
+        b.onclick = () => { pick.kind = k; pick.at = 0; fill(); filter.focus(); };
+        return b;
+      }));
+      const words = filter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      shown = (state.file[KINDS[pick.kind].list] ?? [])
+        .filter(it => words.every(w => String(it.name ?? "").toLowerCase().includes(w)))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      pick.at = Math.min(pick.at, Math.max(shown.length - 1, 0));
+      listNode.replaceChildren(...shown.map((it, i) => {
+        const row = h("div", { class: "librow" + (i === pick.at ? " on" : "") },
+          dot(it.category), h("span", { class: "name" }, it.name ?? "(no name)"));
+        row.onclick = () => { pick.at = i; d.querySelector(".actions button:last-child").click(); };
+        return row;
+      }), shown.length ? "" : h("div", { class: "muted", style: "padding:6px" }, "Nothing here. “New…” adds something else."));
+      listNode.querySelector(".librow.on")?.scrollIntoView({ block: "nearest" });
+    }
+    filter.oninput = () => { pick.at = 0; fill(); };
+    filter.addEventListener("keydown", e => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      pick.at = Math.max(0, Math.min(shown.length - 1, pick.at + (e.key === "ArrowDown" ? 1 : -1)));
+      fill();
     });
+    const other = button("New…", () => {
+      d.close(); d.remove();
+      itemDialog(title, { [pick.kind]: filter.value.trim() }, true, place);
+    }, "A new exercise, an activity, or an item with its own plan");
+    const body = h("div", { class: "picker" }, tabs, h("div", { class: "libtools" }, filter, other), listNode,
+      h("div", { class: "muted" }, "Click or Enter adds it with its library plan; click it on the day to change it."));
+    fill();
+    const d = dialog(title, body, () => {
+      const it = shown[pick.at];
+      if (!it) return "Pick one, or use “New…”.";
+      place({ [pick.kind]: it.name });
+    }, "Add");
+    filter.focus();
   }
   /** The form for one placed item, shaped by its kind. */
   function itemDialog(title, raw, adding, onDone) {
@@ -1764,7 +1818,11 @@ const Editor = (() => {
     const el = board.week != null ? document.querySelector(`.whead[data-week="${board.week}"]`)
       : c ? (c.index != null ? cardEl(c) : slotEl(c)) : null;
     if (board.week == null) el?.classList.add("cur");
-    if (el && board.reveal) { el.scrollIntoView({ block: "nearest", inline: "nearest" }); board.reveal = false; }
+    if (el && board.reveal) {
+      // A frame later: a redraw puts the old scroll back in the next frame, which would undo this.
+      requestAnimationFrame(() => el.isConnected && el.scrollIntoView({ block: "nearest", inline: "nearest" }));
+      board.reveal = false;
+    }
     status();
   }
   function status() {
@@ -1961,8 +2019,31 @@ const Editor = (() => {
     const at = targetFor(c);
     const week = columns().find(w => w.index === at.week);
     const label = week?.slots.find(s => s.key === at.day)?.label ?? at.day;
-    itemDialog(`Add to ${label}, week of ${week ? dayMonth(week.start) : ""}`, { exercise: "" }, true, item => {
+    pickItem(`Add to ${label}, week of ${week ? dayMonth(week.start) : ""}`, item => {
       edit(f => { insertAt(f, at, at.index, [item]); return [item]; });
+    });
+  }
+  /**
+   * Shift+A: the same pick, put on that day of every week in the cursor's phase, deloads included.
+   * The cursor's week gets it where `a` would put it; the others at the same place, or at the end.
+   */
+  function addToPhase() {
+    const c = startCursor(); if (!c) return;
+    const at = targetFor(c);
+    const ph = weekAt(at.week)?.phase;
+    if (!ph) { alert("This week is in no phase. Set phases with Phases… first."); return; }
+    const weeks = state.plan.weeks.filter(w => w.phase === ph);
+    const day = at.day === "unscheduled" ? "Unscheduled" : at.day[0].toUpperCase() + at.day.slice(1);
+    pickItem(`Add to every ${day} of ${ph.name} (${weeks.length} weeks)`, item => {
+      edit(f => {
+        let mine = null;
+        weeks.forEach(w => {
+          const copy = clone(item);
+          insertAt(f, { week: w.index, day: at.day }, at.index, [copy]);
+          if (w.index === at.week) mine = copy;
+        });
+        return [mine];
+      });
     });
   }
 
@@ -2357,7 +2438,9 @@ const Editor = (() => {
       ["{ / }", "Previous / next phase (its first week), same day"],
       ["Ctrl+{ / Ctrl+}", "First / last day of the current phase"],
       ["Enter / e", "Edit the selection"],
-      ["a", "Add to the selected day (after the selected card)"],
+      ["a", "Add to the selected day (after the selected card): pick from the library, or New…"],
+      ["Shift+A", "The same, on that day of every week in the phase (deloads included)"],
+      ["Ctrl / Shift+click a day", "Add that day's cards to the selection / select through to that day"],
       ["Delete", "Remove the selection; on a selected day or week, its workouts"],
       ["Ctrl+X / C / V", "Cut / copy / paste (after the selection, or into the selected day or week)"],
       ["dd / yy / p / P", "Cut / copy / paste after / paste before"],
@@ -2432,7 +2515,32 @@ const Editor = (() => {
       return;
     }
     const slot = slotFromEl(e.target);
-    if (slot) { board.reveal = false; selectSlot(slot); return; }
+    if (slot && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+      // Ctrl or Shift on a day takes its cards into the selection, to clear or move several days at once.
+      const cardsOf = s => rawList(s).map((_, index) => ({ ...s, index }));
+      const cards = cardsOf(slot);
+      if (!cards.length) return;
+      if (e.shiftKey && board.anchor) {
+        // From the anchor to the far end of this day, whichever side of the anchor it is on.
+        const forward = sameRef(rangeBetween(board.anchor, cards[0])[0], board.anchor);
+        const end = forward ? cards[cards.length - 1] : cards[0];
+        setSelection(rangeBetween(board.anchor, end), end, { reveal: false });
+      } else {
+        // A day selected on its own joins in with its cards.
+        const base = board.items.length ? board.items : board.slot ? cardsOf(board.slot) : [];
+        const has = r => base.some(x => sameRef(x, r));
+        const items = cards.every(has) ? base.filter(r => !cards.some(c => sameRef(c, r)))
+          : [...base, ...cards.filter(c => !has(c))];
+        board.anchor = cards[cards.length - 1];
+        setSelection(items, cards[cards.length - 1], { reveal: false });
+      }
+      return;
+    }
+    if (slot) {
+      // A Shift+click on another day then takes everything from this day's first card.
+      if (rawList(slot).length) board.anchor = { ...slot, index: 0 };
+      board.reveal = false; selectSlot(slot); return;
+    }
     const head = e.target.closest(".whead[data-week]");
     if (head) selectWeek(+head.dataset.week, { reveal: false });
   }
@@ -2557,6 +2665,7 @@ const Editor = (() => {
       }
       case "Enter": case "e": e.preventDefault(); editSelection(); return;
       case "a": e.preventDefault(); addHere(); return;
+      case "A": e.preventDefault(); addToPhase(); return;
       case "Delete": case "Backspace":
         e.preventDefault();
         if (e.shiftKey && board.week != null) deleteWeek(board.week); else deleteSelection();
