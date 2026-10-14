@@ -241,6 +241,7 @@ week only — the saved module or circuit keeps its own:
   `plans` applies, and an exercise cannot be both planned and left out.
 - `rounds` is at least 1.
 - All three go only where a module or circuit is placed in a week, never in the definitions.
+- The planner shows a plan or rounds set this way in italics.
 
 ## Phases and deload weeks
 
@@ -261,7 +262,8 @@ the app lives through a phase without needing its name.
   `note` is optional. Overlapping phases are a warning, not a mistake.
 - A week can say `"deload": true` and carry a `note`.
 - The plan editor (`tools/plan-viewer`) shows phases as coloured bands over the weeks and the table,
-  shades deload weeks (faintly in the weeks, more clearly in the table), and edits both (*Phases…*
+  with a line in the phase's colour down the weeks where it begins (grey where weeks in no phase
+  follow), shades deload weeks (faintly in the weeks, more clearly in the table), and edits both (*Phases…*
   above the weeks; `q` and `n`, or the week heading's right-click menu, on a week).
   A week belongs to the phase its first day falls in.
 - An app older than 2026-10-06 refuses these keys as unknown; update it before importing a file

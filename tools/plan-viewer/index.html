@@ -76,6 +76,8 @@
   .module { border: 1px solid var(--line); border-radius: 12px; padding: 4px 8px 6px; margin: 8px 0; }
   .module > .mname { font-weight: 600; padding: 4px 4px 2px; }
   .module > .mdesc { color: var(--muted); font-size: 12px; padding: 0 4px 2px; }
+  /* A plan set where a module or circuit is placed, for that week only. */
+  .weekplan { font-style: italic; }
   /* The plan's note on one placement: italic, so it reads as advice rather than as the library's text. */
   .pnote { font-style: italic; color: var(--muted); font-size: 12px; margin-top: 2px; white-space: pre-wrap; }
   .module > .pnote { padding: 0 4px 2px; margin-top: 0; }
@@ -107,6 +109,11 @@
   .ph3 { --ph: 200, 90, 120; } .ph4 { --ph: 90, 150, 80; } .ph5 { --ph: 100, 140, 200; }
   .phase[class*=ph] { background: rgba(var(--ph), .25); }
   .weekgrid > .whead[class*=ph] { box-shadow: inset 0 4px 0 rgba(var(--ph), .9); }
+  /* Where a phase begins, a line in its colour down the gap before its first week, so the boundary
+     shows however far down the page is; grey where weeks in no phase follow a phase. */
+  .weekgrid > .cell.pbound { position: relative; }
+  .weekgrid > .cell.pbound::before { content: ""; position: absolute; top: 0; bottom: 0; left: -8px; width: 4px;
+    background: rgba(var(--ph, 127, 127, 127), .9); }
   .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px;
     margin-left: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
   .wnote { color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 2px; }
@@ -613,22 +620,28 @@ function exerciseDetail(ex, plan, variation) {
 /** The plan's note on one placement, under its card's plan. */
 const noteNode = note => note ? h("div", { class: "pnote" }, note) : null;
 
+// A plan set where the module or circuit is placed, for that week only, is in italics.
+const WEEK_PLAN = "\nThis week's plan: set where it is placed, not by the module.";
+
 function exerciseCard(item) {
-  return h("div", { class: "card", title: exerciseDetail(item.ex, item.plan, item.variation) + (item.note ? `\nNote: ${item.note}` : "") },
+  return h("div", { class: "card", title: exerciseDetail(item.ex, item.plan, item.variation) + (item.overridden ? WEEK_PLAN : "") + (item.note ? `\nNote: ${item.note}` : "") },
     h("div", { class: "top" }, dot(item.ex.category), h("span", { class: "name" }, item.ex.name),
       item.variation ? h("span", { class: "chip" }, String(item.variation).toUpperCase()) : null,
       item.optional ? h("span", { class: "chip" }, "optional") : null),
-    h("div", { class: "sub" }, planSummary(item.ex, item.plan, false) + (item.overridden ? " · this week" : "")),
+    h("div", { class: "sub" + (item.overridden ? " weekplan" : "") }, planSummary(item.ex, item.plan, false)),
     noteNode(item.note));
 }
 function circuitCard(item) {
-  const shape = [`${item.rounds} ${item.rounds === 1 ? "round" : "rounds"}${item.overridden ? " this week" : ""}`,
-    item.transitionSeconds ? `switch ${fmtSeconds(item.transitionSeconds)}` : null,
-    item.roundRestSeconds ? `rest ${fmtSeconds(item.roundRestSeconds)}` : null].filter(Boolean).join(" · ");
+  const rounds = `${item.rounds} ${item.rounds === 1 ? "round" : "rounds"}`;
+  const rest = [item.transitionSeconds ? `switch ${fmtSeconds(item.transitionSeconds)}` : null,
+    item.roundRestSeconds ? `rest ${fmtSeconds(item.roundRestSeconds)}` : null].filter(Boolean).map(s => " · " + s).join("");
+  const shape = item.overridden
+    ? h("div", { class: "sub", title: "This week's rounds: set where it is placed, not by the circuit." }, h("span", { class: "weekplan" }, rounds), rest)
+    : h("div", { class: "sub" }, rounds + rest);
   return h("div", { class: "card" },
     h("div", { class: "top" }, dot(item.category), h("span", { class: "name" }, item.name), h("span", { class: "muted" }, "circuit"),
       item.optional ? h("span", { class: "chip" }, "optional") : null),
-    h("div", { class: "sub" }, shape),
+    shape,
     noteNode(item.note),
     h("ol", { class: "stations" }, item.stations.map(s => h("li", { title: exerciseDetail(s.ex, s.plan, s.variation) + (s.note ? `\nNote: ${s.note}` : "") },
       `${s.ex.name}${s.variation ? " [" + s.variation + "]" : ""} — ${planSummary(s.ex, s.plan, true)}`, noteNode(s.note)))));
@@ -667,10 +680,13 @@ function renderWeek(main) {
   const rows = 1 + (withUnscheduled ? 1 : 0) + 7;
   const grid = h("div", { class: "weekgrid" });
   grid.style.gridTemplateRows = `repeat(${rows}, auto)`;
-  weeks.forEach(week => {
+  weeks.forEach((week, i) => {
     const end = addDays(week.start, 6);
     const shade = week.deload ? " deload" : "";
-    grid.append(h("div", Object.assign({ class: "cell whead" + shade + (week.phase ? ` ph${week.phase.color}` : "") },
+    // The first week of a phase, or of no phase after one: every cell of it carries the line.
+    const bound = i > 0 && weeks[i - 1].phase !== week.phase
+      ? " pbound" + (week.phase ? ` ph${week.phase.color}` : "") : "";
+    grid.append(h("div", Object.assign({ class: "cell whead" + shade + (week.phase ? ` ph${week.phase.color}` : "") + (bound ? " pbound" : "") },
         state.editing ? { "data-week": week.index } : {}),
       `${dayMonth(week.start)} – ${dayMonth(end)}`,
       h("span", { class: "wk" }, `W${isoWeek(week.start)} · ${end.getUTCFullYear()}`),
@@ -680,7 +696,7 @@ function renderWeek(main) {
       week.note ? h("div", { class: "wnote" }, week.note) : null));
     const slots = withUnscheduled ? week.slots : week.slots.slice(1);
     slots.forEach((slot, n) => {
-      grid.append(h("div", Object.assign({ class: "cell day" + shade + (n === slots.length - 1 ? " last" : "") + (state.editing ? " slot" : "") },
+      grid.append(h("div", Object.assign({ class: "cell day" + shade + bound + (n === slots.length - 1 ? " last" : "") + (state.editing ? " slot" : "") },
           state.editing ? { "data-week": week.index, "data-day": slot.key } : {}),
         h("h2", {}, slot.label, state.editing ? Editor.button("+", () => Editor.addItem(week, slot)) : null),
         slot.items.length ? slot.items.map(it => state.editing ? Editor.wrap(it, week, slot) : itemNode(it))
@@ -837,8 +853,11 @@ function renderGlobal(main) {
 
 function render() {
   const main = document.getElementById("main");
-  // Redrawing keeps the place: the weeks' sideways scroll and the page's.
+  // Redrawing keeps the place: the weeks' sideways scroll, the Global table's (it scrolls in its
+  // own box) and the page's.
   const keepX = document.querySelector(".weeks")?.scrollLeft ?? 0, keepY = window.scrollY;
+  const table = document.querySelector(".tablewrap");
+  const keepTable = table ? [table.scrollLeft, table.scrollTop] : null;
   main.replaceChildren();
   if (!state.plan) { main.append(dropZone); Editor.updateHeader(); return; }
   const { problems, counts } = state.plan;
@@ -861,6 +880,8 @@ function render() {
   // what it follows. In this order, in this task: deferred, the restore could land after it.
   const weeks = document.querySelector(".weeks");
   if (weeks) weeks.scrollLeft = keepX;
+  const tableNow = document.querySelector(".tablewrap");
+  if (tableNow && keepTable) [tableNow.scrollLeft, tableNow.scrollTop] = keepTable;
   window.scrollTo(window.scrollX, keepY);
   if (state.view === "week" && state.editing) Editor.afterRender();
 }
