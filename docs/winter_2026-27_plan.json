@@ -1,5 +1,3 @@
-// Winter 2026–27 · Base (5 Oct–15 Nov) + Strength (16 Nov–10 Jan). Specificity is not programmed yet.
-// Import with Replace plans, From today.
 {
   "format": "melete-plan",
   "version": 1,
@@ -16,33 +14,34 @@
       "name": "AC Boulder Mileage",
       "mode": "DURATION",
       "category": "STRUCTURED_CLIMBING",
-      "description": "One manageable boulder started each minute; accurate, clean completions.",
+      "description": "Climb X easy boulders at low intensity, prioritizing rhythm and smooth movement throughout. 1 minute per boulder, rest the remainder of the time.\nIntent: develop aerobic capacity and forearm capillarisation through high-volume, very low-intensity bouldering.",
       "plan": {
-        "sets": 15,
+        "sets": 20,
         "seconds": 60,
         "restSeconds": 0,
-        "effort": "MODERATE"
+        "effort": "EASY"
       }
     },
     {
-      "name": "Edge pickup",
+      "name": "Progressive Edge pickup",
       "mode": "DURATION",
       "category": "FINGER_TRAINING",
       "unilateral": true,
       "unit": "kg",
       "meaning": "TOTAL_LOAD",
-      "description": "End of the warm-up: progressive holds, half crimp, building to 80% of the last tested max.",
       "plan": {
-        "sets": 5,
+        "sets": 8,
         "seconds": 7,
         "sideSwitchSeconds": 30
-      }
+      },
+      "notes": "both 3fd and half4",
+      "description": "For end of warmup, progress loads over sets, repeat highest load for last set. Build to 80% of the last tested max; record effort on that hold."
     },
     {
       "name": "Strength intervals",
       "mode": "REPETITIONS",
       "category": "STRUCTURED_CLIMBING",
-      "description": "Hard problems; make each lap better than the last. Monday’s main work, not an add-on to projecting.",
+      "description": "Repeat hard but submaximal boulders in structured sets with near-full recovery. Operate near your upper strength threshold across all sets.\nIntent: increase strength endurance and repeatable force production.",
       "plan": {
         "sets": 3,
         "reps": 3,
@@ -52,16 +51,16 @@
       }
     },
     {
-      "name": "Power triples",
+      "name": "Boulder triples",
       "mode": "REPETITIONS",
       "category": "STRUCTURED_CLIMBING",
-      "description": "Power endurance: hold power through the later attempts, not just the first.",
+      "description": "Climb a hard boulder 3 times per set with short rest between reps, completing multiple sets.\nIntent: develop anaerobic capacity through repeated high intensity efforts that builds fatigue across reps and the course of the session.",
       "plan": {
-        "sets": 3,
+        "sets": 5,
         "reps": 3,
         "restSeconds": 300,
         "repRestSeconds": 60,
-        "effort": "HARD"
+        "effort": "VERY_HARD"
       }
     },
     {
@@ -70,7 +69,8 @@
       "category": "BOARD_CLIMBING",
       "description": "Max efforts, long rests.",
       "plan": {
-        "minutes": 60
+        "minutes": 60,
+        "effort": "VERY_HARD"
       }
     },
     {
@@ -88,7 +88,8 @@
       "category": "BOARD_CLIMBING",
       "description": "Problems just above flash level, varied styles.",
       "plan": {
-        "minutes": 60
+        "minutes": 60,
+        "effort": "HARD"
       }
     },
     {
@@ -128,7 +129,8 @@
       "mode": "ACTIVITY",
       "category": "FINGER_TRAINING",
       "plan": {
-        "minutes": 30
+        "minutes": 30,
+        "effort": "VERY_HARD"
       }
     },
     {
@@ -145,36 +147,9 @@
       "category": "STRENGTH_CONDITIONING",
       "unit": "kg",
       "meaning": "TOTAL_LOAD",
-      "description": "Start with 2–3 reps in reserve.",
       "variations": [
         {
           "tag": "STR",
-          "plan": {
-            "sets": 3,
-            "reps": 5,
-            "restSeconds": 180,
-            "effort": "HARD"
-          }
-        }
-      ],
-      "plan": {
-        "sets": 2,
-        "reps": 8,
-        "restSeconds": 150,
-        "effort": "MODERATE"
-      }
-    },
-    {
-      "name": "Wide pull-up",
-      "mode": "REPETITIONS",
-      "category": "STRENGTH_CONDITIONING",
-      "unit": "kg",
-      "meaning": "ADDED_LOAD",
-      "description": "2–3 reps in reserve.",
-      "variations": [
-        {
-          "tag": "STR",
-          "notes": "Weighted. Start near +20 kg (2RM above +35 kg).",
           "plan": {
             "sets": 3,
             "reps": 4,
@@ -184,11 +159,37 @@
         }
       ],
       "plan": {
+        "sets": 3,
+        "reps": 6,
+        "restSeconds": 150,
+        "effort": "HARD"
+      },
+      "notes": "start with 2 RIR"
+    },
+    {
+      "name": "Wide pull-up",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "ADDED_LOAD",
+      "variations": [
+        {
+          "tag": "STR",
+          "plan": {
+            "sets": 4,
+            "reps": 6,
+            "restSeconds": 180,
+            "effort": "HARD"
+          }
+        }
+      ],
+      "plan": {
         "sets": 2,
         "reps": 10,
         "restSeconds": 150,
-        "effort": "MODERATE"
-      }
+        "effort": "HARD"
+      },
+      "description": "Intent: develop capacity and tissue tolerance"
     },
     {
       "name": "External rotation",
@@ -197,13 +198,18 @@
       "unilateral": true,
       "unit": "kg",
       "meaning": "TOTAL_LOAD",
-      "description": "Rotator cuff. Keep all winter, taper included.",
       "plan": {
-        "sets": 2,
-        "reps": 10,
-        "restSeconds": 60,
-        "effort": "MODERATE"
-      }
+        "sets": 3,
+        "reps": 8,
+        "restSeconds": 120,
+        "effort": "HARD"
+      },
+      "notes": "keep all winter, taper included",
+      "variations": [
+        {
+          "tag": "PRON"
+        }
+      ]
     },
     {
       "name": "Lateral raise",
@@ -212,11 +218,12 @@
       "unit": "kg",
       "meaning": "TOTAL_LOAD",
       "plan": {
-        "sets": 2,
+        "sets": 3,
         "reps": 10,
-        "restSeconds": 60,
+        "restSeconds": 90,
         "effort": "MODERATE"
-      }
+      },
+      "description": "Pause at the top."
     },
     {
       "name": "Bent-over fly",
@@ -227,18 +234,17 @@
       "description": "Rear delt + scapular retraction; pause at the top.",
       "plan": {
         "sets": 2,
-        "reps": 8,
+        "reps": 10,
         "restSeconds": 90,
-        "effort": "MODERATE"
+        "effort": "HARD"
       }
     },
     {
-      "name": "Dumbbell curl",
+      "name": "Biceps curl",
       "mode": "REPETITIONS",
       "category": "STRENGTH_CONDITIONING",
       "unit": "kg",
       "meaning": "TOTAL_LOAD",
-      "description": "Elbow rehab.",
       "plan": {
         "sets": 3,
         "reps": 8,
@@ -256,7 +262,8 @@
             "effort": "MODERATE"
           }
         }
-      ]
+      ],
+      "notes": "elbow rehab"
     },
     {
       "name": "Single-leg hip thrust",
@@ -267,7 +274,7 @@
       "meaning": "ADDED_LOAD",
       "description": "Shoulders on a secure bench, brief top pause.",
       "plan": {
-        "sets": 2,
+        "sets": 3,
         "reps": 8,
         "restSeconds": 90,
         "effort": "MODERATE"
@@ -349,8 +356,8 @@
       "meaning": "TOTAL_LOAD",
       "description": "~3 s lowering, controlled depth.",
       "plan": {
-        "sets": 2,
-        "reps": 6,
+        "sets": 3,
+        "reps": 5,
         "restSeconds": 120,
         "effort": "MODERATE"
       }
@@ -359,12 +366,12 @@
       "name": "Frog PAILs/RAILs",
       "mode": "DURATION",
       "category": "FLEXIBILITY",
-      "description": "Each set: 30 s settle → 10 s push → 10 s pull → 20 s relax. Moderate contractions initially.",
+      "description": "Each set: 30 s settle → 10 s push → 10 s pull → 20 s relax.",
       "plan": {
         "sets": 2,
         "seconds": 70,
         "restSeconds": 60,
-        "effort": "MODERATE"
+        "effort": "HARD"
       }
     },
     {
@@ -429,7 +436,7 @@
       "unilateral": true,
       "description": "2 s pause. Stop before pelvic rotation substitutes.",
       "plan": {
-        "sets": 2,
+        "sets": 3,
         "reps": 8,
         "restSeconds": 60,
         "effort": "MODERATE"
@@ -439,12 +446,189 @@
       "name": "Side-split iso",
       "mode": "DURATION",
       "category": "FLEXIBILITY",
-      "description": "Stable width inside benchmark max.",
+      "description": "Stable width.",
       "plan": {
         "sets": 2,
         "seconds": 20,
         "restSeconds": 90,
-        "effort": "MODERATE"
+        "effort": "HARD"
+      }
+    },
+    {
+      "name": "Boulder Mileage",
+      "mode": "DURATION",
+      "category": "STRUCTURED_CLIMBING",
+      "plan": {
+        "sets": 20,
+        "seconds": 180,
+        "restSeconds": 0,
+        "effort": "VERY_HARD"
+      },
+      "description": "Complete 20 boulders in one hour at a challenging but manageable intensity, aiming to flash or complete each within two attempts.\nIntent: Build capacity and tolerance for sustained, high-volume bouldering at a controlled mid-intensity."
+    },
+    {
+      "name": "Overhead press",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "plan": {
+        "sets": 2,
+        "reps": 6
+      }
+    },
+    {
+      "name": "Single-leg RDL",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "unilateral": true,
+      "plan": {
+        "sets": 3,
+        "reps": 8
+      }
+    },
+    {
+      "name": "Single-leg calf raise",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "unilateral": true,
+      "plan": {
+        "sets": 3,
+        "reps": 10
+      }
+    },
+    {
+      "name": "Flat bench (barbell)",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "plan": {
+        "sets": 2,
+        "reps": 5
+      }
+    },
+    {
+      "name": "Chin-up",
+      "mode": "REPETITIONS",
+      "category": "STRENGTH_CONDITIONING",
+      "unit": "kg",
+      "meaning": "ADDED_LOAD",
+      "plan": {
+        "sets": 4,
+        "reps": 6
+      }
+    },
+    {
+      "name": "Climbing with friend",
+      "mode": "ACTIVITY",
+      "category": "OPEN_CLIMBING"
+    },
+    {
+      "name": "Free climbing — below project level",
+      "mode": "ACTIVITY",
+      "category": "OPEN_CLIMBING",
+      "plan": {
+        "minutes": 25
+      }
+    },
+    {
+      "name": "Deficit sumo goblet squat",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "plan": {
+        "sets": 3,
+        "reps": 6
+      },
+      "description": "3 s down, 2 s pause at depth."
+    },
+    {
+      "name": "Middle split PAILs/RAILs",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "description": "Each set: 30 s settle → 10 s push → 10 s pull → 20 s relax. Hands on a support.",
+      "plan": {
+        "sets": 2,
+        "seconds": 70
+      }
+    },
+    {
+      "name": "Pigeon",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "plan": {
+        "sets": 1,
+        "seconds": 60
+      }
+    },
+    {
+      "name": "Frog rock-backs",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "plan": {
+        "sets": 2,
+        "seconds": 60,
+        "restSeconds": 30
+      }
+    },
+    {
+      "name": "Frog lift-offs",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "description": "Hold each lift-off for 5 s.",
+      "plan": {
+        "sets": 3,
+        "reps": 5
+      }
+    },
+    {
+      "name": "Butterfly PAILs/RAILs",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "plan": {
+        "sets": 2,
+        "seconds": 60
+      }
+    },
+    {
+      "name": "Lateral lunge slide",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "plan": {
+        "sets": 2,
+        "reps": 5
+      },
+      "description": "4 s out."
+    },
+    {
+      "name": "Front split",
+      "mode": "DURATION",
+      "category": "FLEXIBILITY",
+      "unilateral": true,
+      "plan": {
+        "sets": 1,
+        "seconds": 45
+      },
+      "description": "Front knee soft, foot pointed."
+    },
+    {
+      "name": "Lateral high step-up rock-over",
+      "mode": "REPETITIONS",
+      "category": "FLEXIBILITY",
+      "unit": "kg",
+      "meaning": "TOTAL_LOAD",
+      "unilateral": true,
+      "plan": {
+        "sets": 3,
+        "reps": 5
       }
     }
   ],
@@ -492,84 +676,60 @@
           }
         }
       ]
+    },
+    {
+      "name": "Chin-ups + wide pull-ups",
+      "category": "STRENGTH_CONDITIONING",
+      "rounds": 3,
+      "transitionSeconds": 90,
+      "roundRestSeconds": 120,
+      "stations": [
+        {
+          "exercise": "Chin-up",
+          "plan": {
+            "reps": 6
+          }
+        },
+        {
+          "exercise": "Wide pull-up",
+          "plan": {
+            "reps": 6
+          }
+        }
+      ]
     }
   ],
   "modules": [
     {
       "name": "FA",
-      "description": "Loaded end-range hip work. Short day: drop one abductor exercise and the split iso.",
+      "description": "Strength in range.",
       "entries": [
         {
           "exercise": "Sciatic sliders"
         },
         {
-          "exercise": "Active 90/90"
+          "exercise": "Deficit sumo goblet squat"
         },
         {
-          "exercise": "Loaded Cossack",
-          "plan": {
-            "sets": 3,
-            "reps": 6,
-            "restSeconds": 120,
-            "effort": "MODERATE"
-          }
+          "exercise": "Loaded Cossack"
         },
         {
-          "exercise": "Frog PAILs/RAILs"
+          "exercise": "Middle split PAILs/RAILs"
         },
         {
-          "exercise": "Clamshell"
+          "exercise": "Pigeon"
         },
         {
-          "exercise": "Fire hydrant"
+          "exercise": "Butterfly"
         },
         {
-          "exercise": "Side-split iso"
-        }
-      ]
-    },
-    {
-      "name": "FA · deload",
-      "description": "Easy. Frog as passive holds; no split iso.",
-      "entries": [
-        {
-          "exercise": "Sciatic sliders",
+          "exercise": "Frog passive hold",
           "plan": {
             "sets": 1,
-            "reps": 10,
+            "seconds": 60,
             "restSeconds": 30,
             "effort": "EASY"
           }
-        },
-        {
-          "exercise": "Active 90/90",
-          "plan": {
-            "sets": 1,
-            "reps": 6,
-            "restSeconds": 45,
-            "effort": "EASY"
-          }
-        },
-        {
-          "exercise": "Loaded Cossack",
-          "plan": {
-            "sets": 2,
-            "reps": 6,
-            "restSeconds": 90,
-            "effort": "EASY"
-          }
-        },
-        {
-          "exercise": "Clamshell",
-          "plan": {
-            "sets": 1,
-            "reps": 10,
-            "restSeconds": 45,
-            "effort": "EASY"
-          }
-        },
-        {
-          "exercise": "Frog passive hold"
         }
       ]
     },
@@ -589,48 +749,90 @@
       ]
     },
     {
-      "name": "Wrist block · deload",
-      "entries": [
-        {
-          "exercise": "Wrist flexor curl",
-          "plan": {
-            "sets": 1,
-            "reps": 10,
-            "restSeconds": 60,
-            "effort": "EASY"
-          }
-        },
-        {
-          "exercise": "Wrist extensor curl",
-          "plan": {
-            "sets": 1,
-            "reps": 10,
-            "restSeconds": 60,
-            "effort": "EASY"
-          }
-        },
-        {
-          "exercise": "Hammer rotation",
-          "plan": {
-            "sets": 1,
-            "reps": 12,
-            "restSeconds": 60,
-            "effort": "EASY"
-          }
-        }
-      ]
-    },
-    {
       "name": "Shoulder support",
       "entries": [
         {
           "exercise": "External rotation"
         },
         {
-          "exercise": "Bent-over fly"
+          "exercise": "Lateral raise"
         },
         {
-          "exercise": "Lateral raise"
+          "exercise": "Bent-over fly"
+        }
+      ]
+    },
+    {
+      "name": "FA · active control",
+      "description": "Active control at moderate depth; no heavy end-range work. Alternate 90/90 with SL RDL.",
+      "entries": [
+        {
+          "exercise": "Sciatic sliders"
+        },
+        {
+          "exercise": "Active 90/90"
+        },
+        {
+          "exercise": "Fire hydrant"
+        },
+        {
+          "exercise": "Frog rock-backs"
+        }
+      ]
+    },
+    {
+      "name": "FA · active control (rock-overs)",
+      "description": "Active control at moderate depth; no heavy end-range work. Alternate 90/90 with SL RDL.",
+      "entries": [
+        {
+          "exercise": "Sciatic sliders"
+        },
+        {
+          "exercise": "Active 90/90"
+        },
+        {
+          "exercise": "Lateral high step-up rock-over"
+        },
+        {
+          "exercise": "Frog rock-backs"
+        }
+      ]
+    },
+    {
+      "name": "FA · main end range",
+      "description": "Main end-range session. Alternate frog lift-offs with hip thrusts.",
+      "entries": [
+        {
+          "exercise": "Sciatic sliders"
+        },
+        {
+          "exercise": "Frog lift-offs"
+        },
+        {
+          "exercise": "Clamshell",
+          "optional": true
+        },
+        {
+          "exercise": "Middle split PAILs/RAILs",
+          "plan": {
+            "sets": 3,
+            "seconds": 70
+          }
+        },
+        {
+          "exercise": "Frog PAILs/RAILs"
+        },
+        {
+          "exercise": "Butterfly PAILs/RAILs"
+        },
+        {
+          "exercise": "Lateral lunge slide"
+        },
+        {
+          "exercise": "Front split"
+        },
+        {
+          "exercise": "Pigeon"
         }
       ]
     }
@@ -643,32 +845,39 @@
           "exercise": "Movement drills"
         },
         {
+          "exercise": "Open boulder",
+          "note": "Weakness"
+        },
+        {
           "exercise": "AC Boulder Mileage",
           "plan": {
             "sets": 15,
             "seconds": 60,
             "restSeconds": 0,
-            "effort": "MODERATE"
+            "effort": "EASY"
           }
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "Wide pull-up",
+          "plan": {
+            "sets": 2,
+            "reps": 10,
+            "restSeconds": 150,
+            "effort": "HARD"
+          }
         },
         {
-          "exercise": "Wide pull-up"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
+          "exercise": "Biceps curl",
           "plan": {
             "sets": 3,
             "reps": 8,
             "restSeconds": 90,
             "effort": "MODERATE"
-          }
+          },
+          "variation": "ECC"
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -676,29 +885,55 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
           "plan": {
-            "sets": 2,
-            "reps": 8,
+            "sets": 3,
+            "reps": 6,
             "restSeconds": 150,
-            "effort": "MODERATE"
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 10
+          }
+        },
+        {
+          "module": "FA · active control"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -707,85 +942,110 @@
           "module": "Shoulder support"
         },
         {
-          "module": "Wrist block"
-        }
-      ],
-      "saturday": [
-        {
-          "exercise": "Edge pickup"
-        },
-        {
-          "exercise": "Open boulder",
+          "exercise": "Biceps curl",
           "plan": {
-            "minutes": 120
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA",
-          "plans": {
-            "Loaded Cossack": {
-              "sets": 2,
-              "reps": 6,
-              "restSeconds": 120,
-              "effort": "MODERATE"
-            }
-          }
-        },
-        {
-          "exercise": "Single-leg hip thrust",
-          "plan": {
-            "sets": 2,
+            "sets": 3,
             "reps": 8,
             "restSeconds": 90,
             "effort": "MODERATE"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Climbing with friend"
+        },
+        {
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "module": "FA · main end range"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
     {
       "weekStart": "2026-10-12",
+      "deload": true,
       "monday": [
         {
-          "exercise": "Movement drills"
+          "exercise": "Open boulder"
         },
         {
-          "exercise": "AC Boulder Mileage",
+          "exercise": "Wide pull-up",
           "plan": {
-            "sets": 15,
-            "seconds": 60,
-            "restSeconds": 0,
-            "effort": "MODERATE"
+            "sets": 2,
+            "reps": 10,
+            "restSeconds": 150,
+            "effort": "EASY"
           }
         },
         {
-          "circuit": "Cooldown"
-        },
-        {
-          "exercise": "Wide pull-up"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
+          "exercise": "Biceps curl",
           "plan": {
-            "sets": 3,
+            "sets": 1,
             "reps": 8,
             "restSeconds": 90,
-            "effort": "MODERATE"
-          }
+            "effort": "EASY"
+          },
+          "variation": "ECC"
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA",
+          "plans": {
+            "Deficit sumo goblet squat": {
+              "sets": 2,
+              "reps": 6,
+              "effort": "EASY"
+            },
+            "Loaded Cossack": {
+              "sets": 2,
+              "reps": 5,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         }
       ],
       "tuesday": [
@@ -793,72 +1053,196 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
           "plan": {
-            "sets": 3,
-            "reps": 8,
+            "sets": 2,
+            "reps": 6,
             "restSeconds": 150,
-            "effort": "MODERATE"
+            "effort": "EASY"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6,
+            "effort": "EASY"
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 1,
+            "reps": 10,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "FA · active control",
+          "plans": {
+            "Active 90/90": {
+              "sets": 1,
+              "reps": 6,
+              "restSeconds": 45,
+              "effort": "EASY"
+            },
+            "Fire hydrant": {
+              "sets": 1,
+              "reps": 8,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Frog rock-backs": {
+              "sets": 1,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            }
+          }
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
         },
         {
-          "module": "Shoulder support"
+          "module": "Shoulder support",
+          "plans": {
+            "External rotation": {
+              "sets": 1,
+              "reps": 8,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Lateral raise": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            },
+            "Bent-over fly": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            }
+          }
         },
         {
-          "module": "Wrist block"
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "Wrist block",
+          "plans": {
+            "Wrist flexor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Wrist extensor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Hammer rotation": {
+              "sets": 1,
+              "reps": 12,
+              "restSeconds": 60,
+              "effort": "EASY"
+            }
+          }
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
-        },
-        {
-          "exercise": "Open boulder",
+          "exercise": "Progressive Edge pickup",
           "plan": {
-            "minutes": 120
-          }
+            "sets": 6,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          },
+          "note": "Build to ~70% max."
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Benchmarks or classics"
         },
         {
           "exercise": "Single-leg hip thrust",
           "plan": {
-            "sets": 3,
+            "sets": 2,
             "reps": 8,
             "restSeconds": 90,
-            "effort": "MODERATE"
+            "effort": "EASY"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range",
+          "omit": [
+            "Clamshell",
+            "Lateral lunge slide"
+          ],
+          "plans": {
+            "Frog lift-offs": {
+              "sets": 1,
+              "reps": 5,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            },
+            "Frog PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            },
+            "Butterfly PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ]
     },
@@ -869,38 +1253,70 @@
           "exercise": "Movement drills"
         },
         {
+          "exercise": "Open boulder",
+          "note": "Flash"
+        },
+        {
           "exercise": "AC Boulder Mileage",
           "plan": {
-            "sets": 10,
+            "sets": 15,
             "seconds": 60,
             "restSeconds": 0,
             "effort": "EASY"
           }
         },
         {
-          "circuit": "Cooldown"
-        },
-        {
           "exercise": "Wide pull-up",
           "plan": {
-            "sets": 2,
+            "sets": 1,
             "reps": 10,
             "restSeconds": 150,
-            "effort": "EASY"
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
+          "exercise": "Biceps curl",
           "plan": {
-            "sets": 1,
+            "sets": 2,
             "reps": 8,
             "restSeconds": 90,
-            "effort": "EASY"
-          }
+            "effort": "MODERATE"
+          },
+          "variation": "ECC"
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA",
+          "plans": {
+            "Deficit sumo goblet squat": {
+              "sets": 2,
+              "reps": 6
+            },
+            "Loaded Cossack": {
+              "sets": 2,
+              "reps": 5,
+              "restSeconds": 120,
+              "effort": "MODERATE"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 1,
+              "seconds": 70
+            },
+            "Pigeon": {
+              "sets": 1,
+              "seconds": 60
+            },
+            "Butterfly": {
+              "sets": 1,
+              "seconds": 60,
+              "effort": "EASY"
+            },
+            "Frog passive hold": {
+              "sets": 1,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            }
+          }
         }
       ],
       "tuesday": [
@@ -908,7 +1324,8 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
@@ -916,55 +1333,145 @@
           "exercise": "Incline bench (barbell)",
           "plan": {
             "sets": 2,
-            "reps": 8,
+            "reps": 6,
             "restSeconds": 150,
-            "effort": "EASY"
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 1,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 2,
+            "reps": 8
+          }
+        },
+        {
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 2,
+            "reps": 10
+          }
+        },
+        {
+          "module": "FA · active control",
+          "plans": {
+            "Active 90/90": {
+              "sets": 1,
+              "reps": 6,
+              "restSeconds": 45,
+              "effort": "MODERATE"
+            },
+            "Fire hydrant": {
+              "sets": 2,
+              "reps": 8,
+              "restSeconds": 60,
+              "effort": "MODERATE"
+            },
+            "Frog rock-backs": {
+              "sets": 1,
+              "seconds": 60,
+              "restSeconds": 30
+            }
+          }
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
         },
         {
-          "exercise": "Bent-over fly",
-          "plan": {
-            "sets": 1,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "EASY"
+          "module": "Shoulder support",
+          "plans": {
+            "External rotation": {
+              "sets": 2,
+              "reps": 8,
+              "restSeconds": 120,
+              "effort": "HARD"
+            },
+            "Lateral raise": {
+              "sets": 2,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "MODERATE"
+            },
+            "Bent-over fly": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "HARD"
+            }
           }
         },
         {
-          "module": "Wrist block · deload"
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "module": "Wrist block",
+          "plans": {
+            "Wrist flexor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "HARD"
+            },
+            "Wrist extensor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "HARD"
+            },
+            "Hammer rotation": {
+              "sets": 1,
+              "reps": 12,
+              "restSeconds": 60,
+              "effort": "MODERATE"
+            }
+          }
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
-        },
-        {
-          "exercise": "Open boulder",
+          "exercise": "Progressive Edge pickup",
           "plan": {
-            "minutes": 90
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
           }
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
+          "exercise": "Climbing with friend"
+        },
         {
-          "module": "FA · deload"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 1,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -972,20 +1479,59 @@
             "sets": 2,
             "reps": 8,
             "restSeconds": 90,
-            "effort": "EASY"
+            "effort": "MODERATE"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range",
+          "plans": {
+            "Frog lift-offs": {
+              "sets": 2,
+              "reps": 5
+            },
+            "Clamshell": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "MODERATE"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 70
+            },
+            "Frog PAILs/RAILs": {
+              "sets": 1,
+              "seconds": 70,
+              "restSeconds": 60,
+              "effort": "HARD"
+            },
+            "Butterfly PAILs/RAILs": {
+              "sets": 1,
+              "seconds": 60
+            },
+            "Lateral lunge slide": {
+              "sets": 1,
+              "reps": 5
+            },
+            "Front split": {
+              "sets": 1,
+              "seconds": 45
+            },
+            "Pigeon": {
+              "sets": 1,
+              "seconds": 60
+            }
+          }
         },
         {
-          "exercise": "Bent-over fly",
+          "exercise": "Abs follow-along",
           "plan": {
-            "sets": 1,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "EASY"
+            "minutes": 10
           }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
@@ -996,32 +1542,39 @@
           "exercise": "Movement drills"
         },
         {
+          "exercise": "Open boulder",
+          "note": "Repeat-to-perfect"
+        },
+        {
           "exercise": "AC Boulder Mileage",
           "plan": {
             "sets": 20,
             "seconds": 60,
             "restSeconds": 0,
-            "effort": "MODERATE"
+            "effort": "EASY"
           }
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "Wide pull-up",
+          "plan": {
+            "sets": 2,
+            "reps": 10,
+            "restSeconds": 150,
+            "effort": "HARD"
+          }
         },
         {
-          "exercise": "Wide pull-up"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
+          "exercise": "Biceps curl",
           "plan": {
             "sets": 3,
             "reps": 8,
             "restSeconds": 90,
             "effort": "MODERATE"
-          }
+          },
+          "variation": "ECC"
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -1029,7 +1582,8 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
@@ -1037,21 +1591,46 @@
           "exercise": "Incline bench (barbell)",
           "plan": {
             "sets": 3,
-            "reps": 8,
+            "reps": 6,
             "restSeconds": 150,
-            "effort": "MODERATE"
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 10
+          }
+        },
+        {
+          "module": "FA · active control"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -1060,32 +1639,38 @@
           "module": "Shoulder support"
         },
         {
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
           "module": "Wrist block"
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
-        },
-        {
-          "exercise": "Open boulder",
+          "exercise": "Progressive Edge pickup",
           "plan": {
-            "minutes": 90
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
           }
         },
         {
-          "exercise": "Board volume",
-          "plan": {
-            "minutes": 30
-          }
+          "exercise": "Climbing with friend"
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -1097,10 +1682,17 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range"
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
@@ -1111,32 +1703,39 @@
           "exercise": "Movement drills"
         },
         {
+          "exercise": "Open boulder",
+          "note": "Project mimics"
+        },
+        {
           "exercise": "AC Boulder Mileage",
           "plan": {
             "sets": 20,
             "seconds": 60,
             "restSeconds": 0,
-            "effort": "MODERATE"
+            "effort": "EASY"
           }
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "Wide pull-up",
+          "plan": {
+            "sets": 2,
+            "reps": 10,
+            "restSeconds": 150,
+            "effort": "HARD"
+          }
         },
         {
-          "exercise": "Wide pull-up"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
+          "exercise": "Biceps curl",
           "plan": {
             "sets": 3,
             "reps": 8,
             "restSeconds": 90,
             "effort": "MODERATE"
-          }
+          },
+          "variation": "ECC"
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -1144,29 +1743,55 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
           "plan": {
-            "sets": 4,
-            "reps": 8,
+            "sets": 3,
+            "reps": 6,
             "restSeconds": 150,
-            "effort": "MODERATE"
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 10
+          }
+        },
+        {
+          "module": "FA · active control"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -1175,75 +1800,69 @@
           "module": "Shoulder support"
         },
         {
-          "module": "Wrist block"
-        }
-      ],
-      "saturday": [
-        {
-          "exercise": "Edge pickup"
-        },
-        {
-          "exercise": "Open boulder",
+          "exercise": "Biceps curl",
           "plan": {
-            "minutes": 90
-          }
-        },
-        {
-          "exercise": "Board volume",
-          "plan": {
-            "minutes": 30
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA",
-          "plans": {
-            "Loaded Cossack": {
-              "sets": 4,
-              "reps": 6,
-              "restSeconds": 120,
-              "effort": "MODERATE"
-            }
-          }
-        },
-        {
-          "exercise": "Single-leg hip thrust",
-          "plan": {
-            "sets": 4,
+            "sets": 3,
             "reps": 8,
             "restSeconds": 90,
             "effort": "MODERATE"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "Wrist block"
+        }
+      ],
+      "saturday": [
+        {
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Climbing with friend"
+        },
+        {
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
+        },
+        {
+          "exercise": "Single-leg hip thrust",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
+          "module": "FA · main end range"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
     {
       "weekStart": "2026-11-09",
+      "deload": true,
       "monday": [
         {
-          "exercise": "Movement drills"
-        },
-        {
-          "exercise": "AC Boulder Mileage",
-          "plan": {
-            "sets": 10,
-            "seconds": 60,
-            "restSeconds": 0,
-            "effort": "EASY"
-          }
-        },
-        {
-          "circuit": "Cooldown"
+          "exercise": "Open boulder"
         },
         {
           "exercise": "Wide pull-up",
@@ -1255,17 +1874,36 @@
           }
         },
         {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
+          "exercise": "Biceps curl",
           "plan": {
             "sets": 1,
             "reps": 8,
             "restSeconds": 90,
             "effort": "EASY"
-          }
+          },
+          "variation": "ECC"
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA",
+          "plans": {
+            "Deficit sumo goblet squat": {
+              "sets": 2,
+              "reps": 6,
+              "effort": "EASY"
+            },
+            "Loaded Cossack": {
+              "sets": 2,
+              "reps": 5,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         }
       ],
       "tuesday": [
@@ -1273,7 +1911,8 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
@@ -1281,27 +1920,98 @@
           "exercise": "Incline bench (barbell)",
           "plan": {
             "sets": 2,
-            "reps": 8,
+            "reps": 6,
             "restSeconds": 150,
             "effort": "EASY"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6,
+            "effort": "EASY"
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 2,
+            "reps": 8,
+            "effort": "EASY"
+          }
+        },
+        {
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 1,
+            "reps": 10,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "FA · active control",
+          "plans": {
+            "Active 90/90": {
+              "sets": 1,
+              "reps": 6,
+              "restSeconds": 45,
+              "effort": "EASY"
+            },
+            "Fire hydrant": {
+              "sets": 1,
+              "reps": 8,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Frog rock-backs": {
+              "sets": 1,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            }
+          }
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
         },
         {
-          "exercise": "Bent-over fly",
+          "module": "Shoulder support",
+          "plans": {
+            "External rotation": {
+              "sets": 1,
+              "reps": 8,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Lateral raise": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            },
+            "Bent-over fly": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            }
+          }
+        },
+        {
+          "exercise": "Biceps curl",
           "plan": {
             "sets": 1,
             "reps": 8,
@@ -1310,23 +2020,33 @@
           }
         },
         {
-          "module": "Wrist block · deload"
+          "module": "Wrist block",
+          "plans": {
+            "Wrist flexor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Wrist extensor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Hammer rotation": {
+              "sets": 1,
+              "reps": 12,
+              "restSeconds": 60,
+              "effort": "EASY"
+            }
+          }
         }
       ],
       "saturday": [
         {
-          "exercise": "Open boulder",
-          "plan": {
-            "minutes": 90
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA · deload"
+          "exercise": "Benchmarks or classics",
+          "note": "Edge pickup max retest."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -1338,15 +2058,40 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range",
+          "omit": [
+            "Clamshell",
+            "Lateral lunge slide"
+          ],
+          "plans": {
+            "Frog lift-offs": {
+              "sets": 1,
+              "reps": 5,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            },
+            "Frog PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            },
+            "Butterfly PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         },
         {
-          "exercise": "Bent-over fly",
+          "exercise": "Abs follow-along",
           "plan": {
-            "sets": 1,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "EASY"
+            "minutes": 10
           }
         }
       ]
@@ -1355,10 +2100,7 @@
       "weekStart": "2026-11-16",
       "monday": [
         {
-          "exercise": "Open boulder",
-          "plan": {
-            "minutes": 25
-          }
+          "exercise": "Free climbing — below project level"
         },
         {
           "exercise": "Strength intervals",
@@ -1371,24 +2113,12 @@
           }
         },
         {
-          "circuit": "Cooldown"
+          "circuit": "Chin-ups + wide pull-ups",
+          "note": "2–3 reps in reserve.",
+          "rounds": 3
         },
         {
-          "exercise": "Wide pull-up",
-          "variation": "STR"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 2,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "MODERATE"
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -1396,30 +2126,56 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
             "sets": 3,
-            "reps": 5,
+            "reps": 4,
             "restSeconds": 180,
             "effort": "HARD"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -1428,12 +2184,26 @@
           "module": "Shoulder support"
         },
         {
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
           "module": "Wrist block"
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
           "exercise": "Limit board"
@@ -1442,12 +2212,13 @@
           "exercise": "Board volume"
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -1459,10 +2230,17 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range"
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
@@ -1470,10 +2248,7 @@
       "weekStart": "2026-11-23",
       "monday": [
         {
-          "exercise": "Open boulder",
-          "plan": {
-            "minutes": 25
-          }
+          "exercise": "Free climbing — below project level"
         },
         {
           "exercise": "Strength intervals",
@@ -1486,24 +2261,12 @@
           }
         },
         {
-          "circuit": "Cooldown"
+          "circuit": "Chin-ups + wide pull-ups",
+          "note": "2–3 reps in reserve.",
+          "rounds": 3
         },
         {
-          "exercise": "Wide pull-up",
-          "variation": "STR"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 2,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "MODERATE"
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -1511,30 +2274,56 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
-            "sets": 4,
-            "reps": 5,
+            "sets": 3,
+            "reps": 4,
             "restSeconds": 180,
             "effort": "HARD"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -1543,12 +2332,26 @@
           "module": "Shoulder support"
         },
         {
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
           "module": "Wrist block"
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
           "exercise": "Limit board"
@@ -1557,12 +2360,13 @@
           "exercise": "Board volume"
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -1574,10 +2378,17 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range"
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
@@ -1585,10 +2396,7 @@
       "weekStart": "2026-11-30",
       "monday": [
         {
-          "exercise": "Open boulder",
-          "plan": {
-            "minutes": 25
-          }
+          "exercise": "Free climbing — below project level"
         },
         {
           "exercise": "Strength intervals",
@@ -1601,24 +2409,12 @@
           }
         },
         {
-          "circuit": "Cooldown"
+          "circuit": "Chin-ups + wide pull-ups",
+          "note": "2–3 reps in reserve.",
+          "rounds": 3
         },
         {
-          "exercise": "Wide pull-up",
-          "variation": "STR"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 2,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "MODERATE"
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -1626,30 +2422,56 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
-            "sets": 4,
-            "reps": 5,
+            "sets": 3,
+            "reps": 4,
             "restSeconds": 180,
             "effort": "HARD"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -1658,12 +2480,26 @@
           "module": "Shoulder support"
         },
         {
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
           "module": "Wrist block"
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
           "exercise": "Limit board"
@@ -1672,12 +2508,13 @@
           "exercise": "Board volume"
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -1689,21 +2526,26 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range"
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
     {
       "weekStart": "2026-12-07",
+      "deload": true,
       "monday": [
         {
-          "exercise": "Open boulder",
-          "plan": {
-            "minutes": 25
-          }
+          "exercise": "Free climbing — below project level"
         },
         {
           "exercise": "Strength intervals",
@@ -1712,34 +2554,35 @@
             "reps": 3,
             "restSeconds": 300,
             "repRestSeconds": 180,
-            "effort": "HARD"
-          }
-        },
-        {
-          "circuit": "Cooldown"
-        },
-        {
-          "exercise": "Wide pull-up",
-          "variation": "STR",
-          "plan": {
-            "sets": 2,
-            "reps": 4,
-            "restSeconds": 180,
             "effort": "EASY"
           }
         },
         {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 1,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "EASY"
-          }
+          "circuit": "Chin-ups + wide pull-ups",
+          "rounds": 2,
+          "note": "3–4 reps in reserve."
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA",
+          "plans": {
+            "Deficit sumo goblet squat": {
+              "sets": 2,
+              "reps": 6,
+              "effort": "EASY"
+            },
+            "Loaded Cossack": {
+              "sets": 2,
+              "reps": 5,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         }
       ],
       "tuesday": [
@@ -1747,36 +2590,107 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
             "sets": 2,
-            "reps": 5,
+            "reps": 4,
             "restSeconds": 180,
+            "effort": "EASY"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6,
             "effort": "EASY"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 2,
+            "reps": 6,
+            "effort": "EASY"
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)",
+          "plans": {
+            "Active 90/90": {
+              "sets": 1,
+              "reps": 6,
+              "restSeconds": 45,
+              "effort": "EASY"
+            },
+            "Lateral high step-up rock-over": {
+              "sets": 2,
+              "reps": 5,
+              "effort": "EASY"
+            },
+            "Frog rock-backs": {
+              "sets": 1,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            }
+          }
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
         },
         {
-          "exercise": "Bent-over fly",
+          "module": "Shoulder support",
+          "plans": {
+            "External rotation": {
+              "sets": 1,
+              "reps": 8,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Lateral raise": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            },
+            "Bent-over fly": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            }
+          }
+        },
+        {
+          "exercise": "Biceps curl",
           "plan": {
             "sets": 1,
             "reps": 8,
@@ -1785,20 +2699,33 @@
           }
         },
         {
-          "module": "Wrist block · deload"
+          "module": "Wrist block",
+          "plans": {
+            "Wrist flexor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Wrist extensor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Hammer rotation": {
+              "sets": 1,
+              "reps": 12,
+              "restSeconds": 60,
+              "effort": "EASY"
+            }
+          }
         }
       ],
       "saturday": [
         {
-          "exercise": "Benchmarks or classics"
-        },
-        {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA · deload"
+          "exercise": "Benchmarks or classics",
+          "note": "Edge pickup max retest."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -1810,15 +2737,40 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range",
+          "omit": [
+            "Clamshell",
+            "Lateral lunge slide"
+          ],
+          "plans": {
+            "Frog lift-offs": {
+              "sets": 1,
+              "reps": 5,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            },
+            "Frog PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            },
+            "Butterfly PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         },
         {
-          "exercise": "Bent-over fly",
+          "exercise": "Abs follow-along",
           "plan": {
-            "sets": 1,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "EASY"
+            "minutes": 10
           }
         }
       ]
@@ -1827,33 +2779,25 @@
       "weekStart": "2026-12-14",
       "monday": [
         {
-          "exercise": "Open boulder",
+          "exercise": "Free climbing — below project level"
+        },
+        {
+          "exercise": "Strength intervals",
           "plan": {
-            "minutes": 25
+            "sets": 3,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Strength intervals"
+          "circuit": "Chin-ups + wide pull-ups",
+          "note": "2–3 reps in reserve.",
+          "rounds": 4
         },
         {
-          "circuit": "Cooldown"
-        },
-        {
-          "exercise": "Wide pull-up",
-          "variation": "STR"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 2,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "MODERATE"
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -1861,30 +2805,56 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
-            "sets": 4,
-            "reps": 5,
+            "sets": 3,
+            "reps": 4,
             "restSeconds": 180,
             "effort": "HARD"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -1893,12 +2863,26 @@
           "module": "Shoulder support"
         },
         {
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
           "module": "Wrist block"
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
           "exercise": "Limit board"
@@ -1907,12 +2891,13 @@
           "exercise": "Board volume"
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -1924,10 +2909,17 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range"
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
@@ -1935,33 +2927,25 @@
       "weekStart": "2026-12-21",
       "monday": [
         {
-          "exercise": "Open boulder",
+          "exercise": "Free climbing — below project level"
+        },
+        {
+          "exercise": "Strength intervals",
           "plan": {
-            "minutes": 25
+            "sets": 3,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Strength intervals"
+          "circuit": "Chin-ups + wide pull-ups",
+          "note": "2–3 reps in reserve.",
+          "rounds": 4
         },
         {
-          "circuit": "Cooldown"
-        },
-        {
-          "exercise": "Wide pull-up",
-          "variation": "STR"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 2,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "MODERATE"
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -1969,30 +2953,56 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
-            "sets": 4,
-            "reps": 5,
+            "sets": 3,
+            "reps": 4,
             "restSeconds": 180,
             "effort": "HARD"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
         {
-          "exercise": "HoG (GG)"
+          "exercise": "HoG (GG)",
+          "note": "Before silks."
         },
         {
           "exercise": "Silks"
@@ -2001,12 +3011,26 @@
           "module": "Shoulder support"
         },
         {
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
           "module": "Wrist block"
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
           "exercise": "Limit board"
@@ -2015,12 +3039,13 @@
           "exercise": "Board volume"
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -2032,10 +3057,17 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range"
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
@@ -2043,33 +3075,25 @@
       "weekStart": "2026-12-28",
       "monday": [
         {
-          "exercise": "Open boulder",
+          "exercise": "Free climbing — below project level"
+        },
+        {
+          "exercise": "Strength intervals",
           "plan": {
-            "minutes": 25
+            "sets": 3,
+            "reps": 3,
+            "restSeconds": 300,
+            "repRestSeconds": 180,
+            "effort": "HARD"
           }
         },
         {
-          "exercise": "Strength intervals"
+          "circuit": "Chin-ups + wide pull-ups",
+          "note": "2–3 reps in reserve.",
+          "rounds": 4
         },
         {
-          "circuit": "Cooldown"
-        },
-        {
-          "exercise": "Wide pull-up",
-          "variation": "STR"
-        },
-        {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 2,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "MODERATE"
-          }
-        },
-        {
-          "exercise": "HoG (GG)"
+          "module": "FA"
         }
       ],
       "tuesday": [
@@ -2077,25 +3101,50 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
-            "sets": 4,
-            "reps": 5,
+            "sets": 3,
+            "reps": 4,
             "restSeconds": 180,
             "effort": "HARD"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 3,
+            "reps": 6
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 3,
+            "reps": 8
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)"
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
@@ -2106,12 +3155,26 @@
           "module": "Shoulder support"
         },
         {
+          "exercise": "Biceps curl",
+          "plan": {
+            "sets": 3,
+            "reps": 8,
+            "restSeconds": 90,
+            "effort": "MODERATE"
+          }
+        },
+        {
           "module": "Wrist block"
         }
       ],
       "saturday": [
         {
-          "exercise": "Edge pickup"
+          "exercise": "Progressive Edge pickup",
+          "plan": {
+            "sets": 8,
+            "seconds": 7,
+            "sideSwitchSeconds": 30
+          }
         },
         {
           "exercise": "Limit board"
@@ -2120,12 +3183,13 @@
           "exercise": "Board volume"
         },
         {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA"
+          "exercise": "Flat bench (barbell)",
+          "plan": {
+            "sets": 2,
+            "reps": 5
+          },
+          "optional": true,
+          "note": "Any press by feel; cut if shoulders are cooked."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -2137,21 +3201,26 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range"
         },
         {
-          "module": "Shoulder support"
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
+        },
+        {
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ]
     },
     {
       "weekStart": "2027-01-04",
+      "deload": true,
       "monday": [
         {
-          "exercise": "Open boulder",
-          "plan": {
-            "minutes": 25
-          }
+          "exercise": "Free climbing — below project level"
         },
         {
           "exercise": "Strength intervals",
@@ -2160,34 +3229,35 @@
             "reps": 3,
             "restSeconds": 300,
             "repRestSeconds": 180,
-            "effort": "HARD"
-          }
-        },
-        {
-          "circuit": "Cooldown"
-        },
-        {
-          "exercise": "Wide pull-up",
-          "variation": "STR",
-          "plan": {
-            "sets": 2,
-            "reps": 4,
-            "restSeconds": 180,
             "effort": "EASY"
           }
         },
         {
-          "exercise": "Dumbbell curl",
-          "variation": "ECC",
-          "plan": {
-            "sets": 1,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "EASY"
-          }
+          "circuit": "Chin-ups + wide pull-ups",
+          "rounds": 2,
+          "note": "3–4 reps in reserve."
         },
         {
-          "exercise": "HoG (GG)"
+          "module": "FA",
+          "plans": {
+            "Deficit sumo goblet squat": {
+              "sets": 2,
+              "reps": 6,
+              "effort": "EASY"
+            },
+            "Loaded Cossack": {
+              "sets": 2,
+              "reps": 5,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         }
       ],
       "tuesday": [
@@ -2195,25 +3265,72 @@
           "exercise": "Open route"
         },
         {
-          "circuit": "Cooldown"
+          "exercise": "HoG (GG)",
+          "note": "Post-climbing mode."
         }
       ],
       "wednesday": [
         {
           "exercise": "Incline bench (barbell)",
-          "variation": "STR",
           "plan": {
             "sets": 2,
-            "reps": 5,
+            "reps": 4,
             "restSeconds": 180,
+            "effort": "EASY"
+          },
+          "variation": "STR"
+        },
+        {
+          "exercise": "Overhead press",
+          "plan": {
+            "sets": 2,
+            "reps": 6,
             "effort": "EASY"
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "exercise": "Single-leg RDL",
+          "plan": {
+            "sets": 2,
+            "reps": 6,
+            "effort": "EASY"
+          }
         },
         {
-          "exercise": "Flex class"
+          "exercise": "Single-leg calf raise",
+          "plan": {
+            "sets": 1,
+            "reps": 8,
+            "effort": "EASY"
+          }
+        },
+        {
+          "module": "FA · active control (rock-overs)",
+          "plans": {
+            "Active 90/90": {
+              "sets": 1,
+              "reps": 6,
+              "restSeconds": 45,
+              "effort": "EASY"
+            },
+            "Lateral high step-up rock-over": {
+              "sets": 2,
+              "reps": 5,
+              "effort": "EASY"
+            },
+            "Frog rock-backs": {
+              "sets": 1,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            }
+          }
+        },
+        {
+          "exercise": "Abs follow-along",
+          "plan": {
+            "minutes": 10
+          }
         }
       ],
       "thursday": [
@@ -2221,7 +3338,30 @@
           "exercise": "HoG (GG)"
         },
         {
-          "exercise": "Bent-over fly",
+          "module": "Shoulder support",
+          "plans": {
+            "External rotation": {
+              "sets": 1,
+              "reps": 8,
+              "restSeconds": 120,
+              "effort": "EASY"
+            },
+            "Lateral raise": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            },
+            "Bent-over fly": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 90,
+              "effort": "EASY"
+            }
+          }
+        },
+        {
+          "exercise": "Biceps curl",
           "plan": {
             "sets": 1,
             "reps": 8,
@@ -2230,20 +3370,33 @@
           }
         },
         {
-          "module": "Wrist block · deload"
+          "module": "Wrist block",
+          "plans": {
+            "Wrist flexor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Wrist extensor curl": {
+              "sets": 1,
+              "reps": 10,
+              "restSeconds": 60,
+              "effort": "EASY"
+            },
+            "Hammer rotation": {
+              "sets": 1,
+              "reps": 12,
+              "restSeconds": 60,
+              "effort": "EASY"
+            }
+          }
         }
       ],
       "saturday": [
         {
-          "exercise": "Benchmarks or classics"
-        },
-        {
-          "exercise": "HoG (GG)"
-        }
-      ],
-      "sunday": [
-        {
-          "module": "FA · deload"
+          "exercise": "Benchmarks or classics",
+          "note": "Edge pickup max retest. Pull-up 2RM and optional 20 mm hangs on separate days; one max test per day."
         },
         {
           "exercise": "Single-leg hip thrust",
@@ -2255,18 +3408,70 @@
           }
         },
         {
-          "exercise": "Abs follow-along"
+          "module": "FA · main end range",
+          "omit": [
+            "Clamshell",
+            "Lateral lunge slide"
+          ],
+          "plans": {
+            "Frog lift-offs": {
+              "sets": 1,
+              "reps": 5,
+              "effort": "EASY"
+            },
+            "Middle split PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            },
+            "Frog PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "restSeconds": 30,
+              "effort": "EASY"
+            },
+            "Butterfly PAILs/RAILs": {
+              "sets": 2,
+              "seconds": 60,
+              "effort": "EASY"
+            }
+          },
+          "note": "Passive holds instead of PAILs/RAILs."
         },
         {
-          "exercise": "Bent-over fly",
+          "exercise": "Abs follow-along",
           "plan": {
-            "sets": 1,
-            "reps": 8,
-            "restSeconds": 90,
-            "effort": "EASY"
+            "minutes": 10
           }
         }
       ]
+    }
+  ],
+  "phases": [
+    {
+      "name": "Baseline",
+      "from": "2026-09-28",
+      "to": "2026-10-04"
+    },
+    {
+      "name": "BASE",
+      "from": "2026-10-05",
+      "to": "2026-11-15"
+    },
+    {
+      "name": "STR",
+      "from": "2026-11-16",
+      "to": "2027-01-10"
+    },
+    {
+      "name": "Specificity · outline",
+      "from": "2027-01-11",
+      "to": "2027-02-21"
+    },
+    {
+      "name": "Taper · outline",
+      "from": "2027-02-22",
+      "to": "2027-03-01"
     }
   ]
 }
